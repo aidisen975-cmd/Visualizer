@@ -160,17 +160,146 @@
     }
     .tv-workspace {
       display: grid;
-      grid-template-columns: var(--side) minmax(0, 1fr) var(--props);
+      grid-template-columns: var(--side) 5px minmax(0, 1fr) 5px var(--props);
       min-height: 0;
     }
+    .tv-workspace.is-left-collapsed { grid-template-columns: 28px 0 minmax(0, 1fr) 5px var(--props); }
+    .tv-workspace.is-right-collapsed { grid-template-columns: var(--side) 5px minmax(0, 1fr) 0 28px; }
+    .tv-workspace.is-left-collapsed.is-right-collapsed { grid-template-columns: 28px 0 minmax(0, 1fr) 0 28px; }
     .tv-side {
       min-width: 0;
       min-height: 0;
       overflow: auto;
       background: var(--surface);
       border-right: 1px solid var(--line);
+      position: relative;
     }
     .tv-side--props { border-right: 0; border-left: 1px solid var(--line); }
+    .tv-side-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line);
+    }
+    .tv-side-head h2 { border-bottom: 0; flex: 1; }
+    .tv-splitter {
+      background: var(--line);
+      cursor: col-resize;
+      position: relative;
+      z-index: 6;
+    }
+    .tv-splitter:hover, .tv-splitter.is-active { background: var(--focus); }
+    .tv-canvas-col {
+      min-width: 0;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) auto;
+    }
+    .tv-zoombar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-top: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .tv-zoombar-label {
+      min-width: 44px;
+      text-align: center;
+      font: 650 11px/1 "SFMono-Regular", "Cascadia Mono", monospace;
+      color: var(--muted);
+    }
+    .tv-layout-menu {
+      position: absolute;
+      z-index: 20;
+      display: grid;
+      grid-template-columns: repeat(4, 64px);
+      gap: 8px;
+      padding: 10px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+    .tv-layout-choice {
+      display: grid;
+      gap: 4px;
+      padding: 6px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 10px;
+    }
+    .tv-layout-choice:hover { border-color: var(--focus); color: var(--ink); }
+    .tv-layout-icon {
+      height: 36px;
+      border: 1px solid currentColor;
+      display: grid;
+    }
+    .tv-guides, .tv-dock-preview {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 8;
+    }
+    .tv-guide {
+      position: absolute;
+      background: var(--focus);
+      opacity: .7;
+    }
+    .tv-guide.is-x { width: 1px; top: 0; bottom: 0; }
+    .tv-guide.is-y { height: 1px; left: 0; right: 0; }
+    .tv-size-tip {
+      position: absolute;
+      z-index: 9;
+      padding: 2px 6px;
+      background: var(--ink);
+      color: var(--surface);
+      font: 650 11px/1.3 "SFMono-Regular", "Cascadia Mono", monospace;
+      pointer-events: none;
+    }
+    .tv-legend-hit {
+      position: absolute;
+      cursor: move;
+      z-index: 5;
+    }
+    .tv-accordion {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      margin-bottom: 8px;
+      background: var(--surface);
+    }
+    .tv-accordion > summary {
+      cursor: pointer;
+      padding: 8px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      color: var(--muted);
+      list-style: none;
+    }
+    .tv-accordion > summary::-webkit-details-marker { display: none; }
+    .tv-accordion[open] > summary { border-bottom: 1px solid var(--line); }
+    .tv-accordion-body { padding: 10px; display: grid; gap: 8px; }
+    .tv-original-name {
+      color: var(--faint);
+      font-size: 10px;
+      line-height: 1.4;
+      word-break: break-all;
+    }
+    .tv-preview-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .tv-preview-table th, .tv-preview-table td {
+      border-bottom: 1px solid var(--line);
+      padding: 4px 6px;
+      text-align: left;
+      vertical-align: top;
+    }
+    .tv-rename-stage { max-height: 48vh; overflow: auto; padding: 12px; }
     .tv-side h2 {
       margin: 0;
       padding: 10px 12px 8px;
@@ -188,11 +317,27 @@
     }
     .tv-dataset-head {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-columns: auto minmax(0, 1fr) auto auto;
       gap: 6px;
       align-items: center;
       padding: 7px 8px;
       border-bottom: 1px solid var(--line);
+      cursor: pointer;
+    }
+    .tv-dataset-toggle {
+      width: 22px;
+      height: 22px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 11px;
+    }
+    .tv-dataset-count {
+      color: var(--faint);
+      font-size: 10px;
+      white-space: nowrap;
     }
     .tv-dataset-head input {
       width: 100%;
@@ -202,8 +347,21 @@
       border-radius: 3px;
       background: transparent;
       font-weight: 650;
+      cursor: text;
     }
     .tv-dataset-head input:hover, .tv-dataset-head input:focus { border-color: var(--line); background: var(--surface); }
+    .tv-dataset-tools {
+      display: flex;
+      gap: 6px;
+      padding: 6px 8px 2px;
+    }
+    .tv-button--tiny {
+      min-height: 26px;
+      padding: 0 8px;
+      font-size: 11px;
+      font-weight: 650;
+    }
+    .tv-series-list { padding-bottom: 4px; }
     .tv-series-row {
       display: grid;
       grid-template-columns: auto minmax(0, 1fr) auto;
@@ -211,6 +369,13 @@
       align-items: center;
       padding: 5px 8px;
       font-size: 12px;
+      user-select: none;
+    }
+    .tv-title-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 6px;
+      align-items: center;
     }
     .tv-series-row small { color: var(--faint); font-size: 10px; }
     .tv-add-row {
@@ -236,6 +401,7 @@
       padding: 20px;
     }
     [data-theme="dark"] .tv-canvas-scroll { background-color: #101416; }
+    .tv-canvas-zoom { position: relative; }
     .tv-canvas-paper {
       position: relative;
       margin: 0 auto;
@@ -243,6 +409,10 @@
       box-shadow: var(--shadow);
       outline: 1px solid var(--line);
     }
+    .tv-workspace.is-left-collapsed #tvLeftPanel .tv-side-body,
+    .tv-workspace.is-right-collapsed #tvRightPanel .tv-side-body,
+    .tv-workspace.is-left-collapsed #tvLeftPanel h2,
+    .tv-workspace.is-right-collapsed #tvRightPanel h2 { display: none; }
     .tv-canvas-empty {
       display: grid;
       place-items: center;
@@ -278,6 +448,7 @@
       grid-template-columns: 1fr 1fr;
       gap: 8px;
     }
+    .tv-inline[hidden] { display: none; }
     .tv-ref-row {
       display: grid;
       grid-template-columns: auto auto minmax(0, 1fr) auto;
@@ -337,7 +508,6 @@
     }
     .tv-icon-button:hover { border-color: var(--line); color: var(--ink); background: var(--surface); }
     @media (max-width: 1100px) {
-      .tv-workspace { grid-template-columns: 230px minmax(0, 1fr) 250px; }
       .tv-status { min-width: 0; width: min(48vw, 280px); }
     }
     @media (prefers-reduced-motion: reduce) {
@@ -349,7 +519,7 @@
   <div class="tv-app" id="tvApp" data-theme="light">
     <header class="tv-header">
       <div class="tv-brand">
-        <p class="tv-kicker">Visualizer v0.1.0</p>
+        <p class="tv-kicker">Visualizer v0.2.1</p>
         <h1>实验数据可视化工作台</h1>
       </div>
       <div class="tv-header-meta">
@@ -364,9 +534,11 @@
         <input id="tvCsvInput" type="file" accept=".csv,text/csv" multiple>
       </label>
       <button type="button" class="tv-button" id="tvNewProject">新建工程</button>
-      <button type="button" class="tv-button" id="tvOpenProject">打开</button>
+      <button type="button" class="tv-button" id="tvOpenProject">打开工程</button>
       <button type="button" class="tv-button" id="tvSaveProject">保存</button>
+      <button type="button" class="tv-button" id="tvSaveProjectAs">另存为</button>
       <button type="button" class="tv-button tv-button--primary" id="tvNewPlot">新建图</button>
+      <button type="button" class="tv-button" id="tvLayout">布局</button>
       <button type="button" class="tv-button" id="tvPreview">预览</button>
       <button type="button" class="tv-button" id="tvExportPng">导出 PNG</button>
       <button type="button" class="tv-button" id="tvExportSvg">导出 SVG</button>
@@ -388,16 +560,36 @@
       </label>
       <input id="tvProjectInput" type="file" accept=".tvproj.json,.tvproj,.json,application/json" hidden>
     </section>
-    <div class="tv-workspace">
-      <aside class="tv-side" aria-label="数据">
-        <h2>Data</h2>
+    <div class="tv-workspace" id="tvWorkspace">
+      <aside class="tv-side" id="tvLeftPanel" aria-label="数据">
+        <div class="tv-side-head">
+          <h2>数据</h2>
+          <button type="button" class="tv-icon-button" id="tvCollapseLeft" aria-label="折叠数据栏">◀</button>
+        </div>
         <div class="tv-side-body" id="tvDataPanel"></div>
       </aside>
-      <section class="tv-canvas-scroll" id="tvCanvasScroll" aria-label="画布">
-        <div class="tv-canvas-paper" id="tvCanvasPaper"></div>
+      <div class="tv-splitter" id="tvSplitLeft" role="separator" aria-orientation="vertical" aria-label="调整数据栏宽度"></div>
+      <section class="tv-canvas-col">
+        <div class="tv-canvas-scroll" id="tvCanvasScroll" aria-label="画布" tabindex="0">
+          <div class="tv-canvas-zoom" id="tvCanvasZoom">
+            <div class="tv-canvas-paper" id="tvCanvasPaper"></div>
+            <div class="tv-guides" id="tvGuides"></div>
+          </div>
+        </div>
+        <div class="tv-zoombar" aria-label="画布缩放">
+          <button type="button" class="tv-button tv-button--tiny" id="tvZoomOut">−</button>
+          <div class="tv-zoombar-label" id="tvZoomLabel">100%</div>
+          <button type="button" class="tv-button tv-button--tiny" id="tvZoomIn">+</button>
+          <button type="button" class="tv-button tv-button--tiny" id="tvZoomFit">适应窗口</button>
+          <button type="button" class="tv-button tv-button--tiny" id="tvZoom100">100%</button>
+        </div>
       </section>
-      <aside class="tv-side tv-side--props" aria-label="属性">
-        <h2>Property</h2>
+      <div class="tv-splitter" id="tvSplitRight" role="separator" aria-orientation="vertical" aria-label="调整属性栏宽度"></div>
+      <aside class="tv-side tv-side--props" id="tvRightPanel" aria-label="属性">
+        <div class="tv-side-head">
+          <h2>属性</h2>
+          <button type="button" class="tv-icon-button" id="tvCollapseRight" aria-label="折叠属性栏">▶</button>
+        </div>
         <div class="tv-side-body" id="tvPropsPanel"></div>
       </aside>
     </div>
@@ -409,6 +601,13 @@
     </div>
     <div class="tv-preview-stage" id="tvPreviewStage"></div>
   </dialog>
+  <dialog class="tv-preview" id="tvRenameDialog" aria-label="批量重命名">
+    <div class="tv-preview-bar">
+      <strong>批量重命名</strong>
+      <button type="button" class="tv-button" id="tvRenameClose">取消</button>
+    </div>
+    <div class="tv-rename-stage" id="tvRenameStage"></div>
+  </dialog>
   <script src="visualizer-core.js"></script>
   <script>
   (function () {
@@ -418,18 +617,62 @@
     var svgNamespace = "http://www.w3.org/2000/svg";
     var app = document.getElementById("tvApp");
     var paper = document.getElementById("tvCanvasPaper");
+    var canvasScroll = document.getElementById("tvCanvasScroll");
+    var canvasZoomEl = document.getElementById("tvCanvasZoom");
+    var guidesEl = document.getElementById("tvGuides");
+    var workspaceEl = document.getElementById("tvWorkspace");
+    var leftPanel = document.getElementById("tvLeftPanel");
+    var rightPanel = document.getElementById("tvRightPanel");
     var dataPanel = document.getElementById("tvDataPanel");
     var propsPanel = document.getElementById("tvPropsPanel");
     var statusEl = document.getElementById("tvStatus");
     var dirtyEl = document.getElementById("tvDirty");
     var previewDialog = document.getElementById("tvPreviewDialog");
     var previewStage = document.getElementById("tvPreviewStage");
+    var renameDialog = document.getElementById("tvRenameDialog");
+    var renameStage = document.getElementById("tvRenameStage");
     var lastCanvasSvg = "";
     var project = core.createProject();
     var selectedPlotId = null;
+    var selectedRefIndex = 0;
     var checkedSeries = new Set();
+    var collapsedDatasets = new Set();
+    var selectionAnchor = {};
+    var activeDatasetId = null;
+    var dataPanelActive = false;
+    var canvasActive = false;
+    var projectFileHandle = null;
     var dirty = false;
     var drag = null;
+    var splitterDrag = null;
+    var layoutMenu = null;
+    var tickWarning = "";
+
+    function isTextEntry(el) {
+      if (!el) return false;
+      if (el.isContentEditable) return true;
+      var tag = el.tagName;
+      if (tag === "TEXTAREA" || tag === "SELECT") return true;
+      if (tag !== "INPUT") return false;
+      var type = String(el.type || "text").toLowerCase();
+      return type !== "checkbox" && type !== "radio" && type !== "button" && type !== "color" && type !== "file";
+    }
+
+    function projectFilename(name) {
+      var base = sanitizeFilename(name || "未命名工程");
+      if (/\.tvproj\.json$/i.test(base)) return base;
+      if (/\.tvproj$/i.test(base)) return base + ".json";
+      if (/\.json$/i.test(base)) return base.replace(/\.json$/i, ".tvproj.json");
+      return base + ".tvproj.json";
+    }
+
+    function canUseSavePicker() {
+      return typeof window.showSaveFilePicker === "function";
+    }
+
+    function canUseOpenPicker() {
+      return typeof window.showOpenFilePicker === "function";
+    }
 
     function cssValue(property) {
       return getComputedStyle(app).getPropertyValue(property).trim();
@@ -455,6 +698,116 @@
       dirty = value;
       dirtyEl.classList.toggle("is-on", dirty);
       document.title = (dirty ? "• " : "") + project.projectName + " · Visualizer";
+    }
+
+    function uiState() {
+      if (!project.ui) project.ui = core.normalizeUi(null);
+      return project.ui;
+    }
+
+    function canvasZoom() {
+      return core.clampZoom(uiState().canvasZoom);
+    }
+
+    function applyPanelLayout() {
+      var ui = uiState();
+      workspaceEl.classList.toggle("is-left-collapsed", !!ui.leftPanelCollapsed);
+      workspaceEl.classList.toggle("is-right-collapsed", !!ui.rightPanelCollapsed);
+      app.style.setProperty("--side", (ui.leftPanelCollapsed ? 0 : ui.leftPanelWidth) + "px");
+      app.style.setProperty("--props", (ui.rightPanelCollapsed ? 0 : ui.rightPanelWidth) + "px");
+      leftPanel.hidden = false;
+      rightPanel.hidden = false;
+      document.getElementById("tvCollapseLeft").textContent = ui.leftPanelCollapsed ? "▶" : "◀";
+      document.getElementById("tvCollapseRight").textContent = ui.rightPanelCollapsed ? "◀" : "▶";
+      dataPanel.parentElement.style.overflow = ui.leftPanelCollapsed ? "hidden" : "auto";
+      propsPanel.parentElement.style.overflow = ui.rightPanelCollapsed ? "hidden" : "auto";
+    }
+
+    function applyCanvasZoom(keepPoint) {
+      var zoom = canvasZoom();
+      core.syncCanvasToPlots(project);
+      var width = project.canvas.width;
+      var height = project.canvas.height;
+      canvasZoomEl.style.width = (width * zoom) + "px";
+      canvasZoomEl.style.height = (height * zoom) + "px";
+      paper.style.width = width + "px";
+      paper.style.height = height + "px";
+      paper.style.transform = "scale(" + zoom + ")";
+      paper.style.transformOrigin = "0 0";
+      guidesEl.style.width = width + "px";
+      guidesEl.style.height = height + "px";
+      guidesEl.style.transform = "scale(" + zoom + ")";
+      guidesEl.style.transformOrigin = "0 0";
+      document.getElementById("tvZoomLabel").textContent = Math.round(zoom * 100) + "%";
+      if (keepPoint) {
+        canvasScroll.scrollLeft = keepPoint.worldX * zoom - keepPoint.offsetX;
+        canvasScroll.scrollTop = keepPoint.worldY * zoom - keepPoint.offsetY;
+      }
+    }
+
+    function setCanvasZoom(nextZoom, originEvent) {
+      var oldZoom = canvasZoom();
+      var zoom = core.clampZoom(nextZoom);
+      var rect = canvasScroll.getBoundingClientRect();
+      var offsetX = originEvent ? (originEvent.clientX - rect.left) : canvasScroll.clientWidth / 2;
+      var offsetY = originEvent ? (originEvent.clientY - rect.top) : canvasScroll.clientHeight / 2;
+      var worldX = (canvasScroll.scrollLeft + offsetX) / oldZoom;
+      var worldY = (canvasScroll.scrollTop + offsetY) / oldZoom;
+      uiState().canvasZoom = zoom;
+      if (project.canvas) project.canvas.zoom = zoom;
+      applyCanvasZoom({ worldX: worldX, worldY: worldY, offsetX: offsetX, offsetY: offsetY });
+    }
+
+    function fitCanvasView() {
+      var zoom = core.fitViewZoom(project.plots, canvasScroll.clientWidth, canvasScroll.clientHeight, 40);
+      uiState().canvasZoom = zoom;
+      project.canvas.zoom = zoom;
+      applyCanvasZoom();
+      var box = core.plotsBoundingBox(project.plots);
+      canvasScroll.scrollLeft = Math.max(0, box.minX * zoom - 40);
+      canvasScroll.scrollTop = Math.max(0, box.minY * zoom - 40);
+    }
+
+    function showGuides(lines) {
+      guidesEl.replaceChildren();
+      (lines || []).forEach(function (line) {
+        var el = document.createElement("div");
+        el.className = "tv-guide is-" + line.axis;
+        if (line.axis === "x") el.style.left = line.value + "px";
+        else el.style.top = line.value + "px";
+        guidesEl.appendChild(el);
+      });
+    }
+
+    function showSizeTip(plot) {
+      var existing = paper.querySelector(".tv-size-tip");
+      if (existing) existing.remove();
+      if (!plot) return;
+      var tip = document.createElement("div");
+      tip.className = "tv-size-tip";
+      tip.textContent = plot.layout.width + " × " + plot.layout.height;
+      tip.style.left = (plot.layout.x + plot.layout.width - 88) + "px";
+      tip.style.top = (plot.layout.y + plot.layout.height + 6) + "px";
+      paper.appendChild(tip);
+    }
+
+    function syncSizeFields(plot) {
+      var widthInput = document.getElementById("tvFigWidth");
+      var heightInput = document.getElementById("tvFigHeight");
+      var xInput = document.getElementById("tvFigX");
+      var yInput = document.getElementById("tvFigY");
+      if (widthInput) widthInput.value = plot.layout.width;
+      if (heightInput) heightInput.value = plot.layout.height;
+      if (xInput) xInput.value = plot.layout.x;
+      if (yInput) yInput.value = plot.layout.y;
+    }
+
+    function selectedCount(dataset) {
+      var count = 0;
+      dataset.series.forEach(function (series) {
+        if (checkedSeries.has(series.id)) count += 1;
+      });
+      return count;
     }
 
     function selectedPlot() {
@@ -484,96 +837,97 @@
       return measureText.ctx.measureText(text).width;
     }
 
-    function niceStep(rawStep) {
-      var power = Math.pow(10, Math.floor(Math.log10(Math.max(rawStep, 1e-9))));
-      var fraction = rawStep / power;
-      var nice = fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 5 ? 5 : 10;
-      return nice * power;
+    function measureLegend(text, fontSize) {
+      return measureText(text, fontSize + "px Aptos, Helvetica Neue, Noto Sans SC, sans-serif");
     }
 
-    function ticks(low, high, count) {
-      var step = niceStep((high - low) / Math.max(1, count - 1));
-      var first = Math.ceil(low / step) * step;
-      var results = [];
-      for (var value = first; value <= high + step * 0.2; value += step) results.push(Number(value.toPrecision(8)));
-      return results.length ? results : [low, high];
-    }
-
-    function compactNumber(value) {
-      var abs = Math.abs(value);
-      if (abs >= 100 || abs === 0) return value.toFixed(0);
-      if (abs >= 10) return value.toFixed(1);
-      return value.toFixed(2);
-    }
-
-    function downsampleIndexes(length, maximum) {
-      if (length <= maximum) return null;
-      var indexes = [0];
-      var step = (length - 1) / (maximum - 1);
-      for (var index = 1; index < maximum - 1; index += 1) indexes.push(Math.round(index * step));
-      indexes.push(length - 1);
-      return Array.from(new Set(indexes));
-    }
-
-    function linePath(xs, ys, xScale, yScale, maximum) {
-      var indexes = downsampleIndexes(xs.length, maximum) || xs.map(function (_, index) { return index; });
-      var path = "";
-      var previous = -1;
-      indexes.forEach(function (index) {
-        if (index === previous) return;
-        previous = index;
-        path += (path ? "L" : "M") + xScale(xs[index]).toFixed(2) + "," + yScale(ys[index]).toFixed(2);
+    function plotLegendItems(plot, resolved) {
+      return plot.legend && plot.legend.visible === false ? [] : resolved.map(function (item) {
+        return {
+          seriesId: item.series.id,
+          label: core.seriesDisplayName(item.series),
+          color: item.color,
+          visible: item.visible
+        };
       });
-      return path;
-    }
-
-    function legendLayout(items, maxWidth) {
-      var font = "11px Aptos, Helvetica Neue, Noto Sans SC, sans-serif";
-      var x = 0;
-      var y = 0;
-      var rowH = 16;
-      var placed = [];
-      items.forEach(function (item) {
-        var width = 16 + measureText(item.label, font) + 4;
-        if (x > 0 && x + width > maxWidth) {
-          x = 0;
-          y += rowH;
-        }
-        placed.push({ x: x, y: y, item: item });
-        x += width + 12;
-      });
-      return { placed: placed, height: items.length ? y + rowH : 0 };
     }
 
     function buildPlotSvg(plot, width, height, interactive) {
       var colors = theme();
       var displayUnit = project.options.displayTimeUnit || "s";
+      core.syncPlotAxisAutoTitles(project, plot);
+      if (!plot.legend) plot.legend = core.normalizeLegend(plot.legend, plot.legendVisible);
+      plot.legendVisible = plot.legend.visible;
       var resolved = core.resolvePlotSeries(project, plot);
       var visible = resolved.filter(function (item) { return item.visible; });
       var extents = core.plotExtents(project, plot);
-      var xTicks = ticks(extents.x[0], extents.x[1], 5);
-      var yTicks = ticks(extents.y[0], extents.y[1], 5);
+      var xTickSet = core.axisTickSet(plot.xAxis, extents.x[0], extents.x[1], 5);
+      var yTickSet = core.axisTickSet(plot.yAxis, extents.y[0], extents.y[1], 5);
+      tickWarning = xTickSet.error || yTickSet.error || "";
+      var xTicks = xTickSet.major;
+      var yTicks = yTickSet.major;
+      var fontSize = plot.legend.fontSize || 12;
       var font = "10px Aptos, Helvetica Neue, Noto Sans SC, sans-serif";
       var yLabelWidth = yTicks.reduce(function (max, tick) {
-        return Math.max(max, measureText(compactNumber(tick), font));
+        return Math.max(max, measureText(core.formatTickValue(tick, plot.yAxis), font));
       }, 24);
-      var header = 16 + 18 + (plot.subtitle ? 16 : 0) + (plot.note ? 15 : 0);
-      var legendItems = plot.legendVisible ? resolved.map(function (item) {
-        var dataset = core.findDataset(project, item.series.datasetId);
-        return {
-          seriesId: item.series.id,
-          label: (dataset ? dataset.name + " / " : "") + item.series.label,
-          color: item.color,
-          visible: item.visible
-        };
-      }) : [];
-      var legend = legendLayout(legendItems, Math.max(120, width - 36));
-      var margin = {
-        top: header,
-        right: 16,
-        bottom: 36 + legend.height,
-        left: Math.max(44, 14 + yLabelWidth)
-      };
+      var xTitle = core.resolvedAxisTitle(plot.xAxis);
+      var yTitle = core.resolvedAxisTitle(plot.yAxis);
+      var headerBottom = 28 + (plot.subtitle ? 16 : 0) + (plot.note ? 15 : 0);
+      var footer = 20 + (xTitle ? 16 : 0);
+      var left = Math.max(44, 18 + yLabelWidth);
+      var legendItems = plot.legend.visible ? plotLegendItems(plot, resolved) : [];
+      var position = core.resolveLegendPosition(plot.legend, legendItems.length);
+      var inside = position.indexOf("inside") === 0 || position === "floating";
+      var maxLegendWidth = plot.legend.maxWidth || (position === "left" || position === "right"
+        ? Math.max(80, Math.min(width * 0.32, 280))
+        : Math.max(80, width - left - 16));
+      var maxLegendHeight = position === "top" || position === "bottom"
+        ? Math.max(16, Math.min(height * 0.4, height - headerBottom - footer - 80))
+        : Math.max(16, height - headerBottom - footer - 24);
+      var legend = core.layoutLegendItems(legendItems, {
+        maxWidth: maxLegendWidth,
+        maxHeight: maxLegendHeight,
+        fontSize: fontSize,
+        sampleLength: plot.legend.sampleLength,
+        rowGap: plot.legend.rowGap,
+        columnGap: plot.legend.columnGap,
+        orientation: plot.legend.orientation,
+        columns: plot.legend.columns,
+        measure: function (text) { return measureLegend(text, fontSize); }
+      });
+      var legendBox = { x: 0, y: 0, width: legend.width, height: legend.height, position: position };
+      var margin = { top: headerBottom, right: 16, bottom: footer, left: left };
+      if (!inside && legend.height) {
+        if (position === "top") {
+          margin.top += legend.height + 8;
+          legendBox.x = left;
+          legendBox.y = headerBottom + 2;
+        } else if (position === "bottom") {
+          margin.bottom += legend.height + 8;
+          legendBox.x = left;
+          legendBox.y = height - margin.bottom + 8;
+        } else if (position === "left") {
+          margin.left += legend.width + 10;
+          legendBox.x = 14;
+          legendBox.y = margin.top;
+        } else if (position === "right") {
+          margin.right += legend.width + 10;
+          legendBox.x = width - margin.right + 8;
+          legendBox.y = margin.top;
+        }
+      } else if (inside && legend.height) {
+        var plotW = Math.max(40, width - margin.left - margin.right);
+        var plotH = Math.max(40, height - margin.top - margin.bottom);
+        var fx = plot.legend.floatingX;
+        var fy = plot.legend.floatingY;
+        if (position === "inside-tl") { fx = 0.04; fy = 0.06; }
+        if (position === "inside-tr") { fx = 0.96; fy = 0.06; }
+        if (position === "inside-bl") { fx = 0.04; fy = 0.94; }
+        if (position === "inside-br") { fx = 0.96; fy = 0.94; }
+        legendBox.x = margin.left + fx * plotW - (fx > 0.5 ? legend.width : 0);
+        legendBox.y = margin.top + fy * plotH - (fy > 0.5 ? legend.height : 0);
+      }
       var plotWidth = Math.max(40, width - margin.left - margin.right);
       var plotHeight = Math.max(40, height - margin.top - margin.bottom);
       var xScale = function (value) {
@@ -590,6 +944,8 @@
         "aria-label": plot.title,
         xmlns: svgNamespace
       });
+      svg.__legendBox = legendBox;
+      svg.__legendOverflow = legend.overflow || 0;
       appendSvg(svg, "rect", { x: 0, y: 0, width: width, height: height, fill: colors.surface });
       appendSvg(svg, "text", {
         x: 14, y: 22, fill: colors.ink, "font-size": 14, "font-weight": 700,
@@ -607,38 +963,51 @@
           "font-family": "Aptos, Helvetica Neue, Noto Sans SC, sans-serif"
         }, plot.note);
       }
+      yTickSet.minor.forEach(function (tick) {
+        var y = yScale(tick);
+        appendSvg(svg, "line", { x1: margin.left, y1: y, x2: margin.left - 3, y2: y, stroke: colors.line, "stroke-width": 1 });
+      });
+      xTickSet.minor.forEach(function (tick) {
+        var x = xScale(tick);
+        appendSvg(svg, "line", { x1: x, y1: height - margin.bottom, x2: x, y2: height - margin.bottom + 3, stroke: colors.line, "stroke-width": 1 });
+      });
       yTicks.forEach(function (tick) {
         var y = yScale(tick);
         appendSvg(svg, "line", { x1: margin.left, y1: y, x2: width - margin.right, y2: y, stroke: colors.grid, "stroke-width": 1 });
         appendSvg(svg, "text", {
           x: margin.left - 8, y: y + 3.5, fill: colors.muted, "font-size": 10,
           "text-anchor": "end", "font-family": "Aptos, Helvetica Neue, Noto Sans SC, sans-serif"
-        }, compactNumber(tick));
+        }, core.formatTickValue(tick, plot.yAxis));
       });
       xTicks.forEach(function (tick) {
         var x = xScale(tick);
         appendSvg(svg, "line", { x1: x, y1: height - margin.bottom, x2: x, y2: height - margin.bottom + 4, stroke: colors.line, "stroke-width": 1 });
         appendSvg(svg, "text", {
-          x: x, y: height - margin.bottom + 16, fill: colors.muted, "font-size": 10,
+          x: x, y: height - margin.bottom + 14, fill: colors.muted, "font-size": 10,
           "text-anchor": "middle", "font-family": "Aptos, Helvetica Neue, Noto Sans SC, sans-serif"
-        }, compactNumber(tick));
+        }, core.formatTickValue(tick, plot.xAxis));
       });
       appendSvg(svg, "line", { x1: margin.left, y1: margin.top, x2: margin.left, y2: height - margin.bottom, stroke: colors.ink, "stroke-width": 1.1 });
       appendSvg(svg, "line", { x1: margin.left, y1: height - margin.bottom, x2: width - margin.right, y2: height - margin.bottom, stroke: colors.ink, "stroke-width": 1.1 });
-      appendSvg(svg, "text", {
-        x: margin.left + plotWidth / 2, y: height - margin.bottom + 30, fill: colors.ink, "font-size": 10,
-        "text-anchor": "middle", "font-family": "Aptos, Helvetica Neue, Noto Sans SC, sans-serif"
-      }, "Time (" + (core.TIME_LABELS[displayUnit] || displayUnit) + ")");
-      var yTitle = appendSvg(svg, "text", {
-        x: 12, y: margin.top + plotHeight / 2, fill: colors.ink, "font-size": 10,
-        "text-anchor": "middle",
-        transform: "rotate(-90 12 " + (margin.top + plotHeight / 2) + ")",
-        "font-family": "Aptos, Helvetica Neue, Noto Sans SC, sans-serif"
-      }, "Value");
-      yTitle.setAttribute("letter-spacing", ".01em");
+      if (xTitle) {
+        appendSvg(svg, "text", {
+          x: margin.left + plotWidth / 2, y: height - 6, fill: colors.ink, "font-size": 10,
+          "text-anchor": "middle", "font-family": "Aptos, Helvetica Neue, Noto Sans SC, sans-serif"
+        }, xTitle);
+      }
+      if (yTitle) {
+        var yTitleNode = appendSvg(svg, "text", {
+          x: 12, y: margin.top + plotHeight / 2, fill: colors.ink, "font-size": 10,
+          "text-anchor": "middle",
+          transform: "rotate(-90 12 " + (margin.top + plotHeight / 2) + ")",
+          "font-family": "Aptos, Helvetica Neue, Noto Sans SC, sans-serif"
+        }, yTitle);
+        yTitleNode.setAttribute("letter-spacing", ".01em");
+      }
       visible.forEach(function (item) {
         var dataset = core.findDataset(project, item.series.datasetId);
-        var xs = core.convertSeriesX(item.series, dataset ? dataset.timeUnit : "s", displayUnit);
+        var xIsTime = !dataset || dataset.xIsTime !== false;
+        var xs = core.convertSeriesX(item.series, dataset ? dataset.timeUnit : "s", displayUnit, xIsTime);
         appendSvg(svg, "path", {
           d: linePath(xs, item.series.y, xScale, yScale, 1400),
           fill: "none",
@@ -648,27 +1017,22 @@
           "stroke-linejoin": "round"
         });
       });
-      if (!visible.length) {
-        appendSvg(svg, "text", {
-          x: margin.left + plotWidth / 2, y: margin.top + plotHeight / 2, fill: colors.muted, "font-size": 12,
-          "text-anchor": "middle", "font-family": "Aptos, Helvetica Neue, Noto Sans SC, sans-serif"
-        }, "从左侧勾选曲线并加入此图");
-      }
       legend.placed.forEach(function (entry) {
-        var x = 14 + entry.x;
-        var y = height - legend.height + entry.y - 2;
+        var x = legendBox.x + entry.x;
+        var y = legendBox.y + entry.y + fontSize - 2;
         var swatch = appendSvg(svg, "rect", {
-          x: x, y: y, width: 12, height: 2, fill: entry.item.visible ? entry.item.color : colors.faint
+          x: x, y: y - 2, width: plot.legend.sampleLength || 16, height: 2, fill: entry.item.visible ? entry.item.color : colors.faint
         });
         var label = appendSvg(svg, "text", {
-          x: x + 16, y: y + 4, fill: entry.item.visible ? colors.ink : colors.faint, "font-size": 11,
+          x: x + (plot.legend.sampleLength || 16) + 6, y: y + 2, fill: entry.item.visible ? colors.ink : colors.faint,
+          "font-size": fontSize,
           "font-family": "Aptos, Helvetica Neue, Noto Sans SC, sans-serif",
           "text-decoration": entry.item.visible ? "none" : "line-through"
         }, entry.item.label);
-        if (interactive) {
+        if (interactive && entry.item.seriesId) {
           var hit = appendSvg(svg, "rect", {
-            x: x, y: y - 8, width: Math.max(48, measureText(entry.item.label, "11px Aptos, Helvetica Neue, sans-serif") + 20),
-            height: 16, fill: "transparent", cursor: "pointer"
+            x: x, y: y - 10, width: Math.max(48, entry.width),
+            height: entry.height, fill: "transparent", cursor: "pointer"
           });
           hit.addEventListener("click", function (event) {
             event.stopPropagation();
@@ -683,7 +1047,40 @@
           label.style.pointerEvents = "none";
         }
       });
+      if (!visible.length) {
+        appendSvg(svg, "text", {
+          x: margin.left + plotWidth / 2, y: margin.top + plotHeight / 2, fill: colors.muted, "font-size": 12,
+          "text-anchor": "middle", "font-family": "Aptos, Helvetica Neue, Noto Sans SC, sans-serif"
+        }, "从左侧勾选曲线并加入此图");
+      }
       return svg;
+    }
+
+    function downsampleIndexes(length, maximum) {
+      if (length <= maximum) return null;
+      var indexes = [0];
+      var step = (length - 1) / (maximum - 1);
+      for (var index = 1; index < maximum - 1; index += 1) indexes.push(Math.round(index * step));
+      indexes.push(length - 1);
+      return Array.from(new Set(indexes));
+    }
+
+    function linePath(xs, ys, xScale, yScale, maximum) {
+      var indexes = downsampleIndexes(xs.length, maximum) || xs.map(function (_, index) { return index; });
+      var path = "";
+      var drawing = false;
+      var previous = -1;
+      indexes.forEach(function (index) {
+        if (index === previous) return;
+        previous = index;
+        if (!Number.isFinite(xs[index]) || !Number.isFinite(ys[index])) {
+          drawing = false;
+          return;
+        }
+        path += (drawing ? "L" : "M") + xScale(xs[index]).toFixed(2) + "," + yScale(ys[index]).toFixed(2);
+        drawing = true;
+      });
+      return path;
     }
 
     function buildCanvasSvg() {
@@ -733,15 +1130,23 @@
       if (!project.datasets.length) {
         var empty = document.createElement("p");
         empty.className = "tv-hint";
-        empty.textContent = "尚未导入数据。CSV 需包含 time / time_s / 时间 列，以及 T1…Tn 或温度/温差列。";
+        empty.textContent = "尚未导入数据。CSV 只要含可绘制的数值列即可；时间列或第一数值列将作为横坐标。";
         dataPanel.appendChild(empty);
         return;
       }
       project.datasets.forEach(function (dataset) {
         var box = document.createElement("section");
         box.className = "tv-dataset";
+        box.dataset.datasetId = dataset.id;
+        var collapsed = collapsedDatasets.has(dataset.id);
         var head = document.createElement("div");
         head.className = "tv-dataset-head";
+        var toggle = document.createElement("button");
+        toggle.type = "button";
+        toggle.className = "tv-dataset-toggle";
+        toggle.textContent = collapsed ? "▶" : "▼";
+        toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+        toggle.setAttribute("aria-label", (collapsed ? "展开 " : "折叠 ") + dataset.name);
         var name = document.createElement("input");
         name.value = dataset.name;
         name.setAttribute("aria-label", "数据源名称");
@@ -751,37 +1156,111 @@
           renderCanvas();
           renderProps();
         });
+        name.addEventListener("click", function (event) { event.stopPropagation(); });
+        var count = document.createElement("span");
+        count.className = "tv-dataset-count";
+        var selected = selectedCount(dataset);
+        count.textContent = selected
+          ? dataset.series.length + "条 · 已选" + selected
+          : dataset.series.length + "条";
         var remove = document.createElement("button");
         remove.type = "button";
         remove.className = "tv-icon-button";
         remove.textContent = "×";
         remove.setAttribute("aria-label", "移除 " + dataset.name);
-        remove.addEventListener("click", function () {
+        remove.addEventListener("click", function (event) {
+          event.stopPropagation();
           core.removeDataset(project, dataset.id);
           dataset.series.forEach(function (series) { checkedSeries.delete(series.id); });
+          collapsedDatasets.delete(dataset.id);
+          delete selectionAnchor[dataset.id];
+          if (activeDatasetId === dataset.id) activeDatasetId = null;
           setDirty(true);
           setStatus("已移除 " + dataset.name + "。", "ok");
           renderAll();
         });
-        head.append(name, remove);
+        function toggleCollapsed(event) {
+          if (event.target === name || event.target === remove) return;
+          event.preventDefault();
+          if (collapsedDatasets.has(dataset.id)) collapsedDatasets.delete(dataset.id);
+          else collapsedDatasets.add(dataset.id);
+          renderData();
+        }
+        head.addEventListener("click", toggleCollapsed);
+        head.addEventListener("mousedown", function () { activeDatasetId = dataset.id; });
+        head.append(toggle, name, count, remove);
         box.appendChild(head);
-        dataset.series.forEach(function (series) {
-          var row = document.createElement("label");
-          row.className = "tv-series-row";
-          var check = document.createElement("input");
-          check.type = "checkbox";
-          check.checked = checkedSeries.has(series.id);
-          check.addEventListener("change", function () {
-            if (check.checked) checkedSeries.add(series.id);
-            else checkedSeries.delete(series.id);
+        if (!collapsed) {
+          var tools = document.createElement("div");
+          tools.className = "tv-dataset-tools";
+          var selectAll = document.createElement("button");
+          selectAll.type = "button";
+          selectAll.className = "tv-button tv-button--tiny";
+          selectAll.textContent = "全选";
+          var selectNone = document.createElement("button");
+          selectNone.type = "button";
+          selectNone.className = "tv-button tv-button--tiny";
+          selectNone.textContent = "全不选";
+          function refreshChecks() {
+            box.querySelectorAll(".tv-series-row input[type=checkbox]").forEach(function (input, index) {
+              input.checked = checkedSeries.has(dataset.series[index].id);
+            });
+            var n = selectedCount(dataset);
+            count.textContent = n
+              ? dataset.series.length + "条 · 已选" + n
+              : dataset.series.length + "条";
+          }
+          selectAll.addEventListener("click", function () {
+            activeDatasetId = dataset.id;
+            dataset.series.forEach(function (series) { checkedSeries.add(series.id); });
+            refreshChecks();
           });
-          var copy = document.createElement("span");
-          copy.textContent = series.label;
-          var meta = document.createElement("small");
-          meta.textContent = series.x.length + " pts";
-          row.append(check, copy, meta);
-          box.appendChild(row);
-        });
+          selectNone.addEventListener("click", function () {
+            activeDatasetId = dataset.id;
+            dataset.series.forEach(function (series) { checkedSeries.delete(series.id); });
+            refreshChecks();
+          });
+          tools.append(selectAll, selectNone);
+          box.appendChild(tools);
+          var list = document.createElement("div");
+          list.className = "tv-series-list";
+          dataset.series.forEach(function (series, index) {
+            var row = document.createElement("label");
+            row.className = "tv-series-row";
+            var check = document.createElement("input");
+            check.type = "checkbox";
+            check.checked = checkedSeries.has(series.id);
+            check.addEventListener("change", function () {
+              activeDatasetId = dataset.id;
+              if (check.checked) checkedSeries.add(series.id);
+              else checkedSeries.delete(series.id);
+              var n = selectedCount(dataset);
+              count.textContent = n
+                ? dataset.series.length + "条 · 已选" + n
+                : dataset.series.length + "条";
+            });
+            row.addEventListener("click", function (event) {
+              activeDatasetId = dataset.id;
+              if (event.shiftKey) {
+                event.preventDefault();
+                var from = selectionAnchor[dataset.id] != null ? selectionAnchor[dataset.id] : index;
+                var start = Math.min(from, index);
+                var end = Math.max(from, index);
+                for (var i = start; i <= end; i += 1) checkedSeries.add(dataset.series[i].id);
+                refreshChecks();
+                return;
+              }
+              selectionAnchor[dataset.id] = index;
+            }, true);
+            var copy = document.createElement("span");
+            copy.textContent = core.seriesDisplayName(series);
+            var meta = document.createElement("small");
+            meta.textContent = series.x.length + " pts";
+            row.append(check, copy, meta);
+            list.appendChild(row);
+          });
+          box.appendChild(list);
+        }
         dataPanel.appendChild(box);
       });
       var addRow = document.createElement("div");
@@ -824,13 +1303,16 @@
       dataPanel.append(addRow);
       var hint = document.createElement("p");
       hint.className = "tv-hint";
-      hint.textContent = "可跨数据源勾选同名列。每条曲线保留自己的时间轴。";
+      hint.textContent = "可跨数据源勾选同名列。Shift 连选，Ctrl/Cmd 点选，Ctrl/Cmd+A 全选当前数据簇。";
       dataPanel.appendChild(hint);
     }
 
     function bindPlotPointer(box, plot, handle) {
+      function others() {
+        return project.plots.filter(function (item) { return item.id !== plot.id; });
+      }
       box.addEventListener("pointerdown", function (event) {
-        if (event.target === handle) return;
+        if (event.target === handle || event.target.classList.contains("tv-legend-hit")) return;
         selectedPlotId = plot.id;
         box.parentElement.appendChild(box);
         renderProps();
@@ -864,28 +1346,86 @@
       });
       box.addEventListener("pointermove", function (event) {
         if (!drag || drag.box !== box) return;
-        var dx = event.clientX - drag.startX;
-        var dy = event.clientY - drag.startY;
+        var delta = core.screenToWorld(event.clientX - drag.startX, event.clientY - drag.startY, canvasZoom());
         if (drag.mode === "move") {
-          plot.layout.x = Math.round(Math.max(0, drag.origX + dx));
-          plot.layout.y = Math.round(Math.max(0, drag.origY + dy));
+          plot.layout.x = Math.round(drag.origX + delta.x);
+          plot.layout.y = Math.round(drag.origY + delta.y);
+          var snapped = core.snapPlotMove(plot, others(), project.canvas, canvasZoom());
+          showGuides(snapped.guides);
           box.style.left = plot.layout.x + "px";
           box.style.top = plot.layout.y + "px";
         } else {
-          plot.layout.width = Math.round(Math.max(240, drag.origW + dx));
-          plot.layout.height = Math.round(Math.max(180, drag.origH + dy));
+          core.setPlotSize(plot, drag.origW + delta.x, drag.origH + delta.y, "width");
+          var resized = core.snapPlotResize(plot, others(), project.canvas, canvasZoom());
+          showGuides(resized.guides);
           box.style.width = plot.layout.width + "px";
           box.style.height = plot.layout.height + "px";
+          showSizeTip(plot);
         }
+        syncSizeFields(plot);
       });
       box.addEventListener("pointerup", function () {
         if (!drag || drag.box !== box) return;
+        showGuides([]);
+        var tip = paper.querySelector(".tv-size-tip");
+        if (tip) tip.remove();
+        core.syncCanvasToPlots(project);
         if (drag.mode === "resize") {
-          box.replaceChildren(buildPlotSvg(plot, plot.layout.width, plot.layout.height, true), handle);
+          var svg = buildPlotSvg(plot, plot.layout.width, plot.layout.height, true);
+          box.replaceChildren(svg, handle);
+          attachLegendHit(box, plot, svg);
         }
         drag = null;
+        applyCanvasZoom();
         setDirty(true);
       });
+    }
+
+    function attachLegendHit(box, plot, svg) {
+      var legendBox = svg.__legendBox;
+      if (!legendBox || !legendBox.height) return;
+      var hit = document.createElement("div");
+      hit.className = "tv-legend-hit";
+      hit.style.left = legendBox.x + "px";
+      hit.style.top = Math.max(0, legendBox.y - 4) + "px";
+      hit.style.width = Math.max(24, legendBox.width) + "px";
+      hit.style.height = "10px";
+      hit.title = "拖动图例以停靠或放入图内";
+      hit.addEventListener("pointerdown", function (event) {
+        event.stopPropagation();
+        selectedPlotId = plot.id;
+        drag = {
+          mode: "legend",
+          plot: plot,
+          box: box,
+          startX: event.clientX,
+          startY: event.clientY
+        };
+        hit.setPointerCapture(event.pointerId);
+      });
+      hit.addEventListener("pointermove", function (event) {
+        if (!drag || drag.mode !== "legend" || drag.plot !== plot) return;
+        var local = core.screenToWorld(
+          event.clientX - box.getBoundingClientRect().left,
+          event.clientY - box.getBoundingClientRect().top,
+          canvasZoom()
+        );
+        var next = core.dockLegendPosition(local.x, local.y, plot.layout.width, plot.layout.height);
+        plot.legend.position = next;
+        if (next === "floating") {
+          plot.legend.floatingX = core.clamp(local.x / Math.max(1, plot.layout.width), 0, 1);
+          plot.legend.floatingY = core.clamp(local.y / Math.max(1, plot.layout.height), 0, 1);
+        }
+        hit.style.outline = next === "floating" ? "1px dashed var(--focus)" : "2px solid var(--focus)";
+      });
+      hit.addEventListener("pointerup", function () {
+        if (!drag || drag.mode !== "legend") return;
+        drag = null;
+        setDirty(true);
+        renderCanvas();
+        renderProps();
+      });
+      box.appendChild(hit);
     }
 
     function makePlotBox(plot) {
@@ -900,14 +1440,15 @@
       handle.type = "button";
       handle.className = "tv-plot-resize";
       handle.setAttribute("aria-label", "调整「" + plot.title + "」大小");
-      box.append(buildPlotSvg(plot, plot.layout.width, plot.layout.height, true), handle);
+      var svg = buildPlotSvg(plot, plot.layout.width, plot.layout.height, true);
+      box.append(svg, handle);
+      attachLegendHit(box, plot, svg);
       bindPlotPointer(box, plot, handle);
       return box;
     }
 
     function renderCanvas() {
-      paper.style.width = project.canvas.width + "px";
-      paper.style.height = project.canvas.height + "px";
+      applyCanvasZoom();
       paper.replaceChildren();
       if (!project.plots.length) {
         var empty = document.createElement("div");
@@ -919,84 +1460,157 @@
         return;
       }
       project.plots.forEach(function (plot) { paper.appendChild(makePlotBox(plot)); });
+      if (tickWarning) setStatus(tickWarning, "error");
+      var overflowPlot = project.plots.find(function (plot) {
+        return plot.legend && plot.legend.visible !== false && (plot.seriesRefs || []).length > 24;
+      });
+      if (overflowPlot && (overflowPlot.seriesRefs.length > 30)) {
+        setStatus("图例内容较多，建议使用批量重命名或调整图例布局。", "");
+      }
     }
 
-    function axisFields(axis, axisName, onChange) {
+    function fieldControl(labelText, value, tag) {
+      var wrap = document.createElement("label");
+      var caption = document.createElement("span");
+      caption.className = "tv-prop-label";
+      caption.textContent = labelText;
+      var input = document.createElement(tag || "input");
+      input.className = "tv-field";
+      if (value != null) input.value = value;
+      wrap.append(caption, input);
+      return { wrap: wrap, input: input };
+    }
+
+    function section(title, open) {
+      var details = document.createElement("details");
+      details.className = "tv-accordion";
+      details.open = open !== false;
+      var summary = document.createElement("summary");
+      summary.textContent = title;
+      var body = document.createElement("div");
+      body.className = "tv-accordion-body";
+      details.append(summary, body);
+      return { wrap: details, body: body };
+    }
+
+    function axisFields(plot, axis, axisName) {
+      core.syncPlotAxisAutoTitles(project, plot);
       var wrap = document.createElement("div");
-      wrap.className = "tv-prop-block";
-      var label = document.createElement("label");
-      label.className = "tv-prop-label";
-      label.textContent = axisName + " 坐标";
+      wrap.style.display = "grid";
+      wrap.style.gap = "8px";
+      var titleRow = document.createElement("div");
+      titleRow.className = "tv-title-row";
+      var titleInput = document.createElement("input");
+      titleInput.className = "tv-field";
+      titleInput.value = core.resolvedAxisTitle(axis);
+      titleInput.setAttribute("aria-label", axisName + " 轴标题");
+      var restore = document.createElement("button");
+      restore.type = "button";
+      restore.className = "tv-button tv-button--tiny";
+      restore.textContent = "恢复自动";
+      titleInput.addEventListener("input", function () {
+        axis.customTitle = titleInput.value;
+        axis.titleMode = "custom";
+        setDirty(true);
+        renderCanvas();
+      });
+      restore.addEventListener("click", function () {
+        axis.titleMode = "auto";
+        core.syncPlotAxisAutoTitles(project, plot);
+        titleInput.value = axis.autoTitle;
+        setDirty(true);
+        renderCanvas();
+      });
+      titleRow.append(titleInput, restore);
       var mode = document.createElement("select");
       mode.className = "tv-select";
-      mode.innerHTML = "<option value=\"auto\">自动</option><option value=\"manual\">手动</option>";
+      mode.innerHTML = "<option value=\"auto\">自动范围</option><option value=\"manual\">手动范围</option>";
       mode.value = axis.mode;
       var range = document.createElement("div");
       range.className = "tv-inline";
       var min = document.createElement("input");
       min.className = "tv-field";
       min.type = "number";
-      min.placeholder = "最小值";
+      min.placeholder = "Min";
       min.value = axis.min == null ? "" : axis.min;
       var max = document.createElement("input");
       max.className = "tv-field";
       max.type = "number";
-      max.placeholder = "最大值";
+      max.placeholder = "Max";
       max.value = axis.max == null ? "" : axis.max;
       range.append(min, max);
       range.hidden = axis.mode !== "manual";
+      var tickMode = document.createElement("select");
+      tickMode.className = "tv-select";
+      tickMode.innerHTML = "<option value=\"auto\">自动刻度</option><option value=\"manual\">手动刻度</option>";
+      tickMode.value = axis.tickMode || "auto";
+      var major = fieldControl("主刻度间隔", axis.majorTick == null ? "" : axis.majorTick);
+      major.input.type = "number";
+      major.input.min = "0";
+      major.input.step = "any";
+      var minorMode = document.createElement("select");
+      minorMode.className = "tv-select";
+      minorMode.innerHTML = "<option value=\"auto\">次刻度：自动</option><option value=\"off\">次刻度：关闭</option><option value=\"custom\">次刻度：自定义</option>";
+      minorMode.value = axis.minorTickMode || "auto";
+      var minor = fieldControl("次刻度间隔", axis.minorTick == null ? "" : axis.minorTick);
+      minor.input.type = "number";
+      minor.input.step = "any";
+      var decimals = fieldControl("小数位数", axis.decimals == null ? "" : axis.decimals);
+      decimals.input.type = "number";
+      decimals.input.min = "0";
+      decimals.input.max = "8";
+      major.wrap.hidden = tickMode.value !== "manual";
+      minor.wrap.hidden = minorMode.value !== "custom";
       function commit() {
         axis.mode = mode.value;
         axis.min = min.value === "" ? null : Number(min.value);
         axis.max = max.value === "" ? null : Number(max.value);
+        axis.tickMode = tickMode.value;
+        axis.majorTick = major.input.value === "" ? null : Number(major.input.value);
+        axis.minorTickMode = minorMode.value;
+        axis.minorTick = minor.input.value === "" ? null : Number(minor.input.value);
+        axis.decimals = decimals.input.value === "" ? null : Number(decimals.input.value);
+        if (axis.decimals != null) axis.formatMode = "fixed";
         range.hidden = axis.mode !== "manual";
-        onChange();
+        major.wrap.hidden = axis.tickMode !== "manual";
+        minor.wrap.hidden = axis.minorTickMode !== "custom";
+        if (axis.mode === "manual" && axis.min != null && axis.max != null && !(axis.min < axis.max)) {
+          setStatus("最小值必须小于最大值。", "error");
+          return;
+        }
+        if (axis.tickMode === "manual" && axis.majorTick != null) {
+          var err = core.validateTickInterval(axis.majorTick, axis.min != null ? axis.min : 0, axis.max != null ? axis.max : axis.majorTick * 2);
+          if (err) {
+            setStatus(err, "error");
+            return;
+          }
+        }
+        setDirty(true);
+        renderCanvas();
       }
       mode.addEventListener("change", commit);
       min.addEventListener("change", commit);
       max.addEventListener("change", commit);
-      wrap.append(label, mode, range);
+      tickMode.addEventListener("change", commit);
+      major.input.addEventListener("change", commit);
+      minorMode.addEventListener("change", commit);
+      minor.input.addEventListener("change", commit);
+      decimals.input.addEventListener("change", commit);
+      var titleCap = document.createElement("span");
+      titleCap.className = "tv-prop-label";
+      titleCap.textContent = "轴标题";
+      var rangeCap = document.createElement("span");
+      rangeCap.className = "tv-prop-label";
+      rangeCap.textContent = "范围";
+      var tickCap = document.createElement("span");
+      tickCap.className = "tv-prop-label";
+      tickCap.textContent = "刻度";
+      wrap.append(titleCap, titleRow, rangeCap, mode, range, tickCap, tickMode, major.wrap, minorMode, minor.wrap, decimals.wrap);
       return wrap;
     }
 
     function renderProps() {
       propsPanel.replaceChildren();
-      var projectBlock = document.createElement("div");
-      projectBlock.className = "tv-prop-block";
-      projectBlock.innerHTML = "<label class=\"tv-prop-label\">工程名称</label>";
-      var projectName = document.createElement("input");
-      projectName.className = "tv-field";
-      projectName.value = project.projectName;
-      projectName.addEventListener("change", function () {
-        project.projectName = projectName.value.trim() || "未命名工程";
-        setDirty(true);
-      });
-      var size = document.createElement("div");
-      size.className = "tv-inline";
-      var width = document.createElement("input");
-      width.className = "tv-field";
-      width.type = "number";
-      width.min = "400";
-      width.value = project.canvas.width;
-      width.setAttribute("aria-label", "画布宽度");
-      var height = document.createElement("input");
-      height.className = "tv-field";
-      height.type = "number";
-      height.min = "300";
-      height.value = project.canvas.height;
-      height.setAttribute("aria-label", "画布高度");
-      size.append(width, height);
-      function commitCanvas() {
-        project.canvas.width = Math.max(400, Number(width.value) || 1280);
-        project.canvas.height = Math.max(300, Number(height.value) || 800);
-        setDirty(true);
-        renderCanvas();
-      }
-      width.addEventListener("change", commitCanvas);
-      height.addEventListener("change", commitCanvas);
-      projectBlock.append(projectName, size);
-      propsPanel.appendChild(projectBlock);
-
       var plot = selectedPlot();
       if (!plot) {
         var hint = document.createElement("p");
@@ -1005,23 +1619,42 @@
         propsPanel.appendChild(hint);
         return;
       }
+      if (!plot.legend) plot.legend = core.normalizeLegend(plot.legend, plot.legendVisible);
 
-      function field(labelText, value, tag) {
-        var wrap = document.createElement("label");
-        wrap.className = "tv-prop-block";
-        var caption = document.createElement("span");
-        caption.className = "tv-prop-label";
-        caption.textContent = labelText;
-        var input = document.createElement(tag || "input");
-        input.className = "tv-field";
-        input.value = value;
-        wrap.append(caption, input);
-        return { wrap: wrap, input: input };
+      var chart = section("图表", true);
+      var title = fieldControl("图标题", plot.title);
+      var subtitle = fieldControl("副标题", plot.subtitle);
+      var note = fieldControl("备注", plot.note, "textarea");
+      var size = document.createElement("div");
+      size.className = "tv-inline";
+      var width = fieldControl("宽度 (px)", plot.layout.width);
+      var height = fieldControl("高度 (px)", plot.layout.height);
+      width.input.id = "tvFigWidth";
+      height.input.id = "tvFigHeight";
+      width.input.type = "number";
+      height.input.type = "number";
+      width.input.min = "240";
+      height.input.min = "180";
+      var lock = document.createElement("label");
+      var lockBox = document.createElement("input");
+      lockBox.type = "checkbox";
+      lockBox.checked = !!plot.lockAspect;
+      lock.append(lockBox, document.createTextNode(" 锁定宽高比"));
+      function commitSize(from) {
+        core.setPlotSize(plot, Number(width.input.value), Number(height.input.value), from);
+        width.input.value = plot.layout.width;
+        height.input.value = plot.layout.height;
+        core.syncCanvasToPlots(project);
+        setDirty(true);
+        renderCanvas();
       }
-
-      var title = field("标题", plot.title);
-      var subtitle = field("副标题", plot.subtitle);
-      var note = field("备注", plot.note, "textarea");
+      width.input.addEventListener("change", function () { commitSize("width"); });
+      height.input.addEventListener("change", function () { commitSize("height"); });
+      lockBox.addEventListener("change", function () {
+        plot.lockAspect = lockBox.checked;
+        if (plot.lockAspect) plot.aspectRatio = plot.layout.height ? plot.layout.width / plot.layout.height : plot.aspectRatio;
+        setDirty(true);
+      });
       title.input.addEventListener("change", function () {
         plot.title = title.input.value;
         setDirty(true);
@@ -1038,28 +1671,30 @@
         setDirty(true);
         renderCanvas();
       });
-      propsPanel.append(title.wrap, subtitle.wrap, note.wrap);
+      size.append(width.wrap, height.wrap);
+      chart.body.append(title.wrap, subtitle.wrap, note.wrap, size, lock);
 
-      var seriesBlock = document.createElement("div");
-      seriesBlock.className = "tv-prop-block";
-      var seriesLabel = document.createElement("div");
-      seriesLabel.className = "tv-prop-label";
-      seriesLabel.textContent = "曲线";
-      seriesBlock.appendChild(seriesLabel);
+      var seriesSec = section("数据系列", true);
+      var batch = document.createElement("button");
+      batch.type = "button";
+      batch.className = "tv-button";
+      batch.textContent = "批量重命名";
+      batch.addEventListener("click", function () { openRenameDialog(plot); });
+      seriesSec.body.appendChild(batch);
       if (!plot.seriesRefs.length) {
         var emptySeries = document.createElement("p");
         emptySeries.className = "tv-hint";
         emptySeries.textContent = "此图还没有曲线。";
-        seriesBlock.appendChild(emptySeries);
+        seriesSec.body.appendChild(emptySeries);
       }
-      plot.seriesRefs.forEach(function (ref) {
+      plot.seriesRefs.forEach(function (ref, index) {
         var series = core.findSeries(project, ref.seriesId);
         var row = document.createElement("div");
         row.className = "tv-ref-row";
         var visible = document.createElement("input");
         visible.type = "checkbox";
         visible.checked = ref.visible !== false;
-        visible.setAttribute("aria-label", "显示 " + (series ? series.label : ref.seriesId));
+        visible.setAttribute("aria-label", "显示 " + (series ? core.seriesDisplayName(series) : ref.seriesId));
         visible.addEventListener("change", function () {
           ref.visible = visible.checked;
           setDirty(true);
@@ -1073,10 +1708,17 @@
           setDirty(true);
           renderCanvas();
         });
-        var name = document.createElement("span");
-        var dataset = series ? core.findDataset(project, series.datasetId) : null;
-        name.textContent = series ? ((dataset ? dataset.name + " / " : "") + series.label) : ref.seriesId;
-        name.title = ref.seriesId;
+        var name = document.createElement("button");
+        name.type = "button";
+        name.className = "tv-icon-button";
+        name.style.width = "auto";
+        name.style.justifySelf = "stretch";
+        name.textContent = series ? core.seriesDisplayName(series) : ref.seriesId;
+        name.title = series ? core.seriesOriginalName(series) : ref.seriesId;
+        name.addEventListener("click", function () {
+          selectedRefIndex = index;
+          renderProps();
+        });
         var remove = document.createElement("button");
         remove.type = "button";
         remove.className = "tv-icon-button";
@@ -1084,33 +1726,122 @@
         remove.setAttribute("aria-label", "从本图移除");
         remove.addEventListener("click", function () {
           plot.seriesRefs = plot.seriesRefs.filter(function (item) { return item !== ref; });
+          core.syncPlotAxisAutoTitles(project, plot);
           setDirty(true);
           renderAll();
         });
         row.append(visible, color, name, remove);
-        seriesBlock.appendChild(row);
+        seriesSec.body.appendChild(row);
+        if (index === selectedRefIndex && series) {
+          var display = fieldControl("显示名称", core.seriesDisplayName(series));
+          display.input.addEventListener("change", function () {
+            series.displayName = display.input.value;
+            series.label = series.displayName;
+            setDirty(true);
+            renderCanvas();
+            renderData();
+            renderProps();
+          });
+          var original = document.createElement("div");
+          original.className = "tv-original-name";
+          original.textContent = "原始名称：" + core.seriesOriginalName(series);
+          seriesSec.body.append(display.wrap, original);
+        }
       });
-      propsPanel.appendChild(seriesBlock);
-      propsPanel.appendChild(axisFields(plot.xAxis, "X", function () {
+
+      var legendSec = section("图例", true);
+      var legendVisible = document.createElement("label");
+      var legendCheck = document.createElement("input");
+      legendCheck.type = "checkbox";
+      legendCheck.checked = plot.legend.visible !== false;
+      legendVisible.append(legendCheck, document.createTextNode(" 显示图例"));
+      legendCheck.addEventListener("change", function () {
+        plot.legend.visible = legendCheck.checked;
+        plot.legendVisible = plot.legend.visible;
         setDirty(true);
         renderCanvas();
-      }));
-      propsPanel.appendChild(axisFields(plot.yAxis, "Y", function () {
+      });
+      var pos = fieldControl("位置", "");
+      pos.input.remove();
+      var posSelect = document.createElement("select");
+      posSelect.className = "tv-select";
+      [["auto","自动"],["top","顶部"],["bottom","底部"],["left","左侧"],["right","右侧"],["inside-tl","图内左上"],["inside-tr","图内右上"],["inside-bl","图内左下"],["inside-br","图内右下"],["floating","自由位置"]].forEach(function (pair) {
+        var option = document.createElement("option");
+        option.value = pair[0];
+        option.textContent = pair[1];
+        posSelect.appendChild(option);
+      });
+      posSelect.value = plot.legend.position || "auto";
+      pos.wrap.appendChild(posSelect);
+      var orient = document.createElement("select");
+      orient.className = "tv-select";
+      orient.innerHTML = "<option value=\"auto\">排列：自动</option><option value=\"horizontal\">横向</option><option value=\"vertical\">纵向</option>";
+      orient.value = plot.legend.orientation || "auto";
+      var fontSize = fieldControl("字体 (px)", plot.legend.fontSize);
+      fontSize.input.type = "number";
+      var columns = fieldControl("列数 (空=自动)", plot.legend.columns === "auto" ? "" : plot.legend.columns);
+      var rowGap = fieldControl("行间距", plot.legend.rowGap);
+      var colGap = fieldControl("列间距", plot.legend.columnGap);
+      var sample = fieldControl("线样长度", plot.legend.sampleLength);
+      var maxW = fieldControl("最大宽度", plot.legend.maxWidth == null ? "" : plot.legend.maxWidth);
+      [fontSize, columns, rowGap, colGap, sample, maxW].forEach(function (item) { item.input.type = "number"; });
+      function commitLegend() {
+        plot.legend.position = posSelect.value;
+        plot.legend.orientation = orient.value;
+        plot.legend.fontSize = Number(fontSize.input.value) || 12;
+        plot.legend.columns = columns.input.value === "" ? "auto" : Math.max(1, Number(columns.input.value) || 1);
+        plot.legend.rowGap = Number(rowGap.input.value) || 0;
+        plot.legend.columnGap = Number(colGap.input.value) || 0;
+        plot.legend.sampleLength = Number(sample.input.value) || 16;
+        plot.legend.maxWidth = maxW.input.value === "" ? null : Number(maxW.input.value);
         setDirty(true);
         renderCanvas();
-      }));
+      }
+      [posSelect, orient, fontSize.input, columns.input, rowGap.input, colGap.input, sample.input, maxW.input].forEach(function (el) {
+        el.addEventListener("change", commitLegend);
+      });
+      legendSec.body.append(legendVisible, pos.wrap, orient, fontSize.wrap, columns.wrap, rowGap.wrap, colGap.wrap, sample.wrap, maxW.wrap);
+
+      var xSec = section("X轴", true);
+      xSec.body.appendChild(axisFields(plot, plot.xAxis, "X"));
+      var ySec = section("Y轴", true);
+      ySec.body.appendChild(axisFields(plot, plot.yAxis, "Y"));
+
+      var layoutSec = section("布局", false);
+      var xy = document.createElement("div");
+      xy.className = "tv-inline";
+      var xPos = fieldControl("X", plot.layout.x);
+      var yPos = fieldControl("Y", plot.layout.y);
+      xPos.input.id = "tvFigX";
+      yPos.input.id = "tvFigY";
+      xPos.input.type = "number";
+      yPos.input.type = "number";
+      function commitPos() {
+        plot.layout.x = Number(xPos.input.value) || 0;
+        plot.layout.y = Number(yPos.input.value) || 0;
+        core.syncCanvasToPlots(project);
+        setDirty(true);
+        renderCanvas();
+      }
+      xPos.input.addEventListener("change", commitPos);
+      yPos.input.addEventListener("change", commitPos);
+      xy.append(xPos.wrap, yPos.wrap);
+      layoutSec.body.appendChild(xy);
+
       var del = document.createElement("button");
       del.type = "button";
       del.className = "tv-button tv-button--danger";
       del.textContent = "删除此图";
       del.addEventListener("click", function () { deletePlot(plot.id); });
-      propsPanel.appendChild(del);
+      propsPanel.append(chart.wrap, seriesSec.wrap, legendSec.wrap, xSec.wrap, ySec.wrap, layoutSec.wrap, del);
     }
 
     function renderAll() {
+      if (!project.ui) project.ui = core.normalizeUi(null);
       app.setAttribute("data-theme", project.options.theme || "light");
       document.getElementById("tvSourceUnit").value = project.options.sourceTimeUnit;
       document.getElementById("tvDisplayUnit").value = project.options.displayTimeUnit;
+      applyPanelLayout();
       renderData();
       renderCanvas();
       renderProps();
@@ -1141,6 +1872,9 @@
             });
             core.addDataset(project, dataset);
             names.push(dataset.name);
+            if (dataset.warnings && dataset.warnings.length) {
+              errors.push(file.name + "：" + dataset.warnings[0]);
+            }
           }).catch(function (error) {
             errors.push(file.name + "：" + (error.message || String(error)));
           });
@@ -1155,10 +1889,20 @@
       });
     }
 
-    function applyProject(next, message) {
+    function applyProject(next, message, handle, filename) {
       project = next;
+      if (!project.ui) project.ui = core.normalizeUi(null);
+      if (filename && (!project.projectName || project.projectName === "未命名工程")) {
+        var fromFile = core.projectNameFromFilename(filename);
+        if (fromFile) project.projectName = fromFile;
+      }
+      projectFileHandle = handle || null;
       selectedPlotId = next.plots[0] ? next.plots[0].id : null;
+      selectedRefIndex = 0;
       checkedSeries = new Set();
+      collapsedDatasets = new Set();
+      selectionAnchor = {};
+      activeDatasetId = null;
       setDirty(false);
       setStatus(message, "ok");
       renderAll();
@@ -1172,21 +1916,92 @@
     function openProjectText(text, filename, options) {
       var next;
       try {
-        next = core.parseProject(text);
+        next = core.parseProject(text, { filename: filename });
       } catch (error) {
         setStatus((filename ? filename + "：" : "") + error.message, "error");
         return false;
       }
       if (!(options && options.force) && !confirmDiscard()) return false;
-      applyProject(next, "已打开工程「" + next.projectName + "」。");
+      applyProject(next, "已打开工程「" + next.projectName + "」。", options && options.handle, filename);
       return true;
     }
 
-    function saveProject() {
-      var text = core.serializeProject(project);
-      downloadBlob(new Blob([text], { type: "application/json;charset=utf-8" }), sanitizeFilename(project.projectName) + ".tvproj.json");
+    function rememberSavedName(handle, filename) {
+      var name = core.projectNameFromFilename((handle && handle.name) || filename || "");
+      if (name) project.projectName = name;
+      projectFileHandle = handle || projectFileHandle;
       setDirty(false);
-      setStatus("已保存 " + project.projectName + ".tvproj.json（含嵌入数据）。", "ok");
+      setStatus("已保存到 " + ((handle && handle.name) || filename) + "。", "ok");
+    }
+
+    function writeTextToHandle(handle, text) {
+      return handle.createWritable().then(function (writable) {
+        return writable.write(text).then(function () { return writable.close(); });
+      });
+    }
+
+    function saveProjectAs() {
+      var filename = projectFilename(project.projectName);
+      if (canUseSavePicker()) {
+        window.showSaveFilePicker({
+          suggestedName: filename,
+          types: [{
+            description: "Trajectory Visualizer Project",
+            accept: { "application/json": [".json"] }
+          }]
+        }).then(function (handle) {
+          var name = core.projectNameFromFilename(handle.name || filename);
+          if (name) project.projectName = name;
+          return writeTextToHandle(handle, core.serializeProject(project)).then(function () {
+            rememberSavedName(handle, filename);
+          });
+        }).catch(function (error) {
+          if (error && error.name === "AbortError") return;
+          setStatus("保存失败：" + (error && error.message ? error.message : String(error)), "error");
+        });
+        return;
+      }
+      var name = core.projectNameFromFilename(filename);
+      if (name) project.projectName = name;
+      downloadBlob(new Blob([core.serializeProject(project)], { type: "application/json;charset=utf-8" }), filename);
+      rememberSavedName(null, filename);
+    }
+
+    function saveProject() {
+      if (projectFileHandle) {
+        writeTextToHandle(projectFileHandle, core.serializeProject(project)).then(function () {
+          rememberSavedName(projectFileHandle, projectFileHandle.name);
+        }).catch(function (error) {
+          setStatus("保存失败：" + (error && error.message ? error.message : String(error)), "error");
+        });
+        return;
+      }
+      saveProjectAs();
+    }
+
+    function openProjectFromDisk() {
+      if (canUseOpenPicker()) {
+        window.showOpenFilePicker({
+          multiple: false,
+          types: [{
+            description: "Trajectory Visualizer Project",
+            accept: { "application/json": [".json"] }
+          }]
+        }).then(function (handles) {
+          var handle = handles && handles[0];
+          if (!handle) return;
+          return handle.getFile().then(function (file) {
+            return file.text().then(function (text) {
+              openProjectText(text, file.name, { handle: handle });
+            });
+          });
+        }).catch(function (error) {
+          if (error && error.name === "AbortError") return;
+          document.getElementById("tvProjectInput").click();
+        });
+        return;
+      }
+      document.getElementById("tvProjectInput").click();
     }
 
     function showPreview() {
@@ -1230,14 +2045,178 @@
       image.src = url;
     }
 
+    function openRenameDialog(plot) {
+      var stage = renameStage;
+      stage.replaceChildren();
+      var scope = document.createElement("select");
+      scope.className = "tv-select";
+      scope.innerHTML = "<option value=\"plot\">当前图全部 Series</option><option value=\"selected\">当前选中的 Series</option><option value=\"cluster\">当前数据簇中的 Series</option>";
+      var mode = document.createElement("select");
+      mode.className = "tv-select";
+      mode.innerHTML = "<option value=\"replace\">查找/替换</option><option value=\"stripPrefix\">删除公共前缀</option><option value=\"stripSuffix\">删除公共后缀</option><option value=\"addPrefix\">添加前缀</option><option value=\"addSuffix\">添加后缀</option><option value=\"template\">模板 / 自动编号</option>";
+      var find = fieldControl("查找", "");
+      var replace = fieldControl("替换", "");
+      var prefix = fieldControl("前缀", "");
+      var suffix = fieldControl("后缀", "");
+      var template = fieldControl("模板", "T{n}");
+      var start = fieldControl("起始编号", "1");
+      start.input.type = "number";
+      var tableWrap = document.createElement("div");
+      function targetSeries() {
+        if (scope.value === "selected") {
+          return Array.from(checkedSeries).map(function (id) { return core.findSeries(project, id); }).filter(Boolean);
+        }
+        if (scope.value === "cluster") {
+          var dataset = activeDatasetId ? core.findDataset(project, activeDatasetId) : project.datasets[0];
+          return dataset ? dataset.series.slice() : [];
+        }
+        return plot.seriesRefs.map(function (ref) { return core.findSeries(project, ref.seriesId); }).filter(Boolean);
+      }
+      function spec() {
+        return {
+          mode: mode.value,
+          find: find.input.value,
+          replace: replace.input.value,
+          prefix: prefix.input.value,
+          suffix: suffix.input.value,
+          template: template.input.value,
+          start: Number(start.input.value) || 1
+        };
+      }
+      function refreshPreview() {
+        var seriesList = targetSeries();
+        var names = seriesList.map(function (series) { return core.seriesDisplayName(series); });
+        var rows = core.previewBatchRename(names, spec());
+        var table = document.createElement("table");
+        table.className = "tv-preview-table";
+        table.innerHTML = "<thead><tr><th>Before</th><th>After</th></tr></thead>";
+        var body = document.createElement("tbody");
+        rows.forEach(function (row) {
+          var tr = document.createElement("tr");
+          var a = document.createElement("td");
+          var b = document.createElement("td");
+          a.textContent = row.before;
+          b.textContent = row.after;
+          tr.append(a, b);
+          body.appendChild(tr);
+        });
+        table.appendChild(body);
+        tableWrap.replaceChildren(table);
+        tableWrap.__rows = rows;
+        tableWrap.__series = seriesList;
+      }
+      [scope, mode, find.input, replace.input, prefix.input, suffix.input, template.input, start.input].forEach(function (el) {
+        el.addEventListener("input", refreshPreview);
+        el.addEventListener("change", refreshPreview);
+      });
+      var apply = document.createElement("button");
+      apply.type = "button";
+      apply.className = "tv-button tv-button--primary";
+      apply.textContent = "应用";
+      apply.addEventListener("click", function () {
+        core.applyBatchRename(tableWrap.__series || [], tableWrap.__rows || []);
+        setDirty(true);
+        if (typeof renameDialog.close === "function") renameDialog.close();
+        else renameDialog.removeAttribute("open");
+        renderAll();
+        setStatus("已更新显示名称。原始名称未改动。", "ok");
+      });
+      var hint = document.createElement("p");
+      hint.className = "tv-hint";
+      hint.textContent = "模板可用 {n} 与 {original}。应用只改 displayName。";
+      stage.append(scope, mode, find.wrap, replace.wrap, prefix.wrap, suffix.wrap, template.wrap, start.wrap, hint, tableWrap, apply);
+      refreshPreview();
+      if (typeof renameDialog.showModal === "function") renameDialog.showModal();
+      else renameDialog.setAttribute("open", "open");
+    }
+
+    function closeLayoutMenu() {
+      if (layoutMenu) layoutMenu.remove();
+      layoutMenu = null;
+    }
+
+    function applyChosenLayout(templateId) {
+      var plots = project.plots.slice();
+      if (!plots.length) return setStatus("请先新建图。", "error");
+      core.applyLayoutTemplate(plots, templateId, {
+        width: Math.max(1280, canvasScroll.clientWidth / canvasZoom()),
+        height: Math.max(800, canvasScroll.clientHeight / canvasZoom()),
+        padding: core.LAYOUT_PADDING,
+        gap: core.LAYOUT_GAP
+      });
+      core.syncCanvasToPlots(project);
+      closeLayoutMenu();
+      setDirty(true);
+      renderAll();
+      setStatus("已应用布局模板。", "ok");
+    }
+
+    function showLayoutMenu() {
+      closeLayoutMenu();
+      layoutMenu = document.createElement("div");
+      layoutMenu.className = "tv-layout-menu";
+      var button = document.getElementById("tvLayout");
+      var rect = button.getBoundingClientRect();
+      layoutMenu.style.left = rect.left + "px";
+      layoutMenu.style.top = (rect.bottom + 4) + "px";
+      Object.keys(core.LAYOUT_TEMPLATES).forEach(function (id) {
+        var spec = core.LAYOUT_TEMPLATES[id];
+        var choice = document.createElement("button");
+        choice.type = "button";
+        choice.className = "tv-layout-choice";
+        var icon = document.createElement("div");
+        icon.className = "tv-layout-icon";
+        icon.style.gridTemplateColumns = "repeat(" + spec.cols + ", 1fr)";
+        icon.style.gridTemplateRows = "repeat(" + spec.rows + ", 1fr)";
+        spec.spans.forEach(function (span) {
+          var cell = document.createElement("div");
+          cell.style.gridColumn = (span[0] + 1) + " / span " + span[2];
+          cell.style.gridRow = (span[1] + 1) + " / span " + span[3];
+          cell.style.border = "1px solid currentColor";
+          icon.appendChild(cell);
+        });
+        choice.append(icon, document.createTextNode(spec.label));
+        choice.addEventListener("click", function () { applyChosenLayout(id); });
+        layoutMenu.appendChild(choice);
+      });
+      document.body.appendChild(layoutMenu);
+    }
+
+    function bindSplitter(el, side) {
+      el.addEventListener("pointerdown", function (event) {
+        splitterDrag = { side: side, startX: event.clientX, startLeft: uiState().leftPanelWidth, startRight: uiState().rightPanelWidth };
+        el.classList.add("is-active");
+        el.setPointerCapture(event.pointerId);
+      });
+      el.addEventListener("pointermove", function (event) {
+        if (!splitterDrag || splitterDrag.side !== side) return;
+        var dx = event.clientX - splitterDrag.startX;
+        var ui = uiState();
+        if (side === "left") ui.leftPanelWidth = core.clamp(splitterDrag.startLeft + dx, 220, 600);
+        else ui.rightPanelWidth = core.clamp(splitterDrag.startRight - dx, 260, 650);
+        applyPanelLayout();
+      });
+      el.addEventListener("pointerup", function () {
+        if (!splitterDrag) return;
+        splitterDrag = null;
+        el.classList.remove("is-active");
+        setDirty(true);
+      });
+      el.addEventListener("dblclick", function () {
+        var ui = uiState();
+        if (side === "left") ui.leftPanelWidth = 268;
+        else ui.rightPanelWidth = 300;
+        applyPanelLayout();
+        setDirty(true);
+      });
+    }
+
     document.getElementById("tvCsvInput").addEventListener("change", function (event) {
       importFiles(event.target.files);
       event.target.value = "";
     });
     document.getElementById("tvNewProject").addEventListener("click", newProject);
-    document.getElementById("tvOpenProject").addEventListener("click", function () {
-      document.getElementById("tvProjectInput").click();
-    });
+    document.getElementById("tvOpenProject").addEventListener("click", openProjectFromDisk);
     document.getElementById("tvProjectInput").addEventListener("change", function (event) {
       var file = event.target.files && event.target.files[0];
       event.target.value = "";
@@ -1245,13 +2224,50 @@
       file.text().then(function (text) { openProjectText(text, file.name); });
     });
     document.getElementById("tvSaveProject").addEventListener("click", saveProject);
+    document.getElementById("tvSaveProjectAs").addEventListener("click", saveProjectAs);
     document.getElementById("tvNewPlot").addEventListener("click", function () {
       var plot = core.createPlot(project, { title: "图 " + (project.plots.length + 1) });
       selectedPlotId = plot.id;
+      core.syncCanvasToPlots(project);
       setDirty(true);
       setStatus("已新建「" + plot.title + "」。从左侧勾选曲线并加入此图。", "ok");
       renderAll();
     });
+    document.getElementById("tvLayout").addEventListener("click", function (event) {
+      event.stopPropagation();
+      if (layoutMenu) closeLayoutMenu();
+      else showLayoutMenu();
+    });
+    document.addEventListener("click", function (event) {
+      if (layoutMenu && !layoutMenu.contains(event.target) && event.target.id !== "tvLayout") closeLayoutMenu();
+    });
+    document.getElementById("tvZoomIn").addEventListener("click", function () { setCanvasZoom(canvasZoom() + core.ZOOM_STEP); });
+    document.getElementById("tvZoomOut").addEventListener("click", function () { setCanvasZoom(canvasZoom() - core.ZOOM_STEP); });
+    document.getElementById("tvZoom100").addEventListener("click", function () { setCanvasZoom(1); });
+    document.getElementById("tvZoomFit").addEventListener("click", fitCanvasView);
+    document.getElementById("tvCollapseLeft").addEventListener("click", function () {
+      uiState().leftPanelCollapsed = !uiState().leftPanelCollapsed;
+      applyPanelLayout();
+      setDirty(true);
+    });
+    document.getElementById("tvCollapseRight").addEventListener("click", function () {
+      uiState().rightPanelCollapsed = !uiState().rightPanelCollapsed;
+      applyPanelLayout();
+      setDirty(true);
+    });
+    document.getElementById("tvRenameClose").addEventListener("click", function () {
+      if (typeof renameDialog.close === "function") renameDialog.close();
+      else renameDialog.removeAttribute("open");
+    });
+    bindSplitter(document.getElementById("tvSplitLeft"), "left");
+    bindSplitter(document.getElementById("tvSplitRight"), "right");
+    canvasScroll.addEventListener("pointerdown", function () { canvasActive = true; });
+    canvasScroll.addEventListener("wheel", function (event) {
+      if (!(event.ctrlKey || event.metaKey)) return;
+      event.preventDefault();
+      var delta = event.deltaY > 0 ? -core.ZOOM_STEP : core.ZOOM_STEP;
+      setCanvasZoom(canvasZoom() + delta, event);
+    }, { passive: false });
     document.getElementById("tvPreview").addEventListener("click", showPreview);
     document.getElementById("tvPreviewClose").addEventListener("click", function () {
       if (typeof previewDialog.close === "function") previewDialog.close();
@@ -1267,9 +2283,50 @@
       setDirty(true);
       renderCanvas();
     });
+    document.addEventListener("mousedown", function (event) {
+      dataPanelActive = !!(dataPanel.contains(event.target));
+      canvasActive = !!(canvasScroll.contains(event.target));
+      if (!dataPanelActive) return;
+      var box = event.target.closest ? event.target.closest(".tv-dataset") : null;
+      if (box && box.dataset.datasetId) activeDatasetId = box.dataset.datasetId;
+    }, true);
+    dataPanel.addEventListener("focusin", function (event) {
+      dataPanelActive = true;
+      var box = event.target.closest ? event.target.closest(".tv-dataset") : null;
+      if (box && box.dataset.datasetId) activeDatasetId = box.dataset.datasetId;
+    });
     document.addEventListener("keydown", function (event) {
+      if ((event.key === "a" || event.key === "A") && (event.ctrlKey || event.metaKey)) {
+        if (isTextEntry(document.activeElement)) return;
+        if (!dataPanelActive) return;
+        var dataset = activeDatasetId ? core.findDataset(project, activeDatasetId) : null;
+        if (!dataset && project.datasets.length === 1) dataset = project.datasets[0];
+        if (!dataset) return;
+        event.preventDefault();
+        activeDatasetId = dataset.id;
+        dataset.series.forEach(function (series) { checkedSeries.add(series.id); });
+        renderData();
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && (canvasActive || canvasScroll.contains(document.activeElement))) {
+        if (event.key === "=" || event.key === "+") {
+          event.preventDefault();
+          setCanvasZoom(canvasZoom() + core.ZOOM_STEP);
+          return;
+        }
+        if (event.key === "-" || event.key === "_") {
+          event.preventDefault();
+          setCanvasZoom(canvasZoom() - core.ZOOM_STEP);
+          return;
+        }
+        if (event.key === "0") {
+          event.preventDefault();
+          setCanvasZoom(1);
+          return;
+        }
+      }
       if (event.key !== "Delete" && event.key !== "Backspace") return;
-      if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement && document.activeElement.tagName)) return;
+      if (isTextEntry(document.activeElement)) return;
       if (!selectedPlotId) return;
       event.preventDefault();
       deletePlot(selectedPlotId);

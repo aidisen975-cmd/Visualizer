@@ -16,8 +16,12 @@ function assert(condition, message) {
 }
 
 var fixtures = path.join(__dirname, "fixtures");
-var expCsv = fs.readFileSync(path.join(fixtures, "TESTDATA_exp_25C.csv"), "utf8");
-var simCsv = fs.readFileSync(path.join(fixtures, "TESTDATA_sim_25C.csv"), "utf8");
+function readFixture(name) {
+  return fs.readFileSync(path.join(fixtures, name), "utf8");
+}
+
+var expCsv = readFixture("TESTDATA_exp_25C.csv");
+var simCsv = readFixture("TESTDATA_sim_25C.csv");
 
 var project = core.createProject({ projectName: "v0.1.0 测试工程" });
 var expDs = core.parseDatasetFromCsv(expCsv, {
@@ -54,7 +58,9 @@ assert(core.findSeries(project, "ds-exp::T1").y[0] === 25, "实验 T1 数值正�
 
 plot.seriesRefs[1].visible = false;
 plot.seriesRefs[0].color = "#d14e3d";
-plot.xAxis = { mode: "manual", min: 0, max: 20 };
+plot.xAxis.mode = "manual";
+plot.xAxis.min = 0;
+plot.xAxis.max = 20;
 plot.layout = { x: 40, y: 60, width: 640, height: 400 };
 plot.subtitle = "测试副标题";
 plot.note = "测试备注";
@@ -103,11 +109,208 @@ try {
 }
 
 try {
-  core.parseDatasetFromCsv("foo,bar\n1,2\n", { name: "坏文件" });
-  assert(false, "缺时间列应抛错");
+  core.parseDatasetFromCsv("name,city\nalice,bob\ncarol,dave\n", { name: "坏文件" });
+  assert(false, "无数值列应抛错");
 } catch (error) {
-  assert(error.message.indexOf("时间列") >= 0, "缺时间列给出明确错误");
+  assert(error.message.indexOf("横坐标") >= 0 || error.message.indexOf("数值数据列") >= 0, "无数值列给出通用错误");
+  assert(!/温度|sensor|delta/i.test(error.message), "错误信息不绑定温度业务");
 }
+
+var tempDs = core.parseDatasetFromCsv(readFixture("TESTDATA_temperature.csv"), {
+  id: "ds-temp",
+  name: "TESTDATA_temperature.csv"
+});
+assert(tempDs.series.length === 3, "普通温度 CSV 正常解析");
+assert(tempDs.series.map(function (s) { return s.localId; }).join(",") === "T1,T2,T3", "温度测点成为 Series");
+
+var elecDs = core.parseDatasetFromCsv(readFixture("TESTDATA_electrical.csv"), {
+  id: "ds-elec",
+  name: "TESTDATA_electrical.csv"
+});
+assert(elecDs.series.length === 3, "完全没有温度字段的 electrical CSV 正常解析");
+assert(elecDs.series.map(function (s) { return s.name; }).join(",") === "Voltage,Current,SOC", "Voltage / Current / SOC 都成为 Series");
+assert(elecDs.series[0].originalHeader === "Voltage(V)", "originalHeader 被保留");
+
+var voltageMeta = core.parseColumnHeader("Voltage(V)");
+assert(voltageMeta.name === "Voltage" && voltageMeta.unit === "V", "Voltage(V) → name Voltage, unit V");
+var voltageBare = core.parseColumnHeader("Voltage");
+assert(voltageBare.name === "Voltage" && voltageBare.unit === "", "Voltage 无单位时 unit 为空");
+var temperatureBare = core.parseColumnHeader("Temperature");
+assert(temperatureBare.unit === "", "Temperature 不得被猜成 °C");
+var inletMeta = core.parseColumnHeader("入口温度[°C]");
+assert(inletMeta.unit === "°C", "入口温度[°C] → unit °C");
+var massMeta = core.parseColumnHeader("Mass Flow(kg/s)");
+assert(massMeta.name === "Mass Flow" && massMeta.unit === "kg/s", "Mass Flow(kg/s) → unit kg/s");
+var underscoreMeta = core.parseColumnHeader("battery_temp_max");
+assert(underscoreMeta.name === "battery_temp_max" && underscoreMeta.unit === "", "Name_unit 不把 max 当单位");
+
+var unknownDs = core.parseDatasetFromCsv(readFixture("TESTDATA_unknown_headers.csv"), {
+  id: "ds-unknown",
+  name: "TESTDATA_unknown_headers.csv"
+});
+var unknownNames = unknownDs.series.map(function (s) { return s.name; });
+assert(unknownNames.indexOf("foo") >= 0 && unknownNames.indexOf("bar") >= 0 && unknownNames.indexOf("baz") >= 0, "unknown header ABC 类列仍能建立 Series");
+
+var abcDs = core.parseDatasetFromCsv(readFixture("TESTDATA_generic.csv"), {
+  id: "ds-generic",
+  name: "TESTDATA_generic.csv"
+});
+var abcSeries = abcDs.series.find(function (s) { return s.name === "ABC"; });
+assert(!!abcSeries, "ABC Series 正常建立");
+var massSeries = abcDs.series.find(function (s) { return s.name === "Mass Flow"; });
+assert(massSeries && massSeries.unit === "kg/s", "generic CSV 保留 Mass Flow 单位");
+assert(abcDs.xIsTime === false && abcDs.xName === "Step", "无 Time 列时可用第一数值列作 X");
+
+var chineseDs = core.parseDatasetFromCsv(readFixture("TESTDATA_chinese.csv"), {
+  id: "ds-zh",
+  name: "TESTDATA_chinese.csv"
+});
+assert(chineseDs.xName === "时间" && chineseDs.xUnit === "s", "中文时间列表头解析");
+assert(chineseDs.series[0].name === "入口温度" && chineseDs.series[0].unit === "°C", "中文温度列解析");
+
+var mixedDs = core.parseDatasetFromCsv(readFixture("TESTDATA_mixed_units.csv"), {
+  id: "ds-mixed",
+  name: "TESTDATA_mixed_units.csv"
+});
+var mixedProject = core.createProject({ projectName: "mixed" });
+core.addDataset(mixedProject, mixedDs);
+var mixedPlot = core.createPlot(mixedProject, { title: "混合单位" });
+core.addSeriesToPlot(mixedProject, mixedPlot, ["ds-mixed::Temperature", "ds-mixed::Voltage"]);
+assert(core.computeAutoYTitle(mixedProject, mixedPlot) === "Value", "多单位 Plot 自动 Y title = Value");
+
+var elecProject = core.createProject({ projectName: "elec" });
+core.addDataset(elecProject, elecDs);
+var voltPlot = core.createPlot(elecProject, { title: "电压" });
+core.addSeriesToPlot(elecProject, voltPlot, ["ds-elec::Voltage"]);
+assert(core.computeAutoYTitle(elecProject, voltPlot) === "Voltage (V)", "单条 Voltage 自动 Y title");
+assert(core.computeAutoXTitle(elecProject, voltPlot) === "Time (s)", "Time(s) 自动 X title");
+assert(core.resolvedAxisTitle(voltPlot.yAxis) === "Voltage (V)", "auto 模式使用 autoTitle");
+
+voltPlot.yAxis.customTitle = "Battery Voltage / V";
+voltPlot.yAxis.titleMode = "custom";
+assert(core.resolvedAxisTitle(voltPlot.yAxis) === "Battery Voltage / V", "custom 模式优先 customTitle");
+core.addSeriesToPlot(elecProject, voltPlot, ["ds-elec::Current"]);
+assert(voltPlot.yAxis.titleMode === "custom", "增加 Series 后 custom titleMode 不变");
+assert(core.resolvedAxisTitle(voltPlot.yAxis) === "Battery Voltage / V", "增加 Series 后不覆盖自定义标题");
+assert(voltPlot.yAxis.autoTitle === "Value", "autoTitle 仍随 Series 更新");
+
+var roundTrip = core.parseProject(core.serializeProject(elecProject));
+assert(roundTrip.plots[0].yAxis.titleMode === "custom", "titleMode round-trip");
+assert(roundTrip.plots[0].yAxis.customTitle === "Battery Voltage / V", "custom axis title serialization round-trip");
+assert(core.resolvedAxisTitle(roundTrip.plots[0].yAxis) === "Battery Voltage / V", "打开后仍显示自定义标题");
+assert(roundTrip.projectName === "elec", "新 project 保存后再打开");
+
+var oldProject = core.parseProject(readFixture("TESTDATA_v010.tvproj.json"));
+assert(oldProject.projectName === "v0.1.0 旧工程", "v0.1.0 old project 打开");
+assert(oldProject.plots[0].xAxis.mode === "manual" && oldProject.plots[0].xAxis.max === 20, "旧 xRange 仍恢复");
+assert(oldProject.plots[0].xAxis.titleMode === "auto", "旧工程缺 titleMode 时默认 auto");
+assert(oldProject.plots[0].yAxis.autoTitle !== "", "旧工程自动补齐 autoTitle");
+assert(oldProject.plots[0].seriesRefs[0].color === "#d14e3d", "旧工程颜色恢复");
+
+try {
+  core.parseProject("{not json");
+  assert(false, "再次损坏 JSON 应抛错");
+} catch (error) {
+  assert(error.message.indexOf("JSON") >= 0, "损坏 JSON 仍然不清空当前工程");
+}
+assert(project.plots.length === 1 && project.projectName === keptName, "损坏工程不改写当前对象");
+
+try {
+  core.parseProject(JSON.stringify({
+    projectFormatVersion: "9.9",
+    datasets: [],
+    plots: []
+  }));
+  assert(false, "再次不支持版本应抛错");
+} catch (error) {
+  assert(error.message.indexOf("不支持的工程版本") >= 0, "unsupported projectFormatVersion 仍然报错");
+}
+
+var wideDs = core.parseDatasetFromCsv(readFixture("TESTDATA_119_series.csv"), {
+  id: "ds-wide",
+  name: "TESTDATA_119_series.csv"
+});
+assert(wideDs.series.length === 119, "119 列 CSV 解析为 119 条 Series");
+
+assert(elecDs.series[0].originalName === "Voltage(V)", "v0.2.1 originalName 从 originalHeader 迁移");
+assert(elecDs.series[0].displayName === "Voltage", "v0.2.1 displayName 默认等于 name");
+
+var migrated = core.parseProject(readFixture("TESTDATA_v010.tvproj.json"), { filename: "25C_2C_Test.tvproj.json" });
+assert(migrated.projectName === "v0.1.0 旧工程", "已有 projectName 不被文件名覆盖");
+assert(migrated.plots[0].legend && migrated.plots[0].legend.position === "auto", "旧工程补齐 legend 默认值");
+assert(migrated.plots[0].xAxis.tickMode === "auto", "旧工程缺 tick 时默认 auto");
+assert(migrated.ui && migrated.ui.canvasZoom === 1, "旧工程 canvasZoom 默认 1");
+assert(migrated.datasets[0].series[0].displayName === "T1", "旧 series 补齐 displayName");
+assert(migrated.datasets[0].series[0].originalName === "T1", "旧 series 补齐 originalName");
+
+var unnamed = JSON.parse(readFixture("TESTDATA_v010.tvproj.json"));
+unnamed.projectName = "未命名工程";
+var namedFromFile = core.parseProject(JSON.stringify(unnamed), { filename: "25C_2C_Test.tvproj.json" });
+assert(namedFromFile.projectName === "25C_2C_Test", "未命名工程打开时回退到文件名");
+assert(core.projectNameFromFilename("folder/test1.tvproj.json") === "test1", "文件名去掉工程扩展名");
+
+var renamePreview = core.previewBatchRename(
+  ["全测点温度 / T1 Monitor: T1 Monitor", "全测点温度 / T2 Monitor: T2 Monitor", "全测点温度 / T3 Monitor: T3 Monitor"],
+  { mode: "template", template: "T{n}", start: 1 }
+);
+assert(renamePreview[0].after === "T1" && renamePreview[2].after === "T3", "模板 T{n} 预览");
+var strip = core.previewBatchRename(
+  ["全测点温度 / T1", "全测点温度 / T2"],
+  { mode: "stripPrefix" }
+);
+assert(strip[0].after === "T1" && strip[1].after === "T2", "删除公共前缀");
+var replaced = core.previewBatchRename(["Cell Voltage Monitor"], { mode: "replace", find: " Monitor", replace: "" });
+assert(replaced[0].after === "Cell Voltage", "查找替换");
+
+var coord = core.screenToWorld(500, 400, 0.5);
+assert(coord.x === 1000 && coord.y === 800, "screenToWorld 使用 zoom");
+assert(core.worldToScreen(1000, 800, 0.5).x === 500, "worldToScreen 反向");
+assert(core.clampZoom(0.05) === 0.25 && core.clampZoom(9) === 3, "zoom 限制 25%–300%");
+
+var layoutPlots = [
+  { layout: { x: 0, y: 0, width: 1280, height: 800 } },
+  { layout: { x: 0, y: 0, width: 1280, height: 800 } },
+  { layout: { x: 0, y: 0, width: 1280, height: 800 } },
+  { layout: { x: 0, y: 0, width: 1280, height: 800 } }
+];
+core.applyLayoutTemplate(layoutPlots, "grid2x2", { width: 1280, height: 800, padding: 40, gap: 24 });
+assert(layoutPlots[0].layout.width === layoutPlots[1].layout.width, "2×2 等宽");
+assert(layoutPlots[0].layout.x < layoutPlots[1].layout.x, "2×2 左右排列");
+assert(layoutPlots[0].layout.y < layoutPlots[2].layout.y, "2×2 上下排列");
+assert(layoutPlots[0].layout.width !== 1280, "布局模板修改真实图尺寸");
+
+assert(core.validateTickInterval(0, 0, 3600).indexOf("正数") >= 0, "Major Tick=0 被拒绝");
+assert(core.validateTickInterval(-2, 0, 40), "负刻度被拒绝");
+assert(core.validateTickInterval(0.00001, 0, 1000000).indexOf("过小") >= 0, "过密刻度被拒绝");
+var xTicks = core.axisTickSet({ tickMode: "manual", majorTick: 500 }, 0, 3600, 5);
+assert(xTicks.major.indexOf(0) >= 0 && xTicks.major.indexOf(3500) >= 0, "0–3600 step 500 含 0 和 3500");
+assert(xTicks.major.length <= 8, "不强行塞入不均匀的 3600");
+var yTicks = core.axisTickSet({ tickMode: "manual", majorTick: 2 }, 20, 40, 5);
+assert(yTicks.major[0] === 20 && yTicks.major[yTicks.major.length - 1] === 40, "20–40 step 2");
+assert(core.formatTickValue(22, { formatMode: "fixed", decimals: 1 }) === "22.0", "固定小数位");
+
+var fit = core.fitViewZoom([
+  { layout: { x: 0, y: 0, width: 1280, height: 800 } },
+  { layout: { x: 1300, y: 0, width: 1280, height: 800 } },
+  { layout: { x: 0, y: 820, width: 1280, height: 800 } },
+  { layout: { x: 1300, y: 820, width: 1280, height: 800 } }
+], 1000, 700, 40);
+assert(fit < 1 && fit >= 0.25, "Fit View 缩小以容纳四图");
+
+var moving = { layout: { x: 102, y: 40, width: 200, height: 100 } };
+var snapped = core.snapPlotMove(moving, [{ layout: { x: 40, y: 40, width: 200, height: 100 } }], { width: 2000, height: 1000 }, 1);
+assert(Math.abs(snapped.plot.layout.y - 40) < 1, "边缘/中心吸附后 Y 对齐");
+
+var legendItems = [];
+for (var i = 1; i <= 30; i += 1) legendItems.push({ label: "T" + i, color: "#2477b6", visible: true });
+var legend = core.layoutLegendItems(legendItems, { maxWidth: 400, maxHeight: 160, fontSize: 12, columns: "auto" });
+assert(legend.columns >= 2, "大量图例自动多列");
+assert(legend.placed.length >= 20, "多列后尽量保留图例项");
+
+var v021 = core.parseProject(core.serializeProject(elecProject));
+assert(v021.softwareVersion === "0.2.1", "新工程写入 0.2.1");
+assert(v021.plots[0].legend.visible === true, "legend 随工程保存");
+assert(v021.ui.leftPanelWidth >= 220, "ui layout 随工程保存");
 
 if (failed) {
   console.error("\n" + failed + " failed");
