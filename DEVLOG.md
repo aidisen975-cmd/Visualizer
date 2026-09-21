@@ -477,4 +477,15 @@ v0.2.3 在 v0.2.2 上做交互与排版修正，不进入 Local Zoom / Inset / C
 
 停在 v0.2.3。后续可补：Undo、单图导出、标注编辑、等距数值标签。
 
+---
+
+## 2026-09-21 发布 v0.2.3 测试版
+
+- 软件版本：`0.2.3`
+- 日期：2026-09-21
+- tag：`v0.2.3`
+- 页面：https://github.com/aidisen975-cmd/Visualizer/releases/tag/v0.2.3
+
+将当时工作区推到 `feat/v0.1.0`，打 tag `v0.2.3`，GitHub 标记为 Pre-release。附件 `Visualizer-v0.2.3.zip`（html + `visualizer-core.js` + `README.md`）。Mac / Windows 共用这一份浏览器页面，不打包原生客户端。
+
 
