@@ -308,7 +308,7 @@ assert(legend.columns >= 2, "大量图例自动多列");
 assert(legend.placed.length >= 20, "多列后尽量保留图例项");
 
 var v021 = core.parseProject(core.serializeProject(elecProject));
-assert(v021.softwareVersion === "0.2.2", "新工程写入 0.2.2");
+assert(v021.softwareVersion === "0.2.3", "新工程写入 0.2.3");
 assert(v021.plots[0].legend.visible === true, "legend 随工程保存");
 assert(v021.ui.leftPanelWidth >= 220, "ui layout 随工程保存");
 
@@ -441,7 +441,108 @@ var oldMigrated = core.parseProject(readFixture("TESTDATA_v010.tvproj.json"));
 assert(oldMigrated.plots[0].seriesRefs[0].style && oldMigrated.plots[0].seriesRefs[0].style.lineWidth === 1.5, "旧工程补齐 series.style");
 assert(oldMigrated.plots[0].xAxis.time && oldMigrated.plots[0].xAxis.time.displayUnit, "旧工程补齐 per-chart time");
 assert(oldMigrated.plots[0].textStyles && oldMigrated.plots[0].textStyles.title.fontSize === 14, "旧工程补齐 textStyles");
-assert(oldMigrated.softwareVersion === "0.2.2", "打开后 working copy 版本为 0.2.2，源文件未改");
+assert(oldMigrated.softwareVersion === "0.2.3", "打开后 working copy 版本为 0.2.3，源文件未改");
+
+var ids = ["s1", "s2", "s3", "s4", "s5"];
+var sel = core.applyMultiSelect({ ids: ids, selectedIds: [], anchorId: null }, { type: "toggle", id: "s3" });
+assert(sel.selectedIds.join(",") === "s3" && sel.anchorId === "s3", "普通单选");
+sel = core.applyMultiSelect({ ids: ids, selectedIds: sel.selectedIds, anchorId: sel.anchorId }, { type: "toggle", id: "s5" });
+assert(sel.selectedIds.join(",") === "s3,s5" && sel.anchorId === "s5", "Ctrl/Cmd toggle 离散多选");
+sel = core.applyMultiSelect({ ids: ids, selectedIds: ["s3"], anchorId: "s3" }, { type: "range", id: "s5" });
+assert(sel.selectedIds.join(",") === "s3,s4,s5" && sel.anchorId === "s3", "Shift range 保留 anchor");
+sel = core.applyMultiSelect({ ids: ids, selectedIds: ["s3"], anchorId: "gone" }, { type: "range", id: "s2" });
+assert(sel.selectedIds.indexOf("s2") >= 0 && sel.anchorId === "s2", "缺失 anchor 时 range 退化");
+sel = core.applyMultiSelect({ ids: ids, selectedIds: ["s2"], anchorId: "s2" }, { type: "selectAll" });
+assert(sel.selectedIds.join(",") === "s1,s2,s3,s4,s5", "Select All");
+sel = core.applyMultiSelect({ ids: ids, selectedIds: sel.selectedIds, anchorId: sel.anchorId }, { type: "clear" });
+assert(sel.selectedIds.join(",") === "" && sel.anchorId == null, "Clear");
+var left = core.applyMultiSelect({ ids: ["d1", "d2"], selectedIds: ["d1"], anchorId: "d1" }, { type: "toggle", id: "d2" });
+var right = core.applyMultiSelect({ ids: ["p1", "p2"], selectedIds: [], anchorId: null }, { type: "selectAll" });
+assert(left.selectedIds.join(",") === "d1,d2" && right.selectedIds.join(",") === "p1,p2", "两个 selection scope 互不污染");
+
+assert(core.normalizeSeriesStyle({ lineWidth: 0.1 }).lineWidth === 0.5, "lineWidth 0.1 → clamp 0.5");
+assert(core.normalizeSeriesStyle({ lineWidth: 5.4 }).lineWidth === 5.4, "lineWidth 5.4 保留");
+assert(core.normalizeSeriesStyle({ lineWidth: 30 }).lineWidth === 12, "lineWidth 30 → clamp 12");
+assert(core.normalizeSeriesStyle({ lineWidth: "abc" }).lineWidth === 1.5, "invalid lineWidth → default");
+assert(core.normalizeSeriesStyle({ lineWidth: 8.5 }).lineWidth === 8.5, "lineWidth 8.5 保留");
+
+var fontLabels = core.FONT_FAMILIES.map(function (item) { return item.label; });
+assert(fontLabels.indexOf("微软雅黑") >= 0 && fontLabels.indexOf("宋体") >= 0, "字体列表含微软雅黑/宋体");
+
+var styleProj = core.createProject({ projectName: "v023-style" });
+core.addDataset(styleProj, elecDs);
+var stylePlot = core.createPlot(styleProj, { title: "Figure 1" });
+core.addSeriesToPlot(styleProj, stylePlot, ["ds-elec::Voltage"]);
+stylePlot.seriesRefs[0].style = core.normalizeSeriesStyle({ lineWidth: 8.5, color: "#2477b6" });
+stylePlot.legend = core.normalizeLegend({
+  position: "free",
+  x: 0.4,
+  y: 0.2,
+  backgroundOpacity: 0,
+  showBackground: true,
+  backgroundColor: "#ffffff"
+});
+stylePlot.textStyles.title.fontFamily = '"Microsoft YaHei", "微软雅黑", Arial, sans-serif';
+stylePlot.textStyles.xAxisTitle.fontFamily = 'SimSun, "宋体", serif';
+var halfLegend = core.parseProject(core.serializeProject(styleProj));
+assert(halfLegend.plots[0].seriesRefs[0].style.lineWidth === 8.5, "Line Width 8.5 round-trip");
+assert(halfLegend.plots[0].legend.backgroundOpacity === 0, "Legend opacity 0 round-trip");
+assert(halfLegend.plots[0].textStyles.title.fontFamily.indexOf("Microsoft YaHei") >= 0, "微软雅黑 round-trip");
+assert(halfLegend.plots[0].textStyles.xAxisTitle.fontFamily.indexOf("SimSun") >= 0, "宋体 round-trip");
+stylePlot.legend.backgroundOpacity = 0.5;
+var midLegend = core.parseProject(core.serializeProject(styleProj));
+assert(midLegend.plots[0].legend.backgroundOpacity === 0.5, "Legend opacity 0.5 round-trip");
+assert(midLegend.plots[0].legend.showBackground === true, "showBackground 默认/保存");
+var oldLegend = core.normalizeLegend({ position: "top-right" });
+assert(oldLegend.showBackground === true && oldLegend.backgroundOpacity === 0.85, "旧工程补齐 legend 背景默认值");
+
+var freeLayout = core.computePlotLayout(400, 300, {
+  title: { width: 80, height: 14, ascent: 11 },
+  yAxisTitle: { width: 40, height: 12 },
+  yTick: { width: 20, height: 10 },
+  xAxisTitle: { width: 40, height: 12 },
+  xTick: { width: 24, height: 10 },
+  legend: { width: 180, height: 70 },
+  legendPosition: "free"
+});
+var topLayout = core.computePlotLayout(400, 300, {
+  title: { width: 80, height: 14, ascent: 11 },
+  yAxisTitle: { width: 40, height: 12 },
+  yTick: { width: 20, height: 10 },
+  xAxisTitle: { width: 40, height: 12 },
+  xTick: { width: 24, height: 10 },
+  legend: { width: 180, height: 70 },
+  legendPosition: "top-center"
+});
+assert(topLayout.margin.top > freeLayout.margin.top + 40, "固定 Top legend 占用上边距，free 不推挤");
+var yBig = core.computePlotLayout(400, 300, {
+  title: { width: 80, height: 14 },
+  yAxisTitle: { width: 160, height: 32 },
+  yTick: { width: 28, height: 12 },
+  xTick: { width: 20, height: 10 },
+  legendPosition: "free"
+});
+var ySmall = core.computePlotLayout(400, 300, {
+  title: { width: 80, height: 14 },
+  yAxisTitle: { width: 80, height: 12 },
+  yTick: { width: 28, height: 12 },
+  xTick: { width: 20, height: 10 },
+  legendPosition: "free"
+});
+assert(yBig.margin.left > ySmall.margin.left, "Y 轴标题变大时 left margin 增加");
+assert(yBig.plotArea.x === yBig.margin.left, "Plot Area 随文字测量右移");
+assert(yBig.yAxisTitlePos.x >= core.FIGURE_LAYOUT.outerPadding, "Y Title 起点不越出左边界");
+var huge = core.computePlotLayout(240, 180, {
+  title: { width: 200, height: 48, ascent: 40 },
+  yAxisTitle: { width: 180, height: 36 },
+  yTick: { width: 48, height: 16 },
+  xAxisTitle: { width: 160, height: 28 },
+  xTick: { width: 40, height: 16 },
+  legendPosition: "free"
+});
+assert(huge.grown, "文字过大时允许增大 Figure");
+assert(huge.plotArea.width >= core.FIGURE_LAYOUT.minPlotWidth, "Plot Area 不低于最小宽度");
+assert(huge.plotArea.height >= core.FIGURE_LAYOUT.minPlotHeight, "Plot Area 不低于最小高度");
 
 if (failed) {
   console.error("\n" + failed + " failed");

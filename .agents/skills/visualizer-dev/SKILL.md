@@ -15,7 +15,7 @@ description: 在 Visualizer 实验数据可视化工具仓库中进行开发、�
 SOP 是 V1 唯一需求基线，本文件提炼约束，不复制或替代详细需求。
 先检查实际代码，再判断功能状态；不能把 SOP 的目标写成已实现功能。
 现有入口是根目录 `temperature_trajectory_visualizer.html`。
-当前进度读 `Progress/PROGRESS-v{softwareVersion}.md`（现为 [PROGRESS-v0.2.2.md](../../../Progress/PROGRESS-v0.2.2.md)）；开发全过程读根目录 [DEVLOG.md](../../../DEVLOG.md)。
+当前进度读 `Progress/PROGRESS-v{softwareVersion}.md`（现为 [PROGRESS-v0.2.3.md](../../../Progress/PROGRESS-v0.2.3.md)）；开发全过程读根目录 [DEVLOG.md](../../../DEVLOG.md)。
 只执行当前授权范围，不因完整阅读 SOP 就启动全部开发。
 
 用户当前明确指令优先。新增需求按 SOP 第 35 节分类为 V1 必须、V1 可选、V1 后延期或 V2；说明所属对象层、工程格式、旧工程兼容性、导出、跨平台和依赖体积的影响。
@@ -64,7 +64,7 @@ SOP 是 V1 唯一需求基线，本文件提炼约束，不复制或替代详细
 
 1. `DEVLOG.md` 放在仓库根目录，必须完整记录开发全过程。每个版本、仓库初始化、发布都追加独立章节，保留当时目标、完成项、数据模型变化、验证和未做事项；不得只保留最新版，不得用新章节覆盖或删改旧记录。
 2. 要展示最新的写在 progress 文件：当前版本、如何运行、已实现摘要、已知限制、下一步。不要把当前状态只写在 DEVLOG 顶部代替全程记录。
-3. 所有 progress 文件放在 `Progress/` 文件夹；命名必须带软件版本号，格式为 `Progress/PROGRESS-v{softwareVersion}.md`（当前 `Progress/PROGRESS-v0.2.2.md`）。升版本时在该文件夹新建对应文件，不把旧 progress 改名或覆盖，不把 progress 放在根目录。
+3. 所有 progress 文件放在 `Progress/` 文件夹；命名必须带软件版本号，格式为 `Progress/PROGRESS-v{softwareVersion}.md`（当前 `Progress/PROGRESS-v0.2.3.md`）。升版本时在该文件夹新建对应文件，不把旧 progress 改名或覆盖，不把 progress 放在根目录。
 4. 根目录 `README.md` 只描述当前软件版本已实现的能力与特色，给使用者和 GitHub 首页看。升版本、删功能或发布时必须按实际代码增删，文首版本号与当前 `PROGRESS-v*.md` 一致；不得把 SOP 未实现项写成已上线。不另存 README 历史副本，历史写在 `DEVLOG.md`。发布 zip 应包含该 README。
 
 交付代码或发布时同步更新：本轮追加根目录 `DEVLOG.md` 章节，写入或更新 `Progress/PROGRESS-v*.md`，并按当前已实现功能增删根目录 `README.md`。

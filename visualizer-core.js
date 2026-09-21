@@ -1,8 +1,8 @@
-/* Visualizer v0.2.2 core: Project / Dataset / Series / Plot / Canvas. No DOM. */
+/* Visualizer v0.2.3 core: Project / Dataset / Series / Plot / Canvas. No DOM. */
 (function (root) {
   "use strict";
 
-  var SOFTWARE_VERSION = "0.2.2";
+  var SOFTWARE_VERSION = "0.2.3";
   var PROJECT_FORMAT_VERSION = "1.0";
   var SUPPORTED_PROJECT_FORMATS = ["1.0"];
   var TIME_IN_SECONDS = { ms: 0.001, s: 1, min: 60, h: 3600 };
@@ -42,6 +42,25 @@
   var LINE_TYPES = ["solid", "dashed", "dotted", "dash-dot", "long-dash"];
   var LINE_DASH = { solid: null, dashed: "6 4", dotted: "1.5 3", "dash-dot": "8 4 1.5 4", "long-dash": "14 6" };
   var DEFAULT_FONT = "Aptos, Helvetica Neue, Noto Sans SC, sans-serif";
+  var FONT_FAMILIES = [
+    { value: DEFAULT_FONT, label: "系统默认" },
+    { value: '"Microsoft YaHei", "微软雅黑", Arial, sans-serif', label: "微软雅黑" },
+    { value: 'SimSun, "宋体", serif', label: "宋体" },
+    { value: "Arial, Helvetica, sans-serif", label: "Arial" },
+    { value: "Times New Roman, Times, serif", label: "Times New Roman" }
+  ];
+  var LINE_WIDTH_MIN = 0.5;
+  var LINE_WIDTH_MAX = 12;
+  var LINE_WIDTH_STEP = 0.1;
+  var FIGURE_LAYOUT = {
+    outerPadding: 10,
+    titleGap: 8,
+    axisTitleGap: 6,
+    tickLabelGap: 4,
+    legendGap: 8,
+    minPlotWidth: 160,
+    minPlotHeight: 110
+  };
   var LAYOUT_TEMPLATES = {
     single: { id: "single", label: "单图全幅", cols: 1, rows: 1, spans: [[0, 0, 1, 1]], slots: ["main"] },
     splitH: { id: "splitH", label: "1:1 左右", cols: 2, rows: 1, spans: [[0, 0, 1, 1], [1, 0, 1, 1]], slots: ["left", "right"] },
@@ -106,7 +125,7 @@
     var lineType = LINE_TYPES.indexOf(style.lineType) >= 0 ? style.lineType : "solid";
     return {
       color: style.color ? String(style.color) : (color ? String(color) : null),
-      lineWidth: Number.isFinite(lineWidth) ? clamp(lineWidth, 0.5, 12) : 1.5,
+      lineWidth: Number.isFinite(lineWidth) ? clamp(lineWidth, LINE_WIDTH_MIN, LINE_WIDTH_MAX) : 1.5,
       lineType: lineType,
       opacity: Number.isFinite(opacity) ? clamp(opacity, 0, 1) : 1
     };
@@ -643,7 +662,7 @@
     (plot.seriesRefs || []).forEach(function (ref) {
       if (!idSet[ref.seriesId]) return;
       ref.style = normalizeSeriesStyle(ref.style, ref.color);
-      if (patch.lineWidth != null) ref.style.lineWidth = Number(patch.lineWidth);
+      if (patch.lineWidth != null && Number.isFinite(Number(patch.lineWidth))) ref.style.lineWidth = Number(patch.lineWidth);
       if (patch.lineType != null) ref.style.lineType = patch.lineType;
       if (patch.opacity != null) ref.style.opacity = Number(patch.opacity);
       if (patch.color != null && patch.color !== "") {
@@ -851,6 +870,9 @@
     var y = Number.isFinite(Number(posY)) ? clamp(Number(posY), 0, 1) : (Number.isFinite(Number(legend.floatingY)) ? clamp(Number(legend.floatingY), 0, 1) : 0.08);
     var bg = Number(legend.backgroundOpacity);
     var padding = Number(legend.padding);
+    var borderWidth = Number(legend.borderWidth);
+    var borderRadius = Number(legend.borderRadius);
+    var showBorder = legend.showBorder != null ? !!legend.showBorder : !!legend.border;
     return {
       visible: visible !== false,
       position: position,
@@ -870,8 +892,14 @@
       columnGap: Number.isFinite(Number(legend.columnGap)) ? clamp(Number(legend.columnGap), 0, 48) : 12,
       sampleLength: Number.isFinite(Number(legend.sampleLength)) ? clamp(Number(legend.sampleLength), 8, 48) : 16,
       maxWidth: legend.maxWidth == null || legend.maxWidth === "" ? null : Math.max(40, Number(legend.maxWidth)),
+      showBackground: legend.showBackground !== false,
+      backgroundColor: legend.backgroundColor ? String(legend.backgroundColor) : "#ffffff",
       backgroundOpacity: Number.isFinite(bg) ? clamp(bg, 0, 1) : 0.85,
-      border: !!legend.border,
+      showBorder: showBorder,
+      border: showBorder,
+      borderColor: legend.borderColor ? String(legend.borderColor) : "#cccccc",
+      borderWidth: Number.isFinite(borderWidth) ? clamp(borderWidth, 0, 8) : 1,
+      borderRadius: Number.isFinite(borderRadius) ? clamp(borderRadius, 0, 16) : 4,
       padding: Number.isFinite(padding) ? clamp(padding, 0, 24) : 6,
       wrap: legend.wrap !== false
     };
@@ -1567,6 +1595,198 @@
     return "floating";
   }
 
+  function applyMultiSelect(state, action) {
+    var ids = (state && state.ids) || [];
+    var selected = {};
+    ((state && state.selectedIds) || []).forEach(function (item) { selected[item] = true; });
+    var anchorId = state && state.anchorId != null ? state.anchorId : null;
+    action = action || {};
+    var type = action.type;
+    var id = action.id;
+
+    function selectedList() {
+      var inOrder = ids.filter(function (item) { return selected[item]; });
+      Object.keys(selected).forEach(function (item) {
+        if (selected[item] && ids.indexOf(item) < 0) inOrder.push(item);
+      });
+      return inOrder;
+    }
+
+    if (type === "selectAll") {
+      ids.forEach(function (item) { selected[item] = true; });
+      return { selectedIds: selectedList(), anchorId: ids[0] || anchorId };
+    }
+    if (type === "clear") {
+      ids.forEach(function (item) { delete selected[item]; });
+      return { selectedIds: selectedList(), anchorId: null };
+    }
+    if (id == null || ids.indexOf(id) < 0) {
+      return { selectedIds: selectedList(), anchorId: anchorId };
+    }
+    if (type === "range" || action.shiftKey) {
+      var from = ids.indexOf(anchorId);
+      var to = ids.indexOf(id);
+      if (from < 0) {
+        selected[id] = true;
+        return { selectedIds: selectedList(), anchorId: id };
+      }
+      var start = Math.min(from, to);
+      var end = Math.max(from, to);
+      for (var i = start; i <= end; i += 1) selected[ids[i]] = true;
+      return { selectedIds: selectedList(), anchorId: anchorId };
+    }
+    if (selected[id]) delete selected[id];
+    else selected[id] = true;
+    return { selectedIds: selectedList(), anchorId: id };
+  }
+
+  function createMultiSelectController(options) {
+    options = options || {};
+    var selectedIds = (options.selectedIds || []).slice();
+    var anchorId = options.anchorId || null;
+
+    function currentIds() {
+      return typeof options.getIds === "function" ? options.getIds() : (options.ids || []);
+    }
+
+    function emit() {
+      if (typeof options.onSelectionChange === "function") options.onSelectionChange(selectedIds.slice(), anchorId);
+    }
+
+    function apply(action) {
+      var next = applyMultiSelect({
+        ids: currentIds(),
+        selectedIds: selectedIds,
+        anchorId: anchorId
+      }, action);
+      selectedIds = next.selectedIds;
+      anchorId = next.anchorId;
+      emit();
+      return next;
+    }
+
+    return {
+      click: function (id, mods) {
+        mods = mods || {};
+        return apply({
+          type: mods.shiftKey ? "range" : "toggle",
+          id: id,
+          shiftKey: !!mods.shiftKey,
+          ctrlKey: !!mods.ctrlKey,
+          metaKey: !!mods.metaKey
+        });
+      },
+      toggle: function (id) { return apply({ type: "toggle", id: id }); },
+      range: function (id) { return apply({ type: "range", id: id }); },
+      selectAll: function () { return apply({ type: "selectAll" }); },
+      clear: function () { return apply({ type: "clear" }); },
+      selectedIds: function () { return selectedIds.slice(); },
+      anchorId: function () { return anchorId; }
+    };
+  }
+
+  function legendLayoutSlot(position) {
+    var resolved = resolveLegendPosition({ position: position });
+    if (resolved === "free" || resolved === "floating") return "overlay";
+    if (resolved === "top" || resolved === "top-left" || resolved === "top-center" || resolved === "top-right") return "top";
+    if (resolved === "bottom" || resolved === "bottom-left" || resolved === "bottom-center" || resolved === "bottom-right") return "bottom";
+    if (resolved === "left" || resolved === "middle-left") return "left";
+    if (resolved === "right" || resolved === "middle-right") return "right";
+    return "overlay";
+  }
+
+  function boxSize(value) {
+    value = value || {};
+    return {
+      width: Number(value.width) || 0,
+      height: Number(value.height) || 0,
+      ascent: Number(value.ascent) || 0,
+      descent: Number(value.descent) || 0
+    };
+  }
+
+  function computePlotLayout(figureWidth, figureHeight, metrics) {
+    var G = FIGURE_LAYOUT;
+    metrics = metrics || {};
+    var title = boxSize(metrics.title);
+    var subtitle = boxSize(metrics.subtitle);
+    var note = boxSize(metrics.note);
+    var xTitle = boxSize(metrics.xAxisTitle);
+    var yTitle = boxSize(metrics.yAxisTitle);
+    var xTick = boxSize(metrics.xTick);
+    var yTick = boxSize(metrics.yTick);
+    var legend = boxSize(metrics.legend);
+    var slot = legendLayoutSlot(metrics.legendPosition);
+    var legendW = legend.width;
+    var legendH = legend.height;
+    var header = 0;
+    if (title.height) header += title.height;
+    if (subtitle.height) header += (header ? 4 : 0) + subtitle.height;
+    if (note.height) header += (header ? 4 : 0) + note.height;
+
+    var top = G.outerPadding + header;
+    if (header) top += G.titleGap;
+    if (slot === "top" && legendH) top += legendH + G.legendGap;
+    top += Math.max(yTick.height, xTick.height) / 2;
+
+    var bottom = G.outerPadding + G.tickLabelGap + xTick.height;
+    if (xTitle.height) bottom += G.axisTitleGap + xTitle.height;
+    if (slot === "bottom" && legendH) bottom += G.legendGap + legendH;
+
+    var left = G.outerPadding;
+    if (yTitle.height) left += yTitle.height + G.axisTitleGap;
+    left += yTick.width + G.tickLabelGap;
+    if (slot === "left" && legendW) left += legendW + G.legendGap;
+
+    var right = Math.max(G.outerPadding, xTick.width / 2 + 4);
+    if (slot === "right" && legendW) right += legendW + G.legendGap;
+
+    var neededWidth = left + G.minPlotWidth + right;
+    var neededHeight = top + G.minPlotHeight + bottom;
+    var width = Math.max(Number(figureWidth) || 0, neededWidth);
+    var height = Math.max(Number(figureHeight) || 0, neededHeight);
+    var plotWidth = Math.max(G.minPlotWidth, width - left - right);
+    var plotHeight = Math.max(G.minPlotHeight, height - top - bottom);
+    var titleX = G.outerPadding;
+    var titleY = G.outerPadding + (title.ascent || title.height);
+    var subtitleY = titleY + (subtitle.height ? 4 + (subtitle.ascent || subtitle.height) : 0);
+    var noteY = (subtitle.height ? subtitleY : titleY) + (note.height ? 4 + (note.ascent || note.height) : 0);
+    var legendBox = { x: left, y: top, width: legendW, height: legendH, slot: slot, pad: 0 };
+    var alignRight = metrics.legendPosition === "top-right" || metrics.legendPosition === "bottom-right";
+    var alignCenter = metrics.legendPosition === "top-center" || metrics.legendPosition === "bottom-center"
+      || metrics.legendPosition === "top" || metrics.legendPosition === "bottom" || metrics.legendPosition === "auto";
+    if (slot === "top") {
+      legendBox.y = G.outerPadding + header + (header ? G.titleGap : 0);
+      legendBox.x = alignRight ? left + Math.max(0, plotWidth - legendW) : (alignCenter ? left + Math.max(0, (plotWidth - legendW) / 2) : left);
+    } else if (slot === "bottom") {
+      legendBox.y = height - G.outerPadding - legendH;
+      legendBox.x = alignRight ? left + Math.max(0, plotWidth - legendW) : (alignCenter ? left + Math.max(0, (plotWidth - legendW) / 2) : left);
+    } else if (slot === "left") {
+      legendBox.x = G.outerPadding;
+      legendBox.y = top;
+    } else if (slot === "right") {
+      legendBox.x = width - G.outerPadding - legendW;
+      legendBox.y = top;
+    }
+    var yTitleX = G.outerPadding + (slot === "left" ? legendW + G.legendGap : 0) + yTitle.height / 2;
+    var xTitleY = height - G.outerPadding - (slot === "bottom" ? legendH + G.legendGap : 0) - (xTitle.descent || 0);
+    return {
+      width: width,
+      height: height,
+      grown: width > (Number(figureWidth) || 0) + 0.5 || height > (Number(figureHeight) || 0) + 0.5,
+      margin: { top: top, right: right, bottom: bottom, left: left },
+      plotArea: { x: left, y: top, width: plotWidth, height: plotHeight },
+      legendBox: legendBox,
+      titlePos: { x: titleX, y: titleY },
+      subtitlePos: { x: titleX, y: subtitleY },
+      notePos: { x: titleX, y: noteY },
+      xAxisTitlePos: { x: left + plotWidth / 2, y: xTitleY },
+      yAxisTitlePos: { x: yTitleX, y: top + plotHeight / 2 },
+      xTickY: top + plotHeight + G.tickLabelGap + (xTick.ascent || xTick.height * 0.8),
+      yTickX: left - G.tickLabelGap
+    };
+  }
+
   var api = {
     SOFTWARE_VERSION: SOFTWARE_VERSION,
     PROJECT_FORMAT_VERSION: PROJECT_FORMAT_VERSION,
@@ -1574,7 +1794,12 @@
     TIME_IN_SECONDS: TIME_IN_SECONDS,
     TIME_LABELS: TIME_LABELS,
     LINE_TYPES: LINE_TYPES,
+    LINE_WIDTH_MIN: LINE_WIDTH_MIN,
+    LINE_WIDTH_MAX: LINE_WIDTH_MAX,
+    LINE_WIDTH_STEP: LINE_WIDTH_STEP,
     DEFAULT_FONT: DEFAULT_FONT,
+    FONT_FAMILIES: FONT_FAMILIES,
+    FIGURE_LAYOUT: FIGURE_LAYOUT,
     DEFAULT_GROUPS: DEFAULT_GROUPS,
     MAX_MAJOR_TICKS: MAX_MAJOR_TICKS,
     ZOOM_MIN: ZOOM_MIN,
@@ -1654,7 +1879,11 @@
     layoutLegendItems: layoutLegendItems,
     resolveLegendPosition: resolveLegendPosition,
     legendAnchor: legendAnchor,
+    legendLayoutSlot: legendLayoutSlot,
     dockLegendPosition: dockLegendPosition,
+    applyMultiSelect: applyMultiSelect,
+    createMultiSelectController: createMultiSelectController,
+    computePlotLayout: computePlotLayout,
     normalizeUi: normalizeUi,
     normalizeLegend: normalizeLegend,
     normalizeAxis: normalizeAxis,

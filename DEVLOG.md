@@ -1,6 +1,6 @@
 # DEVLOG
 
-本文件放在仓库根目录，只追加、不覆盖，用于完整记录开发全过程。当前版本、如何运行和下一步见 [PROGRESS-v0.2.2.md](Progress/PROGRESS-v0.2.2.md)。
+本文件放在仓库根目录，只追加、不覆盖，用于完整记录开发全过程。当前版本、如何运行和下一步见 [PROGRESS-v0.2.3.md](Progress/PROGRESS-v0.2.3.md)。
 
 ---
 
@@ -415,4 +415,66 @@ v0.2.2 在 v0.2.1 上继续迭代科研出图工作流：修正 Series 选择语
 - 页面：https://github.com/aidisen975-cmd/Visualizer/releases/tag/v0.2.2
 
 将当时工作区推到 `feat/v0.1.0` 与 `main`，打 tag `v0.2.2`，GitHub 标记为 Pre-release。附件 `Visualizer-v0.2.2.zip`（html + `visualizer-core.js` + `README.md`）。Mac / Windows 共用这一份浏览器页面，不打包原生客户端。
+
+---
+
+## v0.2.3
+
+- 软件版本：`0.2.3`
+- 工程格式：`projectFormatVersion: "1.0"`（未升格式版本，缺字段由 `parseProject` normalize）
+- 日期：2026-09-21
+
+v0.2.3 在 v0.2.2 上做交互与排版修正，不进入 Local Zoom / Inset / Cursor / Annotation / Formula。目标是把 Series 多选、标题自动留白、图例透明度和线宽/中文字体补齐到可日常出图。
+
+### 本轮实际完成
+
+- 抽出 `applyMultiSelect` / `createMultiSelectController`。左侧 Data Selection 与右侧 Figure Series Selection 共用 click / toggle / range / selectAll / clear；两个选择集互不同步。
+- 右侧 Series 编辑区补全选 / 全不选、Shift 连选、Ctrl/Cmd 点选、Ctrl/Cmd+A；Shift 锚点按 Figure 分开保存。眼睛按钮仍只改 `visible`。
+- Series 行改为两行：显示名称 1 行省略，原始名称最多 2 行；hover 看全文；操作按钮不被挤掉。
+- `computePlotLayout` 用实际文字测量（canvas `measureText`）计算四边 margin 与 Plot Area。固定位置 Legend 参与对应边距，自由 Legend 只做 overlay。字号过大时先缩 Plot Area，低于 160×110 才增大 Figure。
+- Legend 背景：显示背景、颜色、透明度 0–100%、边框颜色/宽度；`fill-opacity` 只作用在背景 rect。
+- 线宽改为 slider + 数字，0.5–12 px、0.1 步进；多选线宽不同时显示混合态。图例线样同步主曲线线宽。
+- 字体下拉：系统默认、微软雅黑、宋体、Arial、Times New Roman。不打包字体文件。
+
+### 数据模型变化
+
+均为向后兼容可选字段：
+
+- Project：`softwareVersion: "0.2.3"`。
+- Legend：`showBackground`、`backgroundColor`、`showBorder`、`borderColor`、`borderWidth`、`borderRadius`。旧工程缺省时补白底 85% 透明度。
+- Series `style.lineWidth` 仍 clamp 到 0.5–12；UI 不再用 4px 档位下拉。
+
+### 明确未做 / 简化
+
+- 未做 Undo、Local Zoom、Inset、Annotation 编辑、Cursor、Formula、MAE/RMSE、双 Y、Heatmap、3D。
+- 自动增大 Figure 不重排邻图；自由画布上超大字号仍可能靠近邻图，需用户拖开。
+- 本机没有微软雅黑 / 宋体时走 CSS fallback，不报错。
+
+### 验证
+
+#### Node（已执行）
+
+`node tests/core-test.js` 全部通过。新增：多选 toggle/range/selectAll/clear、两个 selection scope 隔离、lineWidth clamp、微软雅黑/宋体与 Legend opacity / lineWidth 8.5 round-trip、Top legend 占上边距而 free 不推挤、Y 标题变大时 left margin 增加、过小 Plot Area 时增大 Figure。
+
+#### 浏览器（已执行，macOS / Cursor 内置浏览器，http://127.0.0.1:8891/）
+
+- kicker 为 v0.2.3；字体下拉含微软雅黑 / 宋体；图例有显示背景、透明度 slider、边框控件。
+- 导入 electrical CSV：左侧全选 3 条，加入 Figure 1；右侧出现 Display/Original 分层。
+- 右侧单击 1 条、Shift 连选 3 条；左侧勾选仍为 3，选择集不串。全不选 / 全选、隐藏眼睛后编辑选择仍为 3。
+- 图标题 40px + 微软雅黑、Y 轴标题 32px + 宋体：文字在 Figure 内，Y title x=26，无 SVG 文本溢出。线宽 8 同步到主曲线和图例线样。
+- 图例透明度 0 再 50%、切自由位置后可拖；Preview 与编辑器同用 `buildCanvasSvg()`，线宽 8、透明度 0.5。
+- 一大两小三图外框不重叠。
+
+未在浏览器里点选系统保存对话框；工程 round-trip 由 Node serialize/parse 覆盖。
+
+### 已知限制
+
+- 无 File System Access 的浏览器只能用默认下载目录。
+- 窄视口下三栏仍会挤压画布。
+- 等间距提示没有数值标签。
+
+### 下一步
+
+停在 v0.2.3。后续可补：Undo、单图导出、标注编辑、等距数值标签。
+
 

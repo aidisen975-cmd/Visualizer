@@ -454,15 +454,39 @@
       display: grid;
       grid-template-columns: auto auto auto minmax(0, 1fr) auto;
       gap: 6px;
-      align-items: center;
-      margin-bottom: 4px;
+      align-items: start;
+      margin-bottom: 8px;
     }
     .tv-ref-row input[type="checkbox"] { margin: 0; }
+    .tv-series-names {
+      min-width: 0;
+      overflow: hidden;
+    }
+    .tv-series-display {
+      display: block;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-align: left;
+      width: 100%;
+    }
+    .tv-series-original {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      color: var(--faint);
+      font-size: 10px;
+      line-height: 1.35;
+      word-break: break-all;
+    }
     .tv-swatch {
       width: 18px;
       height: 3px;
       border-radius: 1px;
       justify-self: center;
+      margin-top: 8px;
     }
     .tv-eye-btn {
       width: 22px;
@@ -486,6 +510,23 @@
       text-align: left;
       justify-self: stretch;
       width: auto;
+    }
+    .tv-line-width,
+    .tv-legend-style-panel {
+      display: grid;
+      gap: 6px;
+    }
+    .tv-line-width-row,
+    .tv-opacity-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 64px auto;
+      gap: 8px;
+      align-items: center;
+    }
+    .tv-line-width input[type="range"],
+    .tv-opacity-row input[type="range"] {
+      width: 100%;
+      min-width: 0;
     }
     .tv-count-line {
       display: flex;
@@ -581,7 +622,7 @@
   <div class="tv-app" id="tvApp" data-theme="light">
     <header class="tv-header">
       <div class="tv-brand">
-        <p class="tv-kicker">Visualizer v0.2.2</p>
+        <p class="tv-kicker">Visualizer v0.2.3</p>
         <h1>实验数据可视化工作台</h1>
       </div>
       <div class="tv-header-meta">
@@ -682,11 +723,13 @@
     core.ensureDefaultPlot(project);
     var selectedPlotId = project.plots[0].id;
     var selectedRefIndex = 0;
+    var lastSelectedSeriesId = {};
     var checkedSeries = new Set();
     var collapsedDatasets = new Set();
     var selectionAnchor = {};
     var activeDatasetId = null;
     var dataPanelActive = false;
+    var propsPanelActive = false;
     var canvasActive = false;
     var projectFileHandle = null;
     var dirty = false;
@@ -894,6 +937,35 @@
       return count;
     }
 
+    function applyDatasetSelection(dataset, action) {
+      var ids = dataset.series.map(function (series) { return series.id; });
+      var next = core.applyMultiSelect({
+        ids: ids,
+        selectedIds: Array.from(checkedSeries),
+        anchorId: selectionAnchor[dataset.id]
+      }, action);
+      checkedSeries = new Set(next.selectedIds);
+      selectionAnchor[dataset.id] = next.anchorId;
+    }
+
+    function applyFigureSelection(plot, action) {
+      var ids = (plot.seriesRefs || []).map(function (ref) { return ref.seriesId; });
+      var selected = (plot.seriesRefs || []).filter(function (ref) { return ref.selected; }).map(function (ref) { return ref.seriesId; });
+      var next = core.applyMultiSelect({
+        ids: ids,
+        selectedIds: selected,
+        anchorId: lastSelectedSeriesId[plot.id]
+      }, action);
+      var set = {};
+      next.selectedIds.forEach(function (id) { set[id] = true; });
+      (plot.seriesRefs || []).forEach(function (ref) { ref.selected = !!set[ref.seriesId]; });
+      lastSelectedSeriesId[plot.id] = next.anchorId;
+      if (next.anchorId) {
+        var idx = ids.indexOf(next.anchorId);
+        if (idx >= 0) selectedRefIndex = idx;
+      }
+    }
+
     function selectedPlot() {
       return project.plots.find(function (plot) { return plot.id === selectedPlotId; }) || null;
     }
@@ -921,8 +993,31 @@
       return measureText.ctx.measureText(text).width;
     }
 
-    function measureLegend(text, fontSize) {
-      return measureText(text, fontSize + "px Aptos, Helvetica Neue, Noto Sans SC, sans-serif");
+    function measureStyledText(text, style) {
+      if (!text) return { width: 0, height: 0, ascent: 0, descent: 0 };
+      style = style || {};
+      var fontSize = Number(style.fontSize) || 12;
+      var font = (style.italic ? "italic " : "") + (style.fontWeight || "400") + " " + fontSize + "px " + (style.fontFamily || core.DEFAULT_FONT);
+      if (!measureStyledText.cache) measureStyledText.cache = {};
+      var key = font + "\0" + text;
+      if (measureStyledText.cache[key]) return measureStyledText.cache[key];
+      if (!measureText.ctx) measureText.ctx = document.createElement("canvas").getContext("2d");
+      measureText.ctx.font = font;
+      var m = measureText.ctx.measureText(text);
+      var ascent = Number.isFinite(m.actualBoundingBoxAscent) ? m.actualBoundingBoxAscent : fontSize * 0.8;
+      var descent = Number.isFinite(m.actualBoundingBoxDescent) ? m.actualBoundingBoxDescent : fontSize * 0.2;
+      var size = {
+        width: m.width,
+        height: Math.max(fontSize, ascent + descent),
+        ascent: ascent,
+        descent: descent
+      };
+      measureStyledText.cache[key] = size;
+      return size;
+    }
+
+    function measureLegend(text, style) {
+      return measureStyledText(text, style).width;
     }
 
     function plotLegendItems(plot, resolved) {
@@ -987,23 +1082,54 @@
       var yTicks = yTickSet.major;
       var legendText = plot.textStyles.legend;
       var fontSize = plot.legend.fontSize || legendText.fontSize || 12;
-      var yLabelWidth = yTicks.reduce(function (max, tick) {
-        return Math.max(max, measureText(core.formatTickValue(tick, plot.yAxis), (plot.textStyles.yTick.fontSize || 10) + "px " + (plot.textStyles.yTick.fontFamily || core.DEFAULT_FONT)));
-      }, 24);
+      var legendStyle = {
+        fontFamily: plot.legend.fontFamily || legendText.fontFamily,
+        fontSize: fontSize,
+        fontWeight: plot.legend.fontWeight || legendText.fontWeight,
+        italic: plot.legend.italic || legendText.italic
+      };
       var xTitle = core.resolvedAxisTitle(plot.xAxis);
       var yTitle = core.resolvedAxisTitle(plot.yAxis);
-      var headerBottom = 28 + (plot.subtitle ? 16 : 0) + (plot.note ? 15 : 0);
-      var footer = 20 + (xTitle ? 18 : 0);
-      var left = Math.max(44, 18 + yLabelWidth);
-      var legendItems = plot.legend.visible ? plotLegendItems(plot, resolved) : [];
+      var yTickSize = yTicks.reduce(function (max, tick) {
+        var size = measureStyledText(core.formatTickValue(tick, plot.yAxis), plot.textStyles.yTick);
+        return {
+          width: Math.max(max.width, size.width),
+          height: Math.max(max.height, size.height),
+          ascent: Math.max(max.ascent, size.ascent),
+          descent: Math.max(max.descent, size.descent)
+        };
+      }, { width: 12, height: plot.textStyles.yTick.fontSize || 10, ascent: 0, descent: 0 });
+      var xTickSize = xTicks.reduce(function (max, tick) {
+        var size = measureStyledText(core.formatTickValue(tick, plot.xAxis), plot.textStyles.xTick);
+        return {
+          width: Math.max(max.width, size.width),
+          height: Math.max(max.height, size.height),
+          ascent: Math.max(max.ascent, size.ascent),
+          descent: Math.max(max.descent, size.descent)
+        };
+      }, { width: 12, height: plot.textStyles.xTick.fontSize || 10, ascent: 0, descent: 0 });
+      var metrics = {
+        title: measureStyledText(plot.title || "未命名图", plot.textStyles.title),
+        subtitle: measureStyledText(plot.subtitle, { fontFamily: plot.textStyles.title.fontFamily, fontSize: 11, fontWeight: "400" }),
+        note: measureStyledText(plot.note, { fontFamily: plot.textStyles.title.fontFamily, fontSize: 10, fontWeight: "400" }),
+        xAxisTitle: measureStyledText(xTitle, plot.textStyles.xAxisTitle),
+        yAxisTitle: measureStyledText(yTitle, plot.textStyles.yAxisTitle),
+        xTick: xTickSize,
+        yTick: yTickSize,
+        legend: { width: 0, height: 0 },
+        legendPosition: plot.legend.position
+      };
       var position = core.resolveLegendPosition(plot.legend);
-      var inside = position !== "auto" && position !== "top" && position !== "bottom" && position !== "left" && position !== "right";
-      var maxLegendWidth = plot.legend.maxWidth || (position === "left" || position === "right"
+      var slot = core.legendLayoutSlot(position);
+      var overlay = slot === "overlay";
+      var draft = core.computePlotLayout(width, height, metrics);
+      var legendItems = plot.legend.visible ? plotLegendItems(plot, resolved) : [];
+      var maxLegendWidth = plot.legend.maxWidth || (slot === "left" || slot === "right"
         ? Math.max(80, Math.min(width * 0.32, 280))
-        : Math.max(80, width - left - 16));
-      var maxLegendHeight = position === "top" || position === "bottom"
-        ? Math.max(16, Math.min(height * 0.4, height - headerBottom - footer - 80))
-        : Math.max(16, height - headerBottom - footer - 24);
+        : Math.max(80, draft.plotArea.width));
+      var maxLegendHeight = slot === "top" || slot === "bottom"
+        ? Math.max(16, Math.min(height * 0.4, draft.plotArea.height))
+        : Math.max(16, draft.plotArea.height);
       var legend = core.layoutLegendItems(legendItems, {
         maxWidth: maxLegendWidth,
         maxHeight: maxLegendHeight,
@@ -1015,33 +1141,34 @@
         columns: plot.legend.columns,
         rows: plot.legend.rows,
         wrap: plot.legend.wrap,
-        measure: function (text) { return measureLegend(text, fontSize); }
+        measure: function (text) { return measureLegend(text, legendStyle); }
       });
-      var legendBox = { x: 0, y: 0, width: legend.width, height: legend.height, position: position };
-      var margin = { top: headerBottom, right: 16, bottom: footer, left: left };
-      if (!inside && legend.height) {
-        if (position === "top") {
-          margin.top += legend.height + 8;
-          legendBox.x = left;
-          legendBox.y = headerBottom + 2;
-        } else if (position === "bottom") {
-          margin.bottom += legend.height + 8;
-          legendBox.x = left;
-          legendBox.y = height - margin.bottom + 8;
-        } else if (position === "left") {
-          margin.left += legend.width + 10;
-          legendBox.x = 14;
-          legendBox.y = margin.top;
-        } else if (position === "right") {
-          margin.right += legend.width + 10;
-          legendBox.x = width - margin.right + 8;
-          legendBox.y = margin.top;
-        }
+      var pad = plot.legend.padding || 6;
+      metrics.legend = {
+        width: legend.width + (legend.height ? pad * 2 : 0),
+        height: legend.height + (legend.height ? pad * 2 : 0)
+      };
+      metrics.legendPosition = position;
+      var layout = core.computePlotLayout(width, height, metrics);
+      if (layout.grown && !drag) {
+        plot.layout.width = layout.width;
+        plot.layout.height = layout.height;
+        core.syncCanvasToPlots(project);
       }
-      var plotWidth = Math.max(40, width - margin.left - margin.right);
-      var plotHeight = Math.max(40, height - margin.top - margin.bottom);
-      if (inside && legend.height) {
-        var pad = plot.legend.padding || 6;
+      width = layout.width;
+      height = layout.height;
+      var margin = layout.margin;
+      var plotWidth = layout.plotArea.width;
+      var plotHeight = layout.plotArea.height;
+      var legendBox = {
+        x: layout.legendBox.x,
+        y: layout.legendBox.y,
+        width: legend.width,
+        height: legend.height,
+        position: position,
+        pad: pad
+      };
+      if (overlay && legend.height) {
         var fx = plot.legend.x;
         var fy = plot.legend.y;
         if (position !== "free") {
@@ -1055,9 +1182,8 @@
         var boxH = legend.height + pad * 2;
         legendBox.x = margin.left + fx * Math.max(1, plotWidth - boxW);
         legendBox.y = margin.top + fy * Math.max(1, plotHeight - boxH);
-        legendBox.x = core.clamp(legendBox.x, margin.left, margin.left + plotWidth - boxW);
-        legendBox.y = core.clamp(legendBox.y, margin.top, margin.top + plotHeight - boxH);
-        legendBox.pad = pad;
+        legendBox.x = core.clamp(legendBox.x, margin.left, Math.max(margin.left, margin.left + plotWidth - boxW));
+        legendBox.y = core.clamp(legendBox.y, margin.top, Math.max(margin.top, margin.top + plotHeight - boxH));
       }
       var xScale = function (value) {
         return margin.left + (value - extents.x[0]) / (extents.x[1] - extents.x[0] || 1) * plotWidth;
@@ -1075,14 +1201,14 @@
       });
       svg.__legendBox = legendBox;
       svg.__legendOverflow = legend.overflow || 0;
-      svg.__plotArea = { x: margin.left, y: margin.top, width: plotWidth, height: plotHeight };
+      svg.__plotArea = layout.plotArea;
       appendSvg(svg, "rect", { x: 0, y: 0, width: width, height: height, fill: plot.background || colors.surface });
-      applyText(svg, 14, 22, plot.textStyles.title, colors.ink, {}, plot.title || "未命名图");
+      applyText(svg, layout.titlePos.x, layout.titlePos.y, plot.textStyles.title, colors.ink, {}, plot.title || "未命名图");
       if (plot.subtitle) {
-        applyText(svg, 14, 40, { fontFamily: plot.textStyles.title.fontFamily, fontSize: 11, fontColor: colors.muted, fontWeight: "400" }, colors.muted, {}, plot.subtitle);
+        applyText(svg, layout.subtitlePos.x, layout.subtitlePos.y, { fontFamily: plot.textStyles.title.fontFamily, fontSize: 11, fontColor: colors.muted, fontWeight: "400" }, colors.muted, {}, plot.subtitle);
       }
       if (plot.note) {
-        applyText(svg, 14, plot.subtitle ? 55 : 40, { fontFamily: plot.textStyles.title.fontFamily, fontSize: 10, fontColor: colors.faint, fontWeight: "400" }, colors.faint, {}, plot.note);
+        applyText(svg, layout.notePos.x, layout.notePos.y, { fontFamily: plot.textStyles.title.fontFamily, fontSize: 10, fontColor: colors.faint, fontWeight: "400" }, colors.faint, {}, plot.note);
       }
       var axisStroke = plot.xAxis.lineColor || colors.ink;
       var axisWidth = plot.xAxis.lineWidth || 1.1;
@@ -1097,22 +1223,22 @@
       yTicks.forEach(function (tick) {
         var y = yScale(tick);
         appendSvg(svg, "line", { x1: margin.left, y1: y, x2: width - margin.right, y2: y, stroke: colors.grid, "stroke-width": 1 });
-        applyText(svg, margin.left - 8, y + 3.5, plot.textStyles.yTick, colors.muted, { "text-anchor": "end" }, core.formatTickValue(tick, plot.yAxis));
+        applyText(svg, layout.yTickX, y + (yTickSize.ascent - yTickSize.descent) / 2, plot.textStyles.yTick, colors.muted, { "text-anchor": "end" }, core.formatTickValue(tick, plot.yAxis));
       });
       xTicks.forEach(function (tick) {
         var x = xScale(tick);
         appendSvg(svg, "line", { x1: x, y1: height - margin.bottom, x2: x, y2: height - margin.bottom + 4, stroke: colors.line, "stroke-width": 1 });
-        applyText(svg, x, height - margin.bottom + 14, plot.textStyles.xTick, colors.muted, { "text-anchor": "middle" }, core.formatTickValue(tick, plot.xAxis));
+        applyText(svg, x, layout.xTickY, plot.textStyles.xTick, colors.muted, { "text-anchor": "middle" }, core.formatTickValue(tick, plot.xAxis));
       });
       appendSvg(svg, "line", { x1: margin.left, y1: margin.top, x2: margin.left, y2: height - margin.bottom, stroke: plot.yAxis.lineColor || axisStroke, "stroke-width": plot.yAxis.lineWidth || axisWidth });
       appendSvg(svg, "line", { x1: margin.left, y1: height - margin.bottom, x2: width - margin.right, y2: height - margin.bottom, stroke: axisStroke, "stroke-width": axisWidth });
       if (xTitle) {
-        applyText(svg, margin.left + plotWidth / 2, height - 6, plot.textStyles.xAxisTitle, colors.ink, { "text-anchor": "middle" }, xTitle);
+        applyText(svg, layout.xAxisTitlePos.x, layout.xAxisTitlePos.y, plot.textStyles.xAxisTitle, colors.ink, { "text-anchor": "middle" }, xTitle);
       }
       if (yTitle) {
-        var yTitleNode = applyText(svg, 12, margin.top + plotHeight / 2, plot.textStyles.yAxisTitle, colors.ink, {
+        var yTitleNode = applyText(svg, layout.yAxisTitlePos.x, layout.yAxisTitlePos.y, plot.textStyles.yAxisTitle, colors.ink, {
           "text-anchor": "middle",
-          transform: "rotate(-90 12 " + (margin.top + plotHeight / 2) + ")"
+          transform: "rotate(-90 " + layout.yAxisTitlePos.x + " " + layout.yAxisTitlePos.y + ")"
         }, yTitle);
         yTitleNode.setAttribute("letter-spacing", ".01em");
       }
@@ -1123,17 +1249,20 @@
         pathAttrs.d = linePath(xs, item.series.y, xScale, yScale, 1400);
         appendSvg(svg, "path", pathAttrs);
       });
-      if (inside && legend.height) {
-        var bg = plot.legend.backgroundOpacity;
-        if (bg > 0) {
+      if (legend.height) {
+        var showBg = plot.legend.showBackground !== false;
+        var showBorder = !!(plot.legend.showBorder || plot.legend.border);
+        if (showBg || showBorder) {
+          var fillOpacity = Number.isFinite(Number(plot.legend.backgroundOpacity)) ? plot.legend.backgroundOpacity : 0.85;
           appendSvg(svg, "rect", {
             x: legendBox.x, y: legendBox.y,
             width: legend.width + (legendBox.pad || 0) * 2,
             height: legend.height + (legendBox.pad || 0) * 2,
-            fill: colors.surface,
-            "fill-opacity": bg,
-            stroke: plot.legend.border ? colors.line : "none",
-            rx: 2
+            fill: showBg ? (plot.legend.backgroundColor || colors.surface) : "none",
+            "fill-opacity": showBg ? fillOpacity : 0,
+            stroke: showBorder ? (plot.legend.borderColor || colors.line) : "none",
+            "stroke-width": showBorder ? (plot.legend.borderWidth || 1) : 0,
+            rx: plot.legend.borderRadius == null ? 4 : plot.legend.borderRadius
           });
         }
       }
@@ -1338,48 +1467,39 @@
           }
           selectAll.addEventListener("click", function () {
             activeDatasetId = dataset.id;
-            dataset.series.forEach(function (series) { checkedSeries.add(series.id); });
+            applyDatasetSelection(dataset, { type: "selectAll" });
             refreshChecks();
           });
           selectNone.addEventListener("click", function () {
             activeDatasetId = dataset.id;
-            dataset.series.forEach(function (series) { checkedSeries.delete(series.id); });
+            applyDatasetSelection(dataset, { type: "clear" });
             refreshChecks();
           });
           tools.append(selectAll, selectNone);
           box.appendChild(tools);
           var list = document.createElement("div");
           list.className = "tv-series-list";
-          dataset.series.forEach(function (series, index) {
+          dataset.series.forEach(function (series) {
             var row = document.createElement("label");
             row.className = "tv-series-row";
             var check = document.createElement("input");
             check.type = "checkbox";
             check.checked = checkedSeries.has(series.id);
-            check.addEventListener("change", function () {
-              activeDatasetId = dataset.id;
-              if (check.checked) checkedSeries.add(series.id);
-              else checkedSeries.delete(series.id);
-              var n = selectedCount(dataset);
-              count.textContent = n
-                ? dataset.series.length + "条 · 已选" + n
-                : dataset.series.length + "条";
-            });
             row.addEventListener("click", function (event) {
+              event.preventDefault();
               activeDatasetId = dataset.id;
-              if (event.shiftKey) {
-                event.preventDefault();
-                var from = selectionAnchor[dataset.id] != null ? selectionAnchor[dataset.id] : index;
-                var start = Math.min(from, index);
-                var end = Math.max(from, index);
-                for (var i = start; i <= end; i += 1) checkedSeries.add(dataset.series[i].id);
-                refreshChecks();
-                return;
-              }
-              selectionAnchor[dataset.id] = index;
+              applyDatasetSelection(dataset, {
+                type: event.shiftKey ? "range" : "toggle",
+                id: series.id,
+                shiftKey: event.shiftKey,
+                ctrlKey: event.ctrlKey,
+                metaKey: event.metaKey
+              });
+              refreshChecks();
             }, true);
             var copy = document.createElement("span");
             copy.textContent = core.seriesDisplayName(series);
+            copy.title = core.seriesOriginalName(series);
             var meta = document.createElement("small");
             meta.textContent = series.x.length + " pts";
             row.append(check, copy, meta);
@@ -1571,13 +1691,13 @@
       box.dataset.plotId = plot.id;
       box.style.left = plot.layout.x + "px";
       box.style.top = plot.layout.y + "px";
+      var svg = buildPlotSvg(plot, plot.layout.width, plot.layout.height, true);
       box.style.width = plot.layout.width + "px";
       box.style.height = plot.layout.height + "px";
       var handle = document.createElement("button");
       handle.type = "button";
       handle.className = "tv-plot-resize";
       handle.setAttribute("aria-label", "调整「" + plot.title + "」大小");
-      var svg = buildPlotSvg(plot, plot.layout.width, plot.layout.height, true);
       box.append(svg, handle);
       attachLegendHit(box, plot, svg);
       bindPlotPointer(box, plot, handle);
@@ -1647,14 +1767,85 @@
     }
 
     function fontFamilyControl(labelText, value) {
-      return selectControl(labelText, value || core.DEFAULT_FONT, [
-        [core.DEFAULT_FONT, "默认"],
-        ["Times New Roman, Times, serif", "Times"],
-        ["Georgia, serif", "Georgia"],
-        ["Arial, Helvetica, sans-serif", "Arial"],
-        ["Helvetica Neue, Helvetica, sans-serif", "Helvetica"],
-        ["Courier New, monospace", "Courier"]
-      ]);
+      var options = (core.FONT_FAMILIES || []).map(function (item) { return [item.value, item.label]; });
+      var current = value || core.DEFAULT_FONT;
+      if (!options.some(function (pair) { return pair[0] === current; })) {
+        options.push([current, current.split(",")[0].replace(/['"]/g, "").trim() || current]);
+      }
+      return selectControl(labelText, current, options);
+    }
+
+    function sliderNumberControl(labelText, value, opts) {
+      opts = opts || {};
+      var min = opts.min;
+      var max = opts.max;
+      var step = opts.step;
+      var wrap = document.createElement("div");
+      wrap.className = "tv-line-width";
+      var caption = document.createElement("span");
+      caption.className = "tv-prop-label";
+      caption.textContent = labelText;
+      var row = document.createElement("div");
+      row.className = "tv-line-width-row";
+      var slider = document.createElement("input");
+      slider.type = "range";
+      slider.min = String(min);
+      slider.max = String(max);
+      slider.step = String(step);
+      var number = document.createElement("input");
+      number.className = "tv-field";
+      number.type = "number";
+      number.min = String(min);
+      number.max = String(max);
+      number.step = String(step);
+      if (opts.mixed) {
+        number.placeholder = "混合";
+        number.value = "";
+        slider.value = String(min);
+      } else {
+        number.value = value;
+        slider.value = String(value);
+      }
+      var unit = document.createElement("span");
+      unit.textContent = opts.unit || "";
+      unit.style.color = "var(--muted)";
+      unit.style.fontSize = "11px";
+      var listeners = [];
+      function parseValue(raw) {
+        var n = Number(raw);
+        if (!Number.isFinite(n)) return null;
+        return core.clamp(n, min, max);
+      }
+      function emit(raw) {
+        var n = parseValue(raw);
+        if (n == null) return;
+        slider.value = String(n);
+        number.value = String(n);
+        listeners.forEach(function (fn) { fn(n); });
+      }
+      slider.addEventListener("input", function () { emit(slider.value); });
+      number.addEventListener("input", function () {
+        if (number.value === "") return;
+        var n = parseValue(number.value);
+        if (n == null) return;
+        slider.value = String(n);
+        listeners.forEach(function (fn) { fn(n); });
+      });
+      number.addEventListener("change", function () {
+        var n = parseValue(number.value);
+        if (n == null) {
+          if (!opts.mixed) number.value = slider.value;
+          return;
+        }
+        emit(n);
+      });
+      row.append(slider, number, unit);
+      wrap.append(caption, row);
+      return {
+        wrap: wrap,
+        input: number,
+        onValue: function (fn) { listeners.push(fn); }
+      };
     }
 
     function bindTextStyle(style, onChange) {
@@ -1680,7 +1871,8 @@
       italic.append(italicBox, document.createTextNode(" 斜体"));
       function commit() {
         style.fontFamily = family.input.value;
-        style.fontSize = Number(size.input.value) || style.fontSize;
+        var nextSize = Number(size.input.value);
+        if (size.input.value !== "" && Number.isFinite(nextSize)) style.fontSize = core.clamp(nextSize, 6, 72);
         style.fontColor = color.input.value;
         style.fontWeight = weightBox.checked ? "700" : "400";
         style.italic = italicBox.checked;
@@ -1689,6 +1881,7 @@
       [family.input, size.input, color.input, weightBox, italicBox].forEach(function (el) {
         el.addEventListener("change", commit);
       });
+      size.input.addEventListener("input", commit);
       wrap.append(family.wrap, size.wrap, color.wrap, weight, italic);
       return wrap;
     }
@@ -1891,6 +2084,28 @@
       batch.textContent = "批量重命名";
       batch.addEventListener("click", function () { openRenameDialog(plot); });
       dataSec.body.appendChild(batch);
+      if (plot.seriesRefs.length) {
+        var seriesTools = document.createElement("div");
+        seriesTools.className = "tv-dataset-tools";
+        var figSelectAll = document.createElement("button");
+        figSelectAll.type = "button";
+        figSelectAll.className = "tv-button tv-button--tiny";
+        figSelectAll.textContent = "全选";
+        var figSelectNone = document.createElement("button");
+        figSelectNone.type = "button";
+        figSelectNone.className = "tv-button tv-button--tiny";
+        figSelectNone.textContent = "全不选";
+        figSelectAll.addEventListener("click", function () {
+          applyFigureSelection(plot, { type: "selectAll" });
+          renderProps();
+        });
+        figSelectNone.addEventListener("click", function () {
+          applyFigureSelection(plot, { type: "clear" });
+          renderProps();
+        });
+        seriesTools.append(figSelectAll, figSelectNone);
+        dataSec.body.appendChild(seriesTools);
+      }
       if (!plot.seriesRefs.length) {
         var emptySeries = document.createElement("p");
         emptySeries.className = "tv-hint";
@@ -1899,25 +2114,23 @@
       }
       plot.seriesRefs.forEach(function (ref, index) {
         var series = core.findSeries(project, ref.seriesId);
+        var displayName = series ? core.seriesDisplayName(series) : ref.seriesId;
+        var originalName = series ? core.seriesOriginalName(series) : ref.seriesId;
         var row = document.createElement("div");
         row.className = "tv-ref-row";
         var select = document.createElement("input");
         select.type = "checkbox";
         select.checked = !!ref.selected;
-        select.setAttribute("aria-label", "选择编辑 " + (series ? core.seriesDisplayName(series) : ref.seriesId));
+        select.setAttribute("aria-label", "选择编辑 " + displayName);
         select.title = "选择后用于批量编辑";
-        select.addEventListener("change", function () {
-          ref.selected = select.checked;
-          selectedRefIndex = index;
-          renderProps();
-        });
         var eye = document.createElement("button");
         eye.type = "button";
         eye.className = "tv-eye-btn" + (ref.visible === false ? " is-off" : "");
         eye.textContent = ref.visible === false ? "○" : "●";
-        eye.setAttribute("aria-label", (ref.visible === false ? "显示 " : "隐藏 ") + (series ? core.seriesDisplayName(series) : ref.seriesId));
+        eye.setAttribute("aria-label", (ref.visible === false ? "显示 " : "隐藏 ") + displayName);
         eye.title = ref.visible === false ? "已隐藏，点击显示" : "已显示，点击隐藏";
-        eye.addEventListener("click", function () {
+        eye.addEventListener("click", function (event) {
+          event.stopPropagation();
           ref.visible = ref.visible === false;
           setDirty(true);
           renderCanvas();
@@ -1926,30 +2139,44 @@
         var swatch = document.createElement("span");
         swatch.className = "tv-swatch";
         swatch.style.background = (ref.style && ref.style.color) || ref.color || (series && series.color) || "#2477b6";
-        var name = document.createElement("button");
-        name.type = "button";
-        name.className = "tv-icon-button tv-ref-name";
-        name.textContent = series ? core.seriesDisplayName(series) : ref.seriesId;
-        name.title = series ? core.seriesOriginalName(series) : ref.seriesId;
-        name.addEventListener("click", function () {
-          selectedRefIndex = index;
-          renderProps();
-        });
+        var names = document.createElement("div");
+        names.className = "tv-series-names";
+        var name = document.createElement("div");
+        name.className = "tv-series-display";
+        name.textContent = displayName;
+        var original = document.createElement("div");
+        original.className = "tv-series-original";
+        original.textContent = "原始名称：" + originalName;
+        names.title = displayName + "\n原始名称：" + originalName;
+        names.append(name, original);
         var remove = document.createElement("button");
         remove.type = "button";
         remove.className = "tv-icon-button";
         remove.textContent = "×";
         remove.setAttribute("aria-label", "从本图移除");
-        remove.addEventListener("click", function () {
+        remove.addEventListener("click", function (event) {
+          event.stopPropagation();
           plot.seriesRefs = plot.seriesRefs.filter(function (item) { return item !== ref; });
           core.syncPlotAxisAutoTitles(project, plot);
           setDirty(true);
           renderAll();
         });
-        row.append(select, eye, swatch, name, remove);
+        row.addEventListener("click", function (event) {
+          if (event.target === eye || event.target === remove) return;
+          applyFigureSelection(plot, {
+            type: event.shiftKey ? "range" : "toggle",
+            id: ref.seriesId,
+            shiftKey: event.shiftKey,
+            ctrlKey: event.ctrlKey,
+            metaKey: event.metaKey
+          });
+          selectedRefIndex = index;
+          renderProps();
+        });
+        row.append(select, eye, swatch, names, remove);
         dataSec.body.appendChild(row);
         if (index === selectedRefIndex && series) {
-          var display = fieldControl("显示名称", core.seriesDisplayName(series));
+          var display = fieldControl("显示名称", displayName);
           display.input.addEventListener("change", function () {
             series.displayName = display.input.value;
             series.label = series.displayName;
@@ -1958,10 +2185,7 @@
             renderData();
             renderProps();
           });
-          var original = document.createElement("div");
-          original.className = "tv-original-name";
-          original.textContent = "原始名称：" + core.seriesOriginalName(series);
-          dataSec.body.append(display.wrap, original);
+          dataSec.body.appendChild(display.wrap);
         }
       });
 
@@ -1980,6 +2204,9 @@
           var style = core.normalizeSeriesStyle(ref.style, ref.color);
           return style.color === firstStyle.color;
         });
+        var sameWidth = refs.every(function (ref) {
+          return core.normalizeSeriesStyle(ref.style, ref.color).lineWidth === firstStyle.lineWidth;
+        });
         var color = fieldControl("颜色", sameColor ? (firstStyle.color || "#2477b6") : "#2477b6");
         color.input.type = "color";
         if (!sameColor) color.input.title = "所选 Series 颜色不同；仅在你明确设置后才会统一覆盖";
@@ -1990,9 +2217,13 @@
           ["dash-dot", "点划线"],
           ["long-dash", "长虚线"]
         ]);
-        var lineWidth = selectControl("线宽", String(firstStyle.lineWidth), [
-          ["0.5", "0.5"], ["1", "1"], ["1.5", "1.5"], ["2", "2"], ["2.5", "2.5"], ["3", "3"], ["4", "4"]
-        ]);
+        var lineWidth = sliderNumberControl("线宽", sameWidth ? firstStyle.lineWidth : "", {
+          min: core.LINE_WIDTH_MIN,
+          max: core.LINE_WIDTH_MAX,
+          step: core.LINE_WIDTH_STEP,
+          unit: "px",
+          mixed: !sameWidth
+        });
         var opacity = fieldControl("透明度", firstStyle.opacity);
         opacity.input.type = "number";
         opacity.input.min = "0";
@@ -2005,7 +2236,7 @@
         }
         color.input.addEventListener("input", function () { patchStyle({ color: color.input.value }); });
         lineType.input.addEventListener("change", function () { patchStyle({ lineType: lineType.input.value }); });
-        lineWidth.input.addEventListener("change", function () { patchStyle({ lineWidth: Number(lineWidth.input.value) }); });
+        lineWidth.onValue(function (value) { patchStyle({ lineWidth: value }); });
         opacity.input.addEventListener("change", function () { patchStyle({ opacity: Number(opacity.input.value) }); });
         styleSec.body.append(color.wrap, lineType.wrap, lineWidth.wrap, opacity.wrap);
       }
@@ -2062,16 +2293,30 @@
       var colGap = fieldControl("列间距", plot.legend.columnGap);
       var sample = fieldControl("Symbol 长度", plot.legend.sampleLength);
       var pad = fieldControl("内边距", plot.legend.padding);
-      var bg = fieldControl("背景透明度", plot.legend.backgroundOpacity);
-      [columns, rows, rowGap, colGap, sample, pad, bg].forEach(function (item) { item.input.type = "number"; });
-      bg.input.min = "0";
-      bg.input.max = "1";
-      bg.input.step = "0.05";
-      var border = document.createElement("label");
+      [columns, rows, rowGap, colGap, sample, pad].forEach(function (item) { item.input.type = "number"; });
+      var stylePanel = document.createElement("div");
+      stylePanel.className = "tv-legend-style-panel";
+      var showBg = document.createElement("label");
+      var showBgBox = document.createElement("input");
+      showBgBox.type = "checkbox";
+      showBgBox.checked = plot.legend.showBackground !== false;
+      showBg.append(showBgBox, document.createTextNode(" 显示背景"));
+      var bgColor = fieldControl("背景颜色", plot.legend.backgroundColor || "#ffffff");
+      bgColor.input.type = "color";
+      var opacityPct = Math.round((Number.isFinite(Number(plot.legend.backgroundOpacity)) ? plot.legend.backgroundOpacity : 0.85) * 100);
+      var bgOpacity = sliderNumberControl("背景透明度", opacityPct, { min: 0, max: 100, step: 1, unit: "%" });
+      var showBorder = document.createElement("label");
       var borderBox = document.createElement("input");
       borderBox.type = "checkbox";
-      borderBox.checked = !!plot.legend.border;
-      border.append(borderBox, document.createTextNode(" 边框"));
+      borderBox.checked = !!(plot.legend.showBorder || plot.legend.border);
+      showBorder.append(borderBox, document.createTextNode(" 显示边框"));
+      var borderColor = fieldControl("边框颜色", plot.legend.borderColor || "#cccccc");
+      borderColor.input.type = "color";
+      var borderWidth = fieldControl("边框宽度", plot.legend.borderWidth == null ? 1 : plot.legend.borderWidth);
+      borderWidth.input.type = "number";
+      borderWidth.input.min = "0";
+      borderWidth.input.step = "0.5";
+      stylePanel.append(showBg, bgColor.wrap, bgOpacity.wrap, showBorder, borderColor.wrap, borderWidth.wrap);
       function commitLegend() {
         plot.legend.position = pos.input.value;
         plot.legend.orientation = orient.input.value;
@@ -2081,8 +2326,15 @@
         plot.legend.columnGap = Number(colGap.input.value) || 0;
         plot.legend.sampleLength = Number(sample.input.value) || 16;
         plot.legend.padding = Number(pad.input.value) || 0;
-        plot.legend.backgroundOpacity = Number(bg.input.value);
+        plot.legend.showBackground = showBgBox.checked;
+        plot.legend.backgroundColor = bgColor.input.value;
+        var pct = Number(bgOpacity.input.value);
+        if (Number.isFinite(pct)) plot.legend.backgroundOpacity = core.clamp(pct, 0, 100) / 100;
+        plot.legend.showBorder = borderBox.checked;
         plot.legend.border = borderBox.checked;
+        plot.legend.borderColor = borderColor.input.value;
+        var bw = Number(borderWidth.input.value);
+        if (Number.isFinite(bw)) plot.legend.borderWidth = core.clamp(bw, 0, 8);
         if (plot.legend.position === "free" && (plot.legend.x == null || plot.legend.y == null)) {
           plot.legend.x = 0.72;
           plot.legend.y = 0.18;
@@ -2090,9 +2342,10 @@
         setDirty(true);
         renderCanvas();
       }
-      [pos.input, orient.input, columns.input, rows.input, rowGap.input, colGap.input, sample.input, pad.input, bg.input, borderBox].forEach(function (el) {
+      [pos.input, orient.input, columns.input, rows.input, rowGap.input, colGap.input, sample.input, pad.input, showBgBox, bgColor.input, borderBox, borderColor.input, borderWidth.input].forEach(function (el) {
         el.addEventListener("change", commitLegend);
       });
+      bgOpacity.onValue(function () { commitLegend(); });
       var legendFontCap = document.createElement("span");
       legendFontCap.className = "tv-prop-label";
       legendFontCap.textContent = "图例文字";
@@ -2107,7 +2360,7 @@
           setDirty(true);
           renderCanvas();
         }),
-        rowGap.wrap, colGap.wrap, sample.wrap, pad.wrap, bg.wrap, border
+        rowGap.wrap, colGap.wrap, sample.wrap, pad.wrap, stylePanel
       );
 
       var annSec = section("标注", false);
@@ -2154,18 +2407,18 @@
         if (plot.lockAspect) plot.aspectRatio = plot.layout.height ? plot.layout.width / plot.layout.height : plot.aspectRatio;
         setDirty(true);
       });
-      title.input.addEventListener("change", function () {
+      title.input.addEventListener("input", function () {
         plot.title = title.input.value;
         setDirty(true);
         renderCanvas();
         renderData();
       });
-      subtitle.input.addEventListener("change", function () {
+      subtitle.input.addEventListener("input", function () {
         plot.subtitle = subtitle.input.value;
         setDirty(true);
         renderCanvas();
       });
-      note.input.addEventListener("change", function () {
+      note.input.addEventListener("input", function () {
         plot.note = note.input.value;
         setDirty(true);
         renderCanvas();
@@ -2279,6 +2532,7 @@
       projectFileHandle = handle || null;
       selectedPlotId = next.plots[0] ? next.plots[0].id : null;
       selectedRefIndex = 0;
+      lastSelectedSeriesId = {};
       checkedSeries = new Set();
       collapsedDatasets = new Set();
       selectionAnchor = {};
@@ -2720,26 +2974,41 @@
     document.getElementById("tvExportSvg").addEventListener("click", exportSvg);
     document.addEventListener("mousedown", function (event) {
       dataPanelActive = !!(dataPanel.contains(event.target));
+      propsPanelActive = !!(propsPanel.contains(event.target));
       canvasActive = !!(canvasScroll.contains(event.target));
-      if (!dataPanelActive) return;
-      var box = event.target.closest ? event.target.closest(".tv-dataset") : null;
-      if (box && box.dataset.datasetId) activeDatasetId = box.dataset.datasetId;
+      if (dataPanelActive) {
+        var box = event.target.closest ? event.target.closest(".tv-dataset") : null;
+        if (box && box.dataset.datasetId) activeDatasetId = box.dataset.datasetId;
+      }
     }, true);
     dataPanel.addEventListener("focusin", function (event) {
       dataPanelActive = true;
+      propsPanelActive = false;
       var box = event.target.closest ? event.target.closest(".tv-dataset") : null;
       if (box && box.dataset.datasetId) activeDatasetId = box.dataset.datasetId;
+    });
+    propsPanel.addEventListener("focusin", function () {
+      propsPanelActive = true;
+      dataPanelActive = false;
     });
     document.addEventListener("keydown", function (event) {
       if ((event.key === "a" || event.key === "A") && (event.ctrlKey || event.metaKey)) {
         if (isTextEntry(document.activeElement)) return;
+        if (propsPanelActive) {
+          var plotForSelect = selectedPlot();
+          if (!plotForSelect || !(plotForSelect.seriesRefs || []).length) return;
+          event.preventDefault();
+          applyFigureSelection(plotForSelect, { type: "selectAll" });
+          renderProps();
+          return;
+        }
         if (!dataPanelActive) return;
         var dataset = activeDatasetId ? core.findDataset(project, activeDatasetId) : null;
         if (!dataset && project.datasets.length === 1) dataset = project.datasets[0];
         if (!dataset) return;
         event.preventDefault();
         activeDatasetId = dataset.id;
-        dataset.series.forEach(function (series) { checkedSeries.add(series.id); });
+        applyDatasetSelection(dataset, { type: "selectAll" });
         renderData();
         return;
       }
