@@ -1,113 +1,100 @@
 # DEVLOG
 
-## 本轮版本
-
-- 软件版本：`0.2.1`
-- 工程格式：`projectFormatVersion: "1.0"`（未升格式版本，缺字段由 `parseProject` normalize）
-- 日期：2026-09-18
-
-v0.2.1 是画布编辑、图例管理、多图排版与科研出图体验优化，增量叠加在 v0.2.0 上，不重写引擎。
-
-## 如何运行
-
-1. 用浏览器直接打开 `temperature_trajectory_visualizer.html`（需同目录的 `visualizer-core.js`）。
-2. 或在仓库根目录执行 `python3 -m http.server` 后访问该页面。
-3. 核心数据测试：`node tests/core-test.js`
-
-## 本轮目标
-
-1. 数据簇折叠后显示已选数量。
-2. 左/中/右栏可拖动改宽、可折叠。
-3. Canvas Zoom 与图表真实尺寸分离。
-4. Series originalName / displayName 与批量重命名。
-5. Legend 成为可配置对象（停靠 / 浮动 / 多列）。
-6. 工程名与保存文件名、浏览器标题统一。
-7. 图表 Width/Height 与拖拽 resize 双向同步。
-8. 多图布局模板 + 磁吸。
-9. 坐标轴手动刻度与校验。
-
-## 本轮实际完成
-
-- 数据簇 header：`55条 · 已选17`；折叠不丢 selection。
-- 左右 splitter、双击恢复默认宽、面板折叠按钮；宽度写入 `project.ui`。
-- Canvas Zoom 25%–300%，`[-] [%] [+] [适应窗口] [100%]`；Ctrl/Cmd+滚轮 / +/- / 0；Fit View；坐标用 `screenToWorld` / `worldToScreen`。
-- Series 增加 `originalName` / `displayName`；单条改名与批量预览（查找替换、去前后缀、加前后缀、`T{n}` / `{original}`）。
-- Legend：显示、位置、字体、行列、列数、线样、maxWidth；拖顶部细条可停靠或浮动。
-- 保存/另存为后 `projectName` 取文件 basename；打开「未命名工程」且带文件名时回退 basename；去掉属性栏工程名称输入框。
-- 属性栏 Width/Height 绑定 `plot.layout`；拖角 resize 实时同步；可锁宽高比。
-- 布局模板：单图、1:1、左大右小、左小右大、三等分、一大两小、2×2、3×2。
-- Snap：画布边、他图边、中心、resize 边、等间距候选。
-- 轴：自动/手动刻度、主间隔、次刻度、小数位；非法间隔拒绝；超过 500 主刻度拒绝。
-- 属性栏改为 accordion：图表 / 数据系列 / 图例 / X轴 / Y轴 / 布局。
-
-## 数据模型变化
-
-均为向后兼容可选字段，加载时 normalize：
-
-- Project：`softwareVersion: "0.2.1"`；`ui`（panel 宽、折叠、canvasZoom）；`canvas.zoom` 与 `ui.canvasZoom` 同步。
-- Series：`originalName` / `displayName`。旧工程从 `name` / `label` / `originalHeader` 回填。
-- Plot：`legend` 对象、`lockAspect`、`aspectRatio`。保留 `legendVisible`。
-- Axis：`tickMode` / `majorTick` / `minorTickMode` / `minorTick` / `formatMode` / `decimals`。
-- 默认新图尺寸 1280×800（图表尺寸，不是 CSS zoom）。
-
-## 明确未做 / 简化
-
-- 未做 Undo/Redo（v0.2.0 也没有）。
-- 布局模板作用于当前画布全部图，尚未做多选图。
-- 等间距吸附有对齐，没有在辅助线上画「24」数值标签。
-- PNG/SVG 仍导出整张画布（SOP：Canvas 是导出区）；图按真实 layout 绘制，Canvas Zoom 不进入导出。未另做「只导出选中单图」按钮。
-- 图例拖动用顶部 10px 把手，避免挡住图例点击显隐。
-- 不引入 Regex 命名编辑器。
-- 系统保存对话框仍需真实用户手势，本轮未端到端点选目录。
-
-## 验证
-
-### Node（已执行）
-
-`node tests/core-test.js`：全部通过。覆盖 migration、batch rename、坐标变换、layout、tick 校验、snap、legend 多列。
-
-### 浏览器（已执行，macOS / Cursor 内置浏览器，1440×900）
-
-- 折叠 `119条 · 已选17`，再展开仍选 17。
-- Zoom = 50%/61% 时属性栏仍 1280×800。
-- Fit View 缩到约 61% 以容纳 1280×800 图。
-- 手输宽度 1600 后 layout.width 变为 1600；锁比例时高度跟随。
-- 2×2 模板把四图改为 588×348，属性栏同步。
-- 手动刻度 500 的 SVG 含 500、1000。
-- 打开 v0.1.0 工程：标题为工程名，legend/tick 有默认值。
-- 布局弹出 8 个模板。
-- 折叠左栏后画布变宽。
-- 无工程名称输入框。
-
-## 已知限制
-
-- 极大数量图例仍可能超出 maxHeight；会提示批量重命名，不偷偷删项。
-- 窄视口下三栏仍会挤压画布。
-- 等间距提示没有数值标签。
-
-## 下一步
-
-停在 v0.2.1，等实际排图反馈。后续可补：多选图布局、单图导出、等距数值标签、Undo。
+本文件放在仓库根目录，只追加、不覆盖，用于完整记录开发全过程。当前版本、如何运行和下一步见 [PROGRESS-v0.2.2.md](Progress/PROGRESS-v0.2.2.md)。
 
 ---
 
-## 上一轮 v0.2.0
+## 2026-09-17 仓库初始化
+
+- 提交：`23a5483 chore: initialize Visualizer with project-scoped skill`
+- 日期：2026-09-17
+
+纳入 SOP、`AGENTS.md`、项目 skill、`.gitignore`，以及当时的单文件原型 `temperature_trajectory_visualizer.html`。尚未建立 P0 数据模型、工程文件和 `visualizer-core.js`。
+
+---
+
+## v0.1.0
+
+- 软件版本：`0.1.0`
+- 工程格式：`projectFormatVersion: "1.0"`
+- 分支：`feat/v0.1.0`
+- 日期：2026-09-17
+- 提交：`0d67db0 feat: ship v0.1.0 workbench with P0 data model`
+
+v0.1.0 完成 SOP 第 32 节 **P0 数据模型**，并打通最小可用主链（多源导入、建图、自由布局、工程保存/打开、预览、PNG/SVG）。**不是** SOP 中的完整 V1。
+
+拆出 `visualizer-core.js` 的原因：数据模型与工程解析无 DOM，才能用 Node 做最小可运行检查；页面仍通过本地 `<script>` 引用，无 CDN、无构建链。
+
+### 本轮实际完成
+
+- Project / Dataset / Series / Plot / Canvas 分离。
+- Series 使用 `datasetId::localId`，每条曲线独立 `x[]` / `y[]`。
+- Plot 只引用 Series ID，可跨 Dataset 组图。
+- 工作台：导入、新建工程、打开、保存、新建图、预览、导出 PNG/SVG。
+- Data 面板多选曲线加入指定 Plot；Canvas 上创建/选择/移动/缩放/删除 Plot。
+- 属性：标题、副标题、备注、曲线显隐与颜色、X/Y 自动或手动范围。
+- `.tvproj.json` 嵌入原始 CSV 与本轮已实现的图、样式、坐标、布局。
+- 预览/导出共用 `buildCanvasSvg()`，只含画布内容。
+- 中文界面；空状态、错误提示、未保存标记。
+
+### 明确未做（完整 V1 / 后续）
+
+Formula、MAE/RMSE、Results、Split、Selection、Inset、Annotation、Cursor / Data Inspector、轴联动、吸附对齐、布局锁定、工程缩略图。界面不展示这些功能的假按钮。
+
+### 验证
+
+#### Node（已执行）
+
+`node tests/core-test.js` 全部通过。覆盖：两个标注为测试数据的 CSV（同名列 T1/T2、不同采样时间轴）、唯一 ID、跨源引用、工程往返、损坏 JSON、不支持版本、无效 CSV。解析失败不改写当前工程对象。
+
+测试数据：
+
+- `tests/fixtures/TESTDATA_exp_25C.csv`
+- `tests/fixtures/TESTDATA_sim_25C.csv`
+
+#### 浏览器（已执行，macOS / Cursor 内置浏览器）
+
+通过本地 `http://127.0.0.1:8770/` 交互检查：
+
+- 导入两个测试 CSV；ID 为 `ds-exp::T1` 与 `ds-sim::T1`，无冲突。
+- 新建图，勾选实验 T1/T2 与仿真 T1 加入同一 Plot。
+- 修改标题/副标题/备注、隐藏仿真 T1、改颜色、X 轴手动 0–20。
+- 第二张图、指针移动与缩放布局。
+- 无效 CSV、损坏工程、`projectFormatVersion: "9.9"` 均报错且不清空现有工程。
+- `serializeProject` 后再 `openProjectText(..., { force: true })` 恢复图、显隐、颜色、坐标、布局、嵌入 CSV。
+- 预览与导出来自同一画布 SVG；SVG 含标题/图例/两张图，不含工具栏；PNG 约 59 KB 且可栅格化。
+
+未验证：Windows、`file://` 直接打开、真实下载文件后再用系统文件选择器打开（打开路径与 `openProjectText` 相同）。
+
+### 已知问题
+
+- 窄视口下三栏可能挤压画布；属性面板需较宽窗口。
+- 手动坐标若 min/max 未填全，仍回退自动范围。
+- Plot 过多时默认级联可能超出画布，需手动拖回。
+- 属性面板中同名曲线现已带数据源前缀；图例在曲线很多时可能换行拥挤。
+- 未保存提示依赖 `beforeunload`，浏览器实现不一致。
+
+### 下一步（当时建议，按 SOP 38）
+
+1. Split 自动/手动。
+2. Cursor 与 Data Inspector。
+3. Selection / Local Zoom / Inset。
+4. Annotation。
+5. Formula 与 MAE/RMSE / Results。
+6. Windows 与 `file://` 补测。
+
+---
+
+## v0.2.0
 
 - 软件版本：`0.2.0`
 - 工程格式：`projectFormatVersion: "1.0"`（未升格式版本）
 - 日期：2026-09-18
+- 入库：与 v0.2.1 同提交 `3cbcc18`（当时未单独打 tag）
 
 v0.2.0 是通用数据适配 + 基础交互补强版。目标不是扩展完整 V1 功能数量，而是修正 v0.1.0 使用中暴露的 CSV 解析、数据选择、工程保存、坐标轴语义和图例布局问题。
 
-## 如何运行
-
-1. 用浏览器直接打开 `temperature_trajectory_visualizer.html`（需同目录的 `visualizer-core.js`）。
-2. 或在仓库根目录执行 `python3 -m http.server` 后访问该页面。
-3. 核心数据测试：`node tests/core-test.js`
-
-拆出 `visualizer-core.js` 的原因：数据模型与工程解析无 DOM，才能用 Node 做最小可运行检查；页面仍通过本地 `<script>` 引用，无 CDN、无构建链。
-
-## 本轮目标
+### 本轮目标
 
 1. 数据列批量选择（全选 / 全不选 / Shift 范围 / Ctrl 点选 / Cmd+A）。
 2. CSV 从温度专用识别改为通用工程数值列识别。
@@ -117,7 +104,7 @@ v0.2.0 是通用数据适配 + 基础交互补强版。目标不是扩展完整 
 6. 工程 Save / Save As（优先 File System Access API）。
 7. X/Y 轴标题可人工编辑，并可恢复自动识别。
 
-## 本轮实际完成
+### 本轮实际完成
 
 - CSV 只要存在可绘制数值列即可导入；不再要求 T1…TN 或温度字段。
 - `parseColumnHeader()` 解析 `Name(unit)` / `Name [unit]` / `Name / unit`；不猜测未写出的单位；不把 `battery_temp_max` 的 `max` 当单位。
@@ -127,7 +114,7 @@ v0.2.0 是通用数据适配 + 基础交互补强版。目标不是扩展完整 
 - Legend 默认 Top / Auto，自动换行并占用 layout 高度；Preview / PNG / SVG 仍共用 `buildCanvasSvg()`。
 - 工具栏：新建工程、打开工程、保存、另存为。支持 File System Access API 的浏览器可选择路径并写回；否则下载 `.tvproj.json`。
 
-## 数据模型变化
+### 数据模型变化
 
 新增均为向后兼容可选字段，加载时 normalize：
 
@@ -138,7 +125,7 @@ v0.2.0 是通用数据适配 + 基础交互补强版。目标不是扩展完整 
 
 不原地改写源 JSON 文本；`parseProject` 走 validate → normalize → working project。
 
-## CSV parser 变化
+### CSV parser 变化
 
 - 删除温度专用拒绝条件：「没有识别到 T1…TN 传感器列，也没有识别到温度、温差或 delta 数值列」。
 - 有效非空单元格绝大多数可解析为有限数字 → 数值 Series；允许空值 / NA。
@@ -147,7 +134,7 @@ v0.2.0 是通用数据适配 + 基础交互补强版。目标不是扩展完整 
 - 无数值 X：`无法确定有效横坐标列。`
 - 无可绘 Series：`未找到可绘制的数值数据列。`
 
-## Save / Save As 实现
+### Save / Save As 实现
 
 - 另存为：有 `showSaveFilePicker` 时总是弹出系统保存窗口。
 - 保存：已有可写 `fileHandle` 则直接写回；否则等同首次另存为。
@@ -156,7 +143,7 @@ v0.2.0 是通用数据适配 + 基础交互补强版。目标不是扩展完整 
 - 保存成功 `dirty = false`；失败不清除 dirty。
 - 无 File System Access API 时下载，并轻量提示将使用下载方式。
 
-## Axis title 变化
+### Axis title 变化
 
 - 单条 Voltage(V) → `Voltage (V)`。
 - T1(°C)+T2(°C)+T3(°C) → `Temperature (°C)`。
@@ -165,13 +152,13 @@ v0.2.0 是通用数据适配 + 基础交互补强版。目标不是扩展完整 
 - 同名不同单位 → 仅名称，不加错误单位。
 - 用户编辑后 `titleMode = custom`；加 Series 不覆盖自定义标题；「恢复自动」回到 `autoTitle`。
 
-## 明确未做（完整 V1 / 后续）
+### 明确未做（完整 V1 / 后续）
 
 Formula、MAE/RMSE、Results、Split、Selection、Local Zoom、Inset、Annotation、Cursor / Data Inspector、Dual Y Axis、轴联动、吸附对齐、布局锁定、工程缩略图、Electron/Tauri。界面不展示这些功能的假按钮。
 
-## 验证
+### 验证
 
-### Node（已执行）
+#### Node（已执行）
 
 `node tests/core-test.js`：65 passed，0 failed。
 
@@ -190,7 +177,7 @@ Formula、MAE/RMSE、Results、Split、Selection、Local Zoom、Inset、Annotati
 - `tests/fixtures/TESTDATA_unknown_headers.csv`
 - `tests/fixtures/TESTDATA_v010.tvproj.json`
 
-### 浏览器（已执行，macOS / Cursor 内置浏览器）
+#### 浏览器（已执行，macOS / Cursor 内置浏览器）
 
 通过本地 `http://127.0.0.1:8771/` 交互检查：
 
@@ -207,7 +194,7 @@ Formula、MAE/RMSE、Results、Split、Selection、Local Zoom、Inset、Annotati
 
 未在自动化会话中走完操作系统保存对话框的选目录/覆盖确认（需要真实用户手势）。写回已有 handle 的 Save 因此未做端到端文件对照。无 File System Access API 的浏览器回退下载路径已实现，本 Chromium 走真实 picker，未在该浏览器里触发下载回退。
 
-## 已知限制
+### 已知限制
 
 - 窄视口下三栏可能挤压画布；长 Dataset 名称在折叠头中可能被截断。
 - 手动坐标若 min/max 未填全，仍回退自动范围。
@@ -216,7 +203,7 @@ Formula、MAE/RMSE、Results、Split、Selection、Local Zoom、Inset、Annotati
 - 未保存提示依赖 `beforeunload`，浏览器实现不一致。
 - 本轮不引入 Dual Y Axis；多单位图的自动 Y 标题安全退化为 `Value`。
 
-## 下一步
+### 下一步（当时）
 
 停在 v0.2.0，等待实际使用反馈后再决定是否进入 v0.3.0。
 
@@ -227,3 +214,205 @@ Formula、MAE/RMSE、Results、Split、Selection、Local Zoom、Inset、Annotati
 - 手动时间窗
 - Cursor
 - Data Inspector
+
+---
+
+## v0.2.1
+
+- 软件版本：`0.2.1`
+- 工程格式：`projectFormatVersion: "1.0"`（未升格式版本，缺字段由 `parseProject` normalize）
+- 日期：2026-09-18
+- 提交：`3cbcc18 feat: ship v0.2.1 workbench with canvas layout and legend editing`
+
+v0.2.1 是画布编辑、图例管理、多图排版与科研出图体验优化，增量叠加在 v0.2.0 上，不重写引擎。
+
+### 本轮目标
+
+1. 数据簇折叠后显示已选数量。
+2. 左/中/右栏可拖动改宽、可折叠。
+3. Canvas Zoom 与图表真实尺寸分离。
+4. Series originalName / displayName 与批量重命名。
+5. Legend 成为可配置对象（停靠 / 浮动 / 多列）。
+6. 工程名与保存文件名、浏览器标题统一。
+7. 图表 Width/Height 与拖拽 resize 双向同步。
+8. 多图布局模板 + 磁吸。
+9. 坐标轴手动刻度与校验。
+
+### 本轮实际完成
+
+- 数据簇 header：`55条 · 已选17`；折叠不丢 selection。
+- 左右 splitter、双击恢复默认宽、面板折叠按钮；宽度写入 `project.ui`。
+- Canvas Zoom 25%–300%，`[-] [%] [+] [适应窗口] [100%]`；Ctrl/Cmd+滚轮 / +/- / 0；Fit View；坐标用 `screenToWorld` / `worldToScreen`。
+- Series 增加 `originalName` / `displayName`；单条改名与批量预览（查找替换、去前后缀、加前后缀、`T{n}` / `{original}`）。
+- Legend：显示、位置、字体、行列、列数、线样、maxWidth；拖顶部细条可停靠或浮动。
+- 保存/另存为后 `projectName` 取文件 basename；打开「未命名工程」且带文件名时回退 basename；去掉属性栏工程名称输入框。
+- 属性栏 Width/Height 绑定 `plot.layout`；拖角 resize 实时同步；可锁宽高比。
+- 布局模板：单图、1:1、左大右小、左小右大、三等分、一大两小、2×2、3×2。
+- Snap：画布边、他图边、中心、resize 边、等间距候选。
+- 轴：自动/手动刻度、主间隔、次刻度、小数位；非法间隔拒绝；超过 500 主刻度拒绝。
+- 属性栏改为 accordion：图表 / 数据系列 / 图例 / X轴 / Y轴 / 布局。
+
+### 数据模型变化
+
+均为向后兼容可选字段，加载时 normalize：
+
+- Project：`softwareVersion: "0.2.1"`；`ui`（panel 宽、折叠、canvasZoom）；`canvas.zoom` 与 `ui.canvasZoom` 同步。
+- Series：`originalName` / `displayName`。旧工程从 `name` / `label` / `originalHeader` 回填。
+- Plot：`legend` 对象、`lockAspect`、`aspectRatio`。保留 `legendVisible`。
+- Axis：`tickMode` / `majorTick` / `minorTickMode` / `minorTick` / `formatMode` / `decimals`。
+- 默认新图尺寸 1280×800（图表尺寸，不是 CSS zoom）。
+
+### 明确未做 / 简化
+
+- 未做 Undo/Redo（v0.2.0 也没有）。
+- 布局模板作用于当前画布全部图，尚未做多选图。
+- 等间距吸附有对齐，没有在辅助线上画「24」数值标签。
+- PNG/SVG 仍导出整张画布（SOP：Canvas 是导出区）；图按真实 layout 绘制，Canvas Zoom 不进入导出。未另做「只导出选中单图」按钮。
+- 图例拖动用顶部 10px 把手，避免挡住图例点击显隐。
+- 不引入 Regex 命名编辑器。
+- 系统保存对话框仍需真实用户手势，本轮未端到端点选目录。
+
+### 验证
+
+#### Node（已执行）
+
+`node tests/core-test.js`：全部通过。覆盖 migration、batch rename、坐标变换、layout、tick 校验、snap、legend 多列。
+
+#### 浏览器（已执行，macOS / Cursor 内置浏览器，1440×900）
+
+- 折叠 `119条 · 已选17`，再展开仍选 17。
+- Zoom = 50%/61% 时属性栏仍 1280×800。
+- Fit View 缩到约 61% 以容纳 1280×800 图。
+- 手输宽度 1600 后 layout.width 变为 1600；锁比例时高度跟随。
+- 2×2 模板把四图改为 588×348，属性栏同步。
+- 手动刻度 500 的 SVG 含 500、1000。
+- 打开 v0.1.0 工程：标题为工程名，legend/tick 有默认值。
+- 布局弹出 8 个模板。
+- 折叠左栏后画布变宽。
+- 无工程名称输入框。
+
+### 已知限制
+
+- 极大数量图例仍可能超出 maxHeight；会提示批量重命名，不偷偷删项。
+- 窄视口下三栏仍会挤压画布。
+- 等间距提示没有数值标签。
+
+### 下一步（当时）
+
+停在 v0.2.1，等实际排图反馈。后续可补：多选图布局、单图导出、等距数值标签、Undo。
+
+---
+
+## 2026-09-21 发布 GitHub Latest Release
+
+- 软件版本：`0.2.1`（未改产品功能）
+- 日期：2026-09-21
+- tag：`v0.2.1`
+- 页面：https://github.com/aidisen975-cmd/Visualizer/releases/latest
+
+将当时工作区推到 `feat/v0.1.0` 与 `main`，打 tag `v0.2.1`，附件 `Visualizer-v0.2.1.zip`（html + `visualizer-core.js` + README）。Mac / Windows 共用这一份浏览器页面，不打包原生客户端。
+
+---
+
+## v0.2.2
+
+- 软件版本：`0.2.2`
+- 工程格式：`projectFormatVersion: "1.0"`（未升格式版本，缺字段由 `parseProject` normalize）
+- 日期：2026-09-21
+
+v0.2.2 在 v0.2.1 上继续迭代科研出图工作流：修正 Series 选择语义、批量重命名、X 轴自动范围、每图时间单位，并补齐图例拖动、布局主图槽位、样式系统与统一保存对话框。不重写引擎。
+
+### 本轮实际完成
+
+- 右侧 Series 行：`[选择] [显示/隐藏] [颜色条] [名称] [×]`；`selected` 与 `visible` 分开。
+- 批量重命名按 `seriesId` 应用；范围计数；预览前 10 条；0 条时禁用应用。左侧数据源勾选不再进入重命名范围。
+- 一大两小：当前选中图进 `slot.large`；布局菜单可改主图后重新排列，不销毁图。
+- Legend 九宫格 + 自由位置；自由位置拖动整块图例；序列化为 `{mode:"free",x,y}`。
+- 列数显式指定时按列换行，51×10 列全部保留。
+- 新建工程 / 打开空工程：自动 Figure 1 并设为 activeChart。
+- PNG / SVG / 另存为共用 `pickSaveFile`；无 File System Access 时回退下载并提示。
+- 系列样式：颜色、线型、线宽、透明度；批量改线型/线宽/透明度，颜色仅在用户明确设置时覆盖。
+- 文字样式：图标题、轴标题、刻度、图例、标注；轴线颜色/宽度。
+- 右侧模块：数据 / 系列样式 / 坐标轴 / 图例 / 标注 / 图表。右侧原「布局」改为图表内「画布 X/Y」。
+- 顶部「导入时间 / 显示时间」移到当前图 X Axis。转换只发生在渲染层。
+- X Auto Range 无左右 padding；Y 保留约 4%。Auto→Manual 预填当前范围。
+
+### 数据模型变化
+
+均为向后兼容可选字段，加载时 normalize：
+
+- Project：`softwareVersion: "0.2.2"`。
+- Plot seriesRef：`selected`、`style {color,lineWidth,lineType,opacity}`。
+- Plot：`textStyles`、`layoutSlot`、`background`、`annotations`。
+- Axis：`time {enabled,sourceUnit,displayUnit}`、`lineColor`、`lineWidth`。
+- Legend：`position` 可为字符串或 `{mode,x,y}`；`x`/`y` 归一化；`rows`、字体与背景。
+- 时间单位增加 `ms`。旧工程无 `xAxis.time` 时从 dataset.timeUnit 与 `options.displayTimeUnit` 回填。
+
+### 明确未做 / 简化
+
+- 未做 Undo/Redo、3D、Heatmap、双 Y、Python、云同步、桌面包装。
+- PNG/SVG 仍导出整张画布；保存对话框文件名默认当前图标题。
+- 标注模块有列表/文字样式槽位，本轮不新做标注编辑器。
+- 图例自由拖动时整块覆盖图例项点击显隐；显隐改用右侧眼睛按钮。
+- 一大两小左右等宽、主图更高。
+
+### 验证
+
+#### Node（已执行）
+
+`node tests/core-test.js`：全部通过。新增覆盖：selected 重命名、selected/visible 解耦、一大两小主图槽、Figure 1 默认、Legend 10 列换行、自由位置 round-trip、每图时间单位、X auto 无 padding、样式/文字/时间 round-trip、旧工程 migration。
+
+#### 浏览器（已执行，Playwright / http://127.0.0.1:8878/）
+
+- 打开页面即有 Figure 1，kicker 为 v0.2.2；无需点「新建图」。
+- 顶部无「导入时间 / 显示时间」；右侧模块为 数据 / 系列样式 / 坐标轴 / 图例 / 标注 / 图表；无右侧「布局」accordion。
+- 导入 electrical CSV 后，X 刻度为 0…2.00，0 在最左。
+- 右侧勾选 Voltage、SOC 后样式面板显示「已选择 2 条 Series」；左侧数据源 checkbox 仍未勾选。
+- Figure 2 设为主图后 `layoutSlot=large` 高度 720，Figure 1/3 为小图 348；Figure 2 显示 Time (min)，Figure 1 仍为 Time (s)。
+- 自由位置图例出现「拖动图例」命中区。
+- 布局菜单含「当前主图」下拉。
+- 「新建工程」确认后仍自动得到 Figure 1。
+
+未在浏览器里点选系统保存对话框（需真实用户手势）；Node 与页面逻辑已接到同一套 `pickSaveFile`。
+
+### 已知限制
+
+- 无 File System Access 的浏览器只能用默认下载目录。
+- 窄视口下三栏仍会挤压画布。
+- 等间距提示没有数值标签。
+
+### 下一步
+
+停在 v0.2.2。后续可补：Undo、单图导出、标注编辑、等距数值标签。
+
+---
+
+## 2026-09-21 重写 GitHub Release 说明
+
+- 软件版本：`0.2.1`（未改产品功能、未换附件）
+- 日期：2026-09-21
+- tag：`v0.2.1`
+- 页面：https://github.com/aidisen975-cmd/Visualizer/releases/tag/v0.2.1
+
+将 Latest Release 标题改为 `Visualizer 0.2.1`，并重写页面正文：保留下载与使用步骤，改为系统要求、分节更新说明、累计能力与已知限制。不把 SOP 未实现项（Formula、MAE/RMSE、Inset、Annotation 编辑器等）写成已发布能力。压缩包仍为 `Visualizer-v0.2.1.zip`。
+
+---
+
+## 2026-09-21 增加随版本维护的 README
+
+- 软件版本：`0.2.2`（未改产品功能）
+- 日期：2026-09-21
+
+新增根目录 `README.md`，按当前已实现能力写特色、功能、使用方法、限制与尚未提供项。约定该文件随版本增删，不另存历史副本；项目 skill 的交付清单改为同步更新 README。
+
+---
+
+## 2026-09-21 发布 v0.2.2 测试版
+
+- 软件版本：`0.2.2`
+- 日期：2026-09-21
+- tag：`v0.2.2`
+- 页面：https://github.com/aidisen975-cmd/Visualizer/releases/tag/v0.2.2
+
+将当时工作区推到 `feat/v0.1.0` 与 `main`，打 tag `v0.2.2`，GitHub 标记为 Pre-release。附件 `Visualizer-v0.2.2.zip`（html + `visualizer-core.js` + `README.md`）。Mac / Windows 共用这一份浏览器页面，不打包原生客户端。
+

@@ -308,9 +308,140 @@ assert(legend.columns >= 2, "大量图例自动多列");
 assert(legend.placed.length >= 20, "多列后尽量保留图例项");
 
 var v021 = core.parseProject(core.serializeProject(elecProject));
-assert(v021.softwareVersion === "0.2.1", "新工程写入 0.2.1");
+assert(v021.softwareVersion === "0.2.2", "新工程写入 0.2.2");
 assert(v021.plots[0].legend.visible === true, "legend 随工程保存");
 assert(v021.ui.leftPanelWidth >= 220, "ui layout 随工程保存");
+
+var renameProject = core.createProject({ projectName: "rename-scope" });
+var renameDs = core.parseDatasetFromCsv(readFixture("TESTDATA_electrical.csv"), { id: "ds-ren", name: "elec" });
+core.addDataset(renameProject, renameDs);
+for (var extra = 0; extra < 7; extra += 1) {
+  var clone = core.cloneJson(renameDs.series[0]);
+  clone.id = "ds-ren::V" + extra;
+  clone.localId = "V" + extra;
+  clone.displayName = "Cell Voltage Monitor 00" + extra;
+  clone.label = clone.displayName;
+  renameDs.series.push(clone);
+}
+var renamePlot = core.createPlot(renameProject, { title: "Figure 1" });
+core.addSeriesToPlot(renameProject, renamePlot, renameDs.series.map(function (s) { return s.id; }));
+assert(renamePlot.seriesRefs.length === 10, "10 条 Series 加入当前图");
+["ds-ren::Voltage", "ds-ren::V1", "ds-ren::V4"].forEach(function (id) {
+  renamePlot.seriesRefs.find(function (ref) { return ref.seriesId === id; }).selected = true;
+});
+var selectedIds = core.resolveRenameTarget(renameProject, renamePlot, "selected");
+assert(selectedIds.join(",") === "ds-ren::Voltage,ds-ren::V1,ds-ren::V4", "批量重命名只解析 selectedSeriesIds");
+var beforeNames = renamePlot.seriesRefs.map(function (ref) {
+  return core.seriesDisplayName(core.findSeries(renameProject, ref.seriesId));
+});
+var preview = core.previewBatchRename(selectedIds.map(function (id) {
+  return core.seriesDisplayName(core.findSeries(renameProject, id));
+}), { mode: "replace", find: "Voltage", replace: "Cell Voltage" });
+core.applyRenameToSeriesIds(renameProject, selectedIds, preview);
+assert(core.findSeries(renameProject, "ds-ren::Voltage").displayName.indexOf("Cell Voltage") >= 0, "选中 Series 被重命名");
+assert(core.findSeries(renameProject, "ds-ren::Current").displayName === beforeNames[1], "未选中 Series 名称不变");
+assert(core.findSeries(renameProject, "ds-ren::V2").displayName === "Cell Voltage Monitor 002", "未选中的 Monitor 002 不变");
+
+var hidden = renamePlot.seriesRefs.find(function (ref) { return ref.seriesId === "ds-ren::Voltage"; });
+hidden.visible = false;
+hidden.selected = true;
+core.applySeriesStyle(renamePlot, ["ds-ren::Voltage"], { lineWidth: 3, lineType: "dashed" });
+assert(hidden.visible === false && hidden.selected === true, "selected 与 visible 解耦");
+assert(hidden.style.lineWidth === 3 && hidden.style.lineType === "dashed", "隐藏但选中的 Series 仍被改样式");
+
+var layoutProject = core.createProject({ projectName: "layout" });
+var fig1 = core.createPlot(layoutProject, { id: "fig-1", title: "Figure 1" });
+var fig2 = core.createPlot(layoutProject, { id: "fig-2", title: "Figure 2" });
+var fig3 = core.createPlot(layoutProject, { id: "fig-3", title: "Figure 3" });
+core.addDataset(layoutProject, elecDs);
+core.addSeriesToPlot(layoutProject, fig2, ["ds-elec::Voltage"]);
+fig2.seriesRefs[0].style.lineType = "dash-dot";
+core.applyLayoutTemplate(layoutProject.plots, "onePlusTwo", { width: 1280, height: 800, padding: 40, gap: 24 }, { primaryPlotId: "fig-2" });
+assert(fig2.layoutSlot === "large", "选中 Figure 2 后一大两小的主图是 Figure 2");
+assert(fig2.layout.height > fig1.layout.height, "主图高度大于小图");
+assert(fig1.layoutSlot === "smallTop" && fig3.layoutSlot === "smallBottom", "其余两图进入小图槽");
+var keptStyle = fig2.seriesRefs[0].style.lineType;
+core.applyLayoutTemplate(layoutProject.plots, "onePlusTwo", { width: 1280, height: 800, padding: 40, gap: 24 }, { primaryPlotId: "fig-1" });
+assert(fig1.layoutSlot === "large", "切换主图后 Figure 1 成为大图");
+assert(fig2.seriesRefs[0].style.lineType === keptStyle, "切换主图不销毁 Series/样式");
+
+var blank = core.createProject();
+assert(blank.plots.length === 0, "createProject 本身不建图，便于测试");
+assert(core.ensureDefaultPlot(blank).title === "Figure 1", "新建工程补 Figure 1");
+assert(blank.plots.length === 1 && blank.plots[0].id === core.ensureDefaultPlot(blank).id, "已有 Figure 时不重复创建");
+var emptyOpened = core.parseProject(JSON.stringify({
+  projectFormatVersion: "1.0",
+  projectName: "empty-old",
+  datasets: [],
+  plots: []
+}));
+assert(emptyOpened.plots.length === 1 && emptyOpened.plots[0].title === "Figure 1", "旧空工程打开时补 Figure 1");
+
+var items51 = [];
+for (var n = 1; n <= 51; n += 1) items51.push({ label: "S" + n, color: "#2477b6", visible: true });
+var legend10 = core.layoutLegendItems(items51, { columns: 10, fontSize: 9, maxWidth: 2000, maxHeight: 80 });
+assert(legend10.columns === 10, "51 Series 指定 10 列");
+assert(legend10.placed.length === 51, "指定列数后全部图例项都保留并换行");
+assert(legend10.rows === 6, "51 / 10 自动 6 行");
+
+var freeLegend = core.normalizeLegend({ position: { mode: "free", x: 0.72, y: 0.18 } });
+assert(freeLegend.position === "free" && freeLegend.x === 0.72 && Math.abs(freeLegend.y - 0.18) < 1e-9, "自由位置保存归一化坐标");
+fig1.legend = freeLegend;
+var savedFree = JSON.parse(core.serializeProject(layoutProject));
+assert(savedFree.plots[0].legend.position.mode === "free", "序列化自由图例为 {mode,x,y}");
+var restoredFree = core.parseProject(JSON.stringify(savedFree));
+assert(restoredFree.plots[0].legend.position === "free" && restoredFree.plots[0].legend.x === 0.72, "打开后恢复自由图例坐标");
+
+var timeProject = core.createProject({ projectName: "time" });
+core.addDataset(timeProject, elecDs);
+var t1 = core.createPlot(timeProject, { title: "Figure 1" });
+var t2 = core.createPlot(timeProject, { title: "Figure 2" });
+core.addSeriesToPlot(timeProject, t1, ["ds-elec::Voltage"]);
+core.addSeriesToPlot(timeProject, t2, ["ds-elec::Voltage"]);
+t1.xAxis.time = { enabled: true, sourceUnit: "s", displayUnit: "s" };
+t2.xAxis.time = { enabled: true, sourceUnit: "s", displayUnit: "min" };
+var ext1 = core.plotExtents(timeProject, t1);
+var ext2 = core.plotExtents(timeProject, t2);
+assert(Math.abs(ext1.x[1] / ext2.x[1] - 60) < 0.01, "同一 dataset 下秒/分钟显示可并存");
+
+var rangeDs = core.parseDatasetFromCsv("time,Value\n0,1\n11000,2\n", { id: "ds-range", name: "range" });
+var rangeProject = core.createProject({ projectName: "range" });
+core.addDataset(rangeProject, rangeDs);
+var rangePlot = core.createPlot(rangeProject, { title: "Figure 1" });
+core.addSeriesToPlot(rangeProject, rangePlot, [rangeDs.series[0].id]);
+var xAuto = core.plotExtents(rangeProject, rangePlot);
+assert(xAuto.x[0] === 0 && xAuto.x[1] === 11000, "X Auto Range 无左右 padding，0 贴左边");
+assert(xAuto.y[0] < 1 && xAuto.y[1] > 2, "Y Auto Range 保留视觉 padding");
+rangePlot.xAxis.mode = "manual";
+rangePlot.xAxis.min = 100;
+rangePlot.xAxis.max = 500;
+assert(core.plotExtents(rangeProject, rangePlot).x[0] === 100, "手动范围严格使用输入值");
+rangePlot.xAxis.mode = "auto";
+assert(core.plotExtents(rangeProject, rangePlot).x[0] === 0, "切回 Auto 重新计算 data extent");
+
+t1.seriesRefs[0].style = core.normalizeSeriesStyle({ lineType: "solid", lineWidth: 1, opacity: 1, color: "#2477b6" });
+t2.seriesRefs[0].style = core.normalizeSeriesStyle({ lineType: "dashed", lineWidth: 2, opacity: 0.8, color: "#d36518" });
+var third = core.createPlot(timeProject, { title: "Figure 3" });
+core.addSeriesToPlot(timeProject, third, ["ds-elec::Current"]);
+third.seriesRefs[0].style = core.normalizeSeriesStyle({ lineType: "dash-dot", lineWidth: 3 });
+assert(core.strokeDasharray("dashed") === "6 4" && core.strokeDasharray("dash-dot") === "8 4 1.5 4", "线型映射到 dasharray");
+t1.textStyles.xAxisTitle.fontSize = 16;
+t1.textStyles.yAxisTitle.fontSize = 14;
+t1.textStyles.xTick.fontSize = 10;
+t1.textStyles.legend.fontSize = 9;
+var round = core.parseProject(core.serializeProject(timeProject));
+assert(round.plots[0].seriesRefs[0].style.lineWidth === 1 && round.plots[0].seriesRefs[0].style.lineType === "solid", "Series style round-trip");
+assert(round.plots[1].seriesRefs[0].style.lineType === "dashed" && round.plots[1].seriesRefs[0].style.lineWidth === 2, "Figure 2 dashed width 2 恢复");
+assert(round.plots[2].seriesRefs[0].style.lineType === "dash-dot" && round.plots[2].seriesRefs[0].style.lineWidth === 3, "Figure 3 dash-dot width 3 恢复");
+assert(round.plots[0].textStyles.xAxisTitle.fontSize === 16 && round.plots[0].textStyles.legend.fontSize === 9, "文字样式 round-trip");
+assert(round.plots[0].xAxis.time.displayUnit === "s" && round.plots[1].xAxis.time.displayUnit === "min", "每图时间单位 round-trip");
+assert(round.plots[0].seriesRefs[0].selected === false && round.plots[0].seriesRefs[0].visible === true, "旧/新工程 selected/visible 默认值");
+
+var oldMigrated = core.parseProject(readFixture("TESTDATA_v010.tvproj.json"));
+assert(oldMigrated.plots[0].seriesRefs[0].style && oldMigrated.plots[0].seriesRefs[0].style.lineWidth === 1.5, "旧工程补齐 series.style");
+assert(oldMigrated.plots[0].xAxis.time && oldMigrated.plots[0].xAxis.time.displayUnit, "旧工程补齐 per-chart time");
+assert(oldMigrated.plots[0].textStyles && oldMigrated.plots[0].textStyles.title.fontSize === 14, "旧工程补齐 textStyles");
+assert(oldMigrated.softwareVersion === "0.2.2", "打开后 working copy 版本为 0.2.2，源文件未改");
 
 if (failed) {
   console.error("\n" + failed + " failed");

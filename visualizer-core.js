@@ -1,12 +1,12 @@
-/* Visualizer v0.2.1 core: Project / Dataset / Series / Plot / Canvas. No DOM. */
+/* Visualizer v0.2.2 core: Project / Dataset / Series / Plot / Canvas. No DOM. */
 (function (root) {
   "use strict";
 
-  var SOFTWARE_VERSION = "0.2.1";
+  var SOFTWARE_VERSION = "0.2.2";
   var PROJECT_FORMAT_VERSION = "1.0";
   var SUPPORTED_PROJECT_FORMATS = ["1.0"];
-  var TIME_IN_SECONDS = { s: 1, min: 60, h: 3600 };
-  var TIME_LABELS = { s: "s", min: "min", h: "h" };
+  var TIME_IN_SECONDS = { ms: 0.001, s: 1, min: 60, h: 3600 };
+  var TIME_LABELS = { ms: "ms", s: "s", min: "min", h: "h" };
   var MAX_MAJOR_TICKS = 500;
   var ZOOM_MIN = 0.25;
   var ZOOM_MAX = 3;
@@ -23,16 +23,34 @@
     rightPanelCollapsed: false,
     canvasZoom: 1
   };
-  var LEGEND_POSITIONS = ["auto", "top", "bottom", "left", "right", "inside-tl", "inside-tr", "inside-bl", "inside-br", "floating"];
+  var LEGEND_POSITIONS = [
+    "auto", "top-left", "top-center", "top-right", "middle-left", "middle-right",
+    "bottom-left", "bottom-center", "bottom-right", "free",
+    "top", "bottom", "left", "right", "inside-tl", "inside-tr", "inside-bl", "inside-br", "floating"
+  ];
+  var LEGEND_POSITION_ALIASES = {
+    top: "top-center",
+    bottom: "bottom-center",
+    left: "middle-left",
+    right: "middle-right",
+    "inside-tl": "top-left",
+    "inside-tr": "top-right",
+    "inside-bl": "bottom-left",
+    "inside-br": "bottom-right",
+    floating: "free"
+  };
+  var LINE_TYPES = ["solid", "dashed", "dotted", "dash-dot", "long-dash"];
+  var LINE_DASH = { solid: null, dashed: "6 4", dotted: "1.5 3", "dash-dot": "8 4 1.5 4", "long-dash": "14 6" };
+  var DEFAULT_FONT = "Aptos, Helvetica Neue, Noto Sans SC, sans-serif";
   var LAYOUT_TEMPLATES = {
-    single: { id: "single", label: "单图全幅", cols: 1, rows: 1, spans: [[0, 0, 1, 1]] },
-    splitH: { id: "splitH", label: "1:1 左右", cols: 2, rows: 1, spans: [[0, 0, 1, 1], [1, 0, 1, 1]] },
-    leftWide: { id: "leftWide", label: "左大右小", cols: 3, rows: 1, spans: [[0, 0, 2, 1], [2, 0, 1, 1]] },
-    rightWide: { id: "rightWide", label: "左小右大", cols: 3, rows: 1, spans: [[0, 0, 1, 1], [1, 0, 2, 1]] },
-    triple: { id: "triple", label: "三等分", cols: 3, rows: 1, spans: [[0, 0, 1, 1], [1, 0, 1, 1], [2, 0, 1, 1]] },
-    onePlusTwo: { id: "onePlusTwo", label: "一大两小", cols: 2, rows: 2, spans: [[0, 0, 1, 2], [1, 0, 1, 1], [1, 1, 1, 1]] },
-    grid2x2: { id: "grid2x2", label: "2×2", cols: 2, rows: 2, spans: [[0, 0, 1, 1], [1, 0, 1, 1], [0, 1, 1, 1], [1, 1, 1, 1]] },
-    grid3x2: { id: "grid3x2", label: "3×2", cols: 3, rows: 2, spans: [[0, 0, 1, 1], [1, 0, 1, 1], [2, 0, 1, 1], [0, 1, 1, 1], [1, 1, 1, 1], [2, 1, 1, 1]] }
+    single: { id: "single", label: "单图全幅", cols: 1, rows: 1, spans: [[0, 0, 1, 1]], slots: ["main"] },
+    splitH: { id: "splitH", label: "1:1 左右", cols: 2, rows: 1, spans: [[0, 0, 1, 1], [1, 0, 1, 1]], slots: ["left", "right"] },
+    leftWide: { id: "leftWide", label: "左大右小", cols: 3, rows: 1, spans: [[0, 0, 2, 1], [2, 0, 1, 1]], slots: ["large", "small"] },
+    rightWide: { id: "rightWide", label: "左小右大", cols: 3, rows: 1, spans: [[0, 0, 1, 1], [1, 0, 2, 1]], slots: ["small", "large"] },
+    triple: { id: "triple", label: "三等分", cols: 3, rows: 1, spans: [[0, 0, 1, 1], [1, 0, 1, 1], [2, 0, 1, 1]], slots: ["left", "center", "right"] },
+    onePlusTwo: { id: "onePlusTwo", label: "一大两小", cols: 2, rows: 2, spans: [[0, 0, 1, 2], [1, 0, 1, 1], [1, 1, 1, 1]], slots: ["large", "smallTop", "smallBottom"] },
+    grid2x2: { id: "grid2x2", label: "2×2", cols: 2, rows: 2, spans: [[0, 0, 1, 1], [1, 0, 1, 1], [0, 1, 1, 1], [1, 1, 1, 1]], slots: ["tl", "tr", "bl", "br"] },
+    grid3x2: { id: "grid3x2", label: "3×2", cols: 3, rows: 2, spans: [[0, 0, 1, 1], [1, 0, 1, 1], [2, 0, 1, 1], [0, 1, 1, 1], [1, 1, 1, 1], [2, 1, 1, 1]], slots: ["r1c1", "r1c2", "r1c3", "r2c1", "r2c2", "r2c3"] }
   };
   var DEFAULT_GROUPS = [
     { id: "group-1", label: "T1–T7", start: 1, end: 7, color: "#2477b6" },
@@ -41,6 +59,62 @@
     { id: "group-4", label: "T38–T52", start: 38, end: 52, color: "#6b52a8" }
   ];
   var SERIES_COLORS = ["#2477b6", "#d36518", "#25884d", "#6b52a8", "#d14e3d", "#167b91", "#8b5a9d", "#272b2e"];
+
+  function defaultTextStyle(overrides) {
+    var style = {
+      fontFamily: DEFAULT_FONT,
+      fontSize: 12,
+      fontColor: "",
+      fontWeight: "400",
+      italic: false
+    };
+    Object.keys(overrides || {}).forEach(function (key) { style[key] = overrides[key]; });
+    return style;
+  }
+
+  function normalizeTextStyle(raw, fallback) {
+    var base = defaultTextStyle(fallback || {});
+    var style = raw && typeof raw === "object" ? raw : {};
+    var fontSize = Number(style.fontSize);
+    var weight = style.fontWeight;
+    return {
+      fontFamily: String(style.fontFamily || base.fontFamily || DEFAULT_FONT),
+      fontSize: Number.isFinite(fontSize) ? clamp(fontSize, 6, 72) : base.fontSize,
+      fontColor: style.fontColor == null || style.fontColor === "" ? String(base.fontColor || "") : String(style.fontColor),
+      fontWeight: weight === "700" || weight === "bold" || weight === 700 ? "700" : (weight === "600" ? "600" : "400"),
+      italic: style.italic == null ? !!base.italic : !!style.italic
+    };
+  }
+
+  function normalizePlotTextStyles(raw) {
+    var styles = raw && typeof raw === "object" ? raw : {};
+    return {
+      title: normalizeTextStyle(styles.title, { fontSize: 14, fontWeight: "700" }),
+      xAxisTitle: normalizeTextStyle(styles.xAxisTitle, { fontSize: 11, fontWeight: "600" }),
+      yAxisTitle: normalizeTextStyle(styles.yAxisTitle, { fontSize: 11, fontWeight: "600" }),
+      xTick: normalizeTextStyle(styles.xTick, { fontSize: 10 }),
+      yTick: normalizeTextStyle(styles.yTick, { fontSize: 10 }),
+      legend: normalizeTextStyle(styles.legend, { fontSize: 12 }),
+      annotation: normalizeTextStyle(styles.annotation, { fontSize: 11 })
+    };
+  }
+
+  function normalizeSeriesStyle(raw, color) {
+    var style = raw && typeof raw === "object" ? raw : {};
+    var lineWidth = Number(style.lineWidth);
+    var opacity = Number(style.opacity);
+    var lineType = LINE_TYPES.indexOf(style.lineType) >= 0 ? style.lineType : "solid";
+    return {
+      color: style.color ? String(style.color) : (color ? String(color) : null),
+      lineWidth: Number.isFinite(lineWidth) ? clamp(lineWidth, 0.5, 12) : 1.5,
+      lineType: lineType,
+      opacity: Number.isFinite(opacity) ? clamp(opacity, 0, 1) : 1
+    };
+  }
+
+  function strokeDasharray(lineType) {
+    return LINE_DASH[lineType] || null;
+  }
 
   function makeId(prefix) {
     return prefix + "-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
@@ -384,17 +458,27 @@
     return "Value";
   }
 
+  function plotTimeSettings(plot, dataset) {
+    var time = plot && plot.xAxis && plot.xAxis.time ? plot.xAxis.time : {};
+    var datasetIsTime = !dataset || dataset.xIsTime !== false;
+    var enabled = time.enabled == null ? datasetIsTime : !!time.enabled;
+    return {
+      enabled: enabled,
+      sourceUnit: TIME_IN_SECONDS[time.sourceUnit] ? time.sourceUnit : ((dataset && TIME_IN_SECONDS[dataset.timeUnit]) ? dataset.timeUnit : "s"),
+      displayUnit: TIME_IN_SECONDS[time.displayUnit] ? time.displayUnit : "s"
+    };
+  }
+
   function computeAutoXTitle(project, plot) {
-    var displayUnit = project.options && project.options.displayTimeUnit ? project.options.displayTimeUnit : "s";
     var items = resolvePlotSeries(project, plot);
     if (!items.length) return "Value";
     var metas = items.map(function (item) {
       var dataset = findDataset(project, item.series.datasetId);
-      var xIsTime = !dataset || dataset.xIsTime !== false;
+      var time = plotTimeSettings(plot, dataset);
       return {
-        name: dataset && dataset.xName ? dataset.xName : (xIsTime ? "Time" : ""),
-        unit: xIsTime ? (TIME_LABELS[displayUnit] || displayUnit) : ((dataset && dataset.xUnit) || ""),
-        xIsTime: xIsTime
+        name: dataset && dataset.xName ? dataset.xName : (time.enabled ? "Time" : ""),
+        unit: time.enabled ? (TIME_LABELS[time.displayUnit] || time.displayUnit) : ((dataset && dataset.xUnit) || ""),
+        xIsTime: time.enabled
       };
     });
     var first = metas[0];
@@ -448,17 +532,24 @@
   }
 
   function createPlot(project, partial) {
+    var index = ((project && project.plots && project.plots.length) || 0) + 1;
     var plot = {
       id: (partial && partial.id) || makeId("plot"),
-      title: (partial && partial.title) || "未命名图",
+      title: (partial && partial.title) || ("Figure " + index),
       subtitle: (partial && partial.subtitle) || "",
       note: (partial && partial.note) || "",
-      seriesRefs: (partial && partial.seriesRefs) || [],
+      seriesRefs: Array.isArray(partial && partial.seriesRefs)
+        ? partial.seriesRefs.map(function (ref) { return normalizeSeriesRef(ref); })
+        : [],
       xAxis: normalizeAxis(partial && partial.xAxis),
       yAxis: normalizeAxis(partial && partial.yAxis),
       layout: (partial && partial.layout) || nextPlotLayout(project),
+      layoutSlot: partial && partial.layoutSlot ? String(partial.layoutSlot) : null,
       legendVisible: partial && partial.legendVisible === false ? false : true,
       legend: normalizeLegend(partial && partial.legend, partial && partial.legendVisible),
+      textStyles: normalizePlotTextStyles(partial && partial.textStyles),
+      background: partial && partial.background ? String(partial.background) : "",
+      annotations: Array.isArray(partial && partial.annotations) ? partial.annotations.slice() : [],
       lockAspect: !!(partial && partial.lockAspect),
       aspectRatio: Number.isFinite(Number(partial && partial.aspectRatio))
         ? Number(partial.aspectRatio)
@@ -478,11 +569,13 @@
       var series = findSeries(project, id);
       if (!series) throw new Error("找不到曲线：" + id);
       if (plot.seriesRefs.some(function (ref) { return ref.seriesId === id; })) return;
-      plot.seriesRefs.push({
+      plot.seriesRefs.push(normalizeSeriesRef({
         seriesId: id,
         visible: true,
-        color: series.color
-      });
+        selected: false,
+        color: series.color,
+        style: { color: series.color }
+      }));
     });
     syncPlotAxisAutoTitles(project, plot);
     return plot;
@@ -504,13 +597,62 @@
     return plot.seriesRefs.map(function (ref) {
       var series = findSeries(project, ref.seriesId);
       if (!series) return null;
+      var style = normalizeSeriesStyle(ref.style, ref.color || series.color);
+      if (ref.color) style.color = ref.color;
       return {
         series: series,
         ref: ref,
         visible: ref.visible !== false,
-        color: ref.color || series.color
+        selected: !!ref.selected,
+        color: ref.color || style.color || series.color,
+        style: style
       };
     }).filter(Boolean);
+  }
+
+  function selectedSeriesIds(plot) {
+    return (plot && plot.seriesRefs ? plot.seriesRefs : []).filter(function (ref) {
+      return !!ref.selected;
+    }).map(function (ref) { return ref.seriesId; });
+  }
+
+  function resolveRenameTarget(project, plot, scope, datasetId) {
+    if (scope === "selected") return plot ? selectedSeriesIds(plot) : [];
+    if (scope === "cluster") {
+      var dataset = findDataset(project, datasetId) || ((project.datasets && project.datasets[0]) || null);
+      return dataset ? dataset.series.map(function (series) { return series.id; }) : [];
+    }
+    if (!plot) return [];
+    return (plot.seriesRefs || []).map(function (ref) { return ref.seriesId; });
+  }
+
+  function applyRenameToSeriesIds(project, seriesIds, previewRows) {
+    (seriesIds || []).forEach(function (id, index) {
+      if (!previewRows || !previewRows[index]) return;
+      var series = findSeries(project, id);
+      if (!series) return;
+      series.displayName = String(previewRows[index].after || "");
+      series.label = series.displayName;
+    });
+    return seriesIds;
+  }
+
+  function applySeriesStyle(plot, seriesIds, patch) {
+    var idSet = {};
+    (seriesIds || []).forEach(function (id) { idSet[id] = true; });
+    (plot.seriesRefs || []).forEach(function (ref) {
+      if (!idSet[ref.seriesId]) return;
+      ref.style = normalizeSeriesStyle(ref.style, ref.color);
+      if (patch.lineWidth != null) ref.style.lineWidth = Number(patch.lineWidth);
+      if (patch.lineType != null) ref.style.lineType = patch.lineType;
+      if (patch.opacity != null) ref.style.opacity = Number(patch.opacity);
+      if (patch.color != null && patch.color !== "") {
+        ref.style.color = String(patch.color);
+        ref.color = ref.style.color;
+      }
+      ref.style = normalizeSeriesStyle(ref.style, ref.color);
+    });
+    return plot;
   }
 
   function convertSeriesX(series, sourceUnit, displayUnit, xIsTime) {
@@ -521,7 +663,7 @@
     return series.x.map(function (value) { return value * sourceFactor / targetFactor; });
   }
 
-  function numericExtent(values) {
+  function numericExtent(values, paddingRatio) {
     var low = Infinity;
     var high = -Infinity;
     values.forEach(function (value) {
@@ -534,33 +676,44 @@
       var fallback = Math.max(Math.abs(low) * 0.04, 1);
       return [low - fallback, high + fallback];
     }
-    var padding = (high - low) * 0.045;
-    return [low - padding, high + padding];
+    var pad = (paddingRatio == null ? 0.045 : Number(paddingRatio)) * (high - low);
+    return [low - pad, high + pad];
   }
 
-  function axisRange(axis, values) {
+  function axisRange(axis, values, paddingRatio) {
     if (axis && axis.mode === "manual" && Number.isFinite(Number(axis.min)) && Number.isFinite(Number(axis.max)) && Number(axis.min) < Number(axis.max)) {
       return [Number(axis.min), Number(axis.max)];
     }
-    return numericExtent(values);
+    return numericExtent(values, paddingRatio);
+  }
+
+  function seriesXForPlot(project, plot, series, dataset) {
+    var time = plotTimeSettings(plot, dataset);
+    return convertSeriesX(series, time.sourceUnit, time.displayUnit, time.enabled);
   }
 
   function plotExtents(project, plot) {
-    var displayUnit = project.options.displayTimeUnit || "s";
     var visible = resolvePlotSeries(project, plot).filter(function (item) { return item.visible; });
     var xs = [];
     var ys = [];
     visible.forEach(function (item) {
       var dataset = findDataset(project, item.series.datasetId);
-      var xIsTime = !dataset || dataset.xIsTime !== false;
-      var xValues = convertSeriesX(item.series, dataset ? dataset.timeUnit : "s", displayUnit, xIsTime);
-      xValues.forEach(function (value) { xs.push(value); });
+      seriesXForPlot(project, plot, item.series, dataset).forEach(function (value) { xs.push(value); });
       item.series.y.forEach(function (value) { ys.push(value); });
     });
     return {
-      x: axisRange(plot.xAxis, xs),
-      y: axisRange(plot.yAxis, ys),
+      x: axisRange(plot.xAxis, xs, 0),
+      y: axisRange(plot.yAxis, ys, 0.04),
       visibleCount: visible.length
+    };
+  }
+
+  function normalizeAxisTime(raw) {
+    var time = raw && typeof raw === "object" ? raw : {};
+    return {
+      enabled: time.enabled === false ? false : true,
+      sourceUnit: TIME_IN_SECONDS[time.sourceUnit] ? time.sourceUnit : "s",
+      displayUnit: TIME_IN_SECONDS[time.displayUnit] ? time.displayUnit : "s"
     };
   }
 
@@ -569,6 +722,7 @@
     var decimals = axis.decimals == null || axis.decimals === "" ? null : Number(axis.decimals);
     var majorTick = axis.majorTick == null || axis.majorTick === "" ? null : Number(axis.majorTick);
     var minorTick = axis.minorTick == null || axis.minorTick === "" ? null : Number(axis.minorTick);
+    var lineWidth = Number(axis.lineWidth);
     return {
       mode: axis.mode === "manual" ? "manual" : "auto",
       min: axis.min == null || axis.min === "" ? null : Number(axis.min),
@@ -581,7 +735,10 @@
       minorTickMode: axis.minorTickMode === "off" || axis.minorTickMode === "custom" ? axis.minorTickMode : "auto",
       minorTick: Number.isFinite(minorTick) && minorTick > 0 ? minorTick : null,
       formatMode: axis.formatMode === "fixed" || axis.formatMode === "scientific" ? axis.formatMode : "auto",
-      decimals: Number.isFinite(decimals) && decimals >= 0 ? Math.min(8, Math.round(decimals)) : null
+      decimals: Number.isFinite(decimals) && decimals >= 0 ? Math.min(8, Math.round(decimals)) : null,
+      lineColor: axis.lineColor ? String(axis.lineColor) : "",
+      lineWidth: Number.isFinite(lineWidth) ? clamp(lineWidth, 0.5, 6) : 1.1,
+      time: normalizeAxisTime(axis.time)
     };
   }
 
@@ -671,25 +828,66 @@
 
   function normalizeLegend(raw, legendVisible) {
     var legend = raw && typeof raw === "object" ? raw : {};
-    var position = LEGEND_POSITIONS.indexOf(legend.position) >= 0 ? legend.position : "auto";
+    var rawPosition = legend.position;
+    var posX = legend.x;
+    var posY = legend.y;
+    if (rawPosition && typeof rawPosition === "object") {
+      posX = rawPosition.x;
+      posY = rawPosition.y;
+      rawPosition = rawPosition.mode === "free" ? "free" : (rawPosition.mode || rawPosition.position || "top-right");
+    }
+    if (LEGEND_POSITION_ALIASES[rawPosition]) rawPosition = LEGEND_POSITION_ALIASES[rawPosition];
+    var position = LEGEND_POSITIONS.indexOf(rawPosition) >= 0 ? rawPosition : "auto";
+    if (position === "floating") position = "free";
     var columns = legend.columns === "auto" || legend.columns == null || legend.columns === ""
       ? "auto"
       : Math.max(1, Math.round(Number(legend.columns) || 1));
+    var rows = legend.rows === "auto" || legend.rows == null || legend.rows === ""
+      ? "auto"
+      : Math.max(1, Math.round(Number(legend.rows) || 1));
     var visible = legend.visible;
     if (visible == null) visible = legendVisible !== false;
+    var x = Number.isFinite(Number(posX)) ? clamp(Number(posX), 0, 1) : (Number.isFinite(Number(legend.floatingX)) ? clamp(Number(legend.floatingX), 0, 1) : 0.72);
+    var y = Number.isFinite(Number(posY)) ? clamp(Number(posY), 0, 1) : (Number.isFinite(Number(legend.floatingY)) ? clamp(Number(legend.floatingY), 0, 1) : 0.08);
+    var bg = Number(legend.backgroundOpacity);
+    var padding = Number(legend.padding);
     return {
       visible: visible !== false,
       position: position,
-      floatingX: Number.isFinite(Number(legend.floatingX)) ? clamp(Number(legend.floatingX), 0, 1) : 0.75,
-      floatingY: Number.isFinite(Number(legend.floatingY)) ? clamp(Number(legend.floatingY), 0, 1) : 0.08,
+      x: x,
+      y: y,
+      floatingX: x,
+      floatingY: y,
+      fontFamily: String(legend.fontFamily || DEFAULT_FONT),
       fontSize: Number.isFinite(Number(legend.fontSize)) ? clamp(Number(legend.fontSize), 8, 24) : 12,
+      fontColor: legend.fontColor ? String(legend.fontColor) : "",
+      fontWeight: legend.fontWeight === "700" || legend.fontWeight === "bold" ? "700" : "400",
+      italic: !!legend.italic,
       orientation: legend.orientation === "horizontal" || legend.orientation === "vertical" ? legend.orientation : "auto",
       columns: columns,
+      rows: rows,
       rowGap: Number.isFinite(Number(legend.rowGap)) ? clamp(Number(legend.rowGap), 0, 24) : 4,
       columnGap: Number.isFinite(Number(legend.columnGap)) ? clamp(Number(legend.columnGap), 0, 48) : 12,
       sampleLength: Number.isFinite(Number(legend.sampleLength)) ? clamp(Number(legend.sampleLength), 8, 48) : 16,
       maxWidth: legend.maxWidth == null || legend.maxWidth === "" ? null : Math.max(40, Number(legend.maxWidth)),
+      backgroundOpacity: Number.isFinite(bg) ? clamp(bg, 0, 1) : 0.85,
+      border: !!legend.border,
+      padding: Number.isFinite(padding) ? clamp(padding, 0, 24) : 6,
       wrap: legend.wrap !== false
+    };
+  }
+
+  function normalizeSeriesRef(ref) {
+    if (!ref || !ref.seriesId) throw new Error("Plot 的 seriesRefs 缺少 seriesId。");
+    var color = ref.color ? String(ref.color) : (ref.style && ref.style.color ? String(ref.style.color) : null);
+    var style = normalizeSeriesStyle(ref.style, color);
+    if (color) style.color = color;
+    return {
+      seriesId: String(ref.seriesId),
+      visible: ref.visible !== false,
+      selected: !!ref.selected,
+      color: style.color || color,
+      style: style
     };
   }
 
@@ -700,19 +898,22 @@
     var height = Number.isFinite(Number(layout.height)) ? Math.max(180, Number(layout.height)) : DEFAULT_FIGURE_HEIGHT;
     var legend = normalizeLegend(raw.legend, raw.legendVisible);
     var aspectRatio = Number.isFinite(Number(raw.aspectRatio)) ? Number(raw.aspectRatio) : (height ? width / height : 1.6);
+    var textStyles = normalizePlotTextStyles(raw.textStyles);
+    if (!raw.textStyles || !raw.textStyles.legend) {
+      textStyles.legend = normalizeTextStyle(textStyles.legend, {
+        fontFamily: legend.fontFamily,
+        fontSize: legend.fontSize,
+        fontColor: legend.fontColor,
+        fontWeight: legend.fontWeight,
+        italic: legend.italic
+      });
+    }
     return {
       id: String(raw.id || makeId("plot")),
       title: String(raw.title || "未命名图"),
       subtitle: String(raw.subtitle || ""),
       note: String(raw.note || ""),
-      seriesRefs: Array.isArray(raw.seriesRefs) ? raw.seriesRefs.map(function (ref) {
-        if (!ref || !ref.seriesId) throw new Error("Plot 的 seriesRefs 缺少 seriesId。");
-        return {
-          seriesId: String(ref.seriesId),
-          visible: ref.visible !== false,
-          color: ref.color ? String(ref.color) : null
-        };
-      }) : [],
+      seriesRefs: Array.isArray(raw.seriesRefs) ? raw.seriesRefs.map(normalizeSeriesRef) : [],
       xAxis: normalizeAxis(raw.xAxis),
       yAxis: normalizeAxis(raw.yAxis),
       layout: {
@@ -721,8 +922,12 @@
         width: width,
         height: height
       },
+      layoutSlot: raw.layoutSlot ? String(raw.layoutSlot) : null,
       legendVisible: legend.visible,
       legend: legend,
+      textStyles: textStyles,
+      background: raw.background ? String(raw.background) : "",
+      annotations: Array.isArray(raw.annotations) ? raw.annotations.slice() : [],
       lockAspect: !!raw.lockAspect,
       aspectRatio: aspectRatio
     };
@@ -755,13 +960,14 @@
     if (!projectName) projectName = "未命名工程";
     var uiSource = data.ui && typeof data.ui === "object" ? data.ui : {};
     if (uiSource.canvasZoom == null && canvas.zoom != null) uiSource.canvasZoom = canvas.zoom;
+    var dataPlots = Array.isArray(data.plots) ? data.plots : [];
     var project = {
       projectFormatVersion: PROJECT_FORMAT_VERSION,
       softwareVersion: SOFTWARE_VERSION,
       projectName: projectName,
       savedAt: data.savedAt ? String(data.savedAt) : null,
       datasets: Array.isArray(data.datasets) ? data.datasets.map(normalizeDataset) : [],
-      plots: Array.isArray(data.plots) ? data.plots.map(normalizePlot) : [],
+      plots: dataPlots.map(normalizePlot),
       canvas: {
         width: Number.isFinite(Number(canvas.width)) ? Math.max(400, Number(canvas.width)) : 1280,
         height: Number.isFinite(Number(canvas.height)) ? Math.max(300, Number(canvas.height)) : 800,
@@ -779,6 +985,20 @@
     } else {
       project.ui.canvasZoom = project.canvas.zoom = clampZoom(project.ui.canvasZoom || project.canvas.zoom || 1);
     }
+    project.plots.forEach(function (plot, index) {
+      var rawPlot = dataPlots[index] || {};
+      var rawAxis = rawPlot.xAxis && typeof rawPlot.xAxis === "object" ? rawPlot.xAxis : {};
+      if (!rawAxis.time) {
+        var firstRef = plot.seriesRefs[0];
+        var dataset = firstRef ? findDataset(project, (findSeries(project, firstRef.seriesId) || {}).datasetId) : null;
+        plot.xAxis.time.sourceUnit = (dataset && TIME_IN_SECONDS[dataset.timeUnit])
+          ? dataset.timeUnit
+          : (TIME_IN_SECONDS[optionsIn.sourceTimeUnit] ? optionsIn.sourceTimeUnit : "s");
+        plot.xAxis.time.displayUnit = TIME_IN_SECONDS[optionsIn.displayTimeUnit] ? optionsIn.displayTimeUnit : "s";
+        if (dataset && dataset.xIsTime === false) plot.xAxis.time.enabled = false;
+      }
+    });
+    if (!project.plots.length) ensureDefaultPlot(project);
     assertUniqueSeriesIds(project);
     project.plots.forEach(function (plot) {
       plot.seriesRefs.forEach(function (ref) {
@@ -792,6 +1012,14 @@
     return project;
   }
 
+  function serializeLegend(legend) {
+    var copy = cloneJson(legend || {});
+    if (copy.position === "free") {
+      copy.position = { mode: "free", x: copy.x, y: copy.y };
+    }
+    return copy;
+  }
+
   function serializeProject(project) {
     assertUniqueSeriesIds(project);
     var payload = {
@@ -800,7 +1028,11 @@
       projectName: project.projectName,
       savedAt: new Date().toISOString(),
       datasets: project.datasets,
-      plots: project.plots,
+      plots: (project.plots || []).map(function (plot) {
+        var copy = cloneJson(plot);
+        copy.legend = serializeLegend(plot.legend);
+        return copy;
+      }),
       canvas: project.canvas,
       options: project.options,
       ui: normalizeUi(project.ui)
@@ -903,6 +1135,11 @@
     return seriesList;
   }
 
+  function ensureDefaultPlot(project) {
+    if (project.plots && project.plots.length) return project.plots[0];
+    return createPlot(project, { title: "Figure 1" });
+  }
+
   function screenToWorld(x, y, zoom) {
     var z = clampZoom(zoom);
     return { x: x / z, y: y / z };
@@ -989,15 +1226,29 @@
     });
   }
 
-  function applyLayoutTemplate(plots, templateId, area) {
+  function applyLayoutTemplate(plots, templateId, area, options) {
+    var spec = LAYOUT_TEMPLATES[templateId] || LAYOUT_TEMPLATES.single;
     var slots = layoutSlots(templateId, area || {});
-    (plots || []).forEach(function (plot, index) {
+    var names = spec.slots || slots.map(function (_, index) { return "slot" + index; });
+    var list = (plots || []).slice();
+    var primaryId = options && options.primaryPlotId;
+    if (primaryId) {
+      var primaryIndex = list.findIndex(function (plot) { return plot.id === primaryId; });
+      if (primaryIndex > 0) {
+        var primary = list.splice(primaryIndex, 1)[0];
+        if (templateId === "onePlusTwo" || templateId === "leftWide") list.unshift(primary);
+        else if (templateId === "rightWide") list.splice(1, 0, primary);
+        else list.unshift(primary);
+      }
+    }
+    list.forEach(function (plot, index) {
       var slot = slots[index];
       if (!slot) return;
       plot.layout.x = slot.x;
       plot.layout.y = slot.y;
       plot.layout.width = Math.max(240, slot.width);
       plot.layout.height = Math.max(180, slot.height);
+      plot.layoutSlot = names[index] || ("slot" + index);
       if (!plot.lockAspect) plot.aspectRatio = plot.layout.height ? plot.layout.width / plot.layout.height : plot.aspectRatio;
     });
     return plots;
@@ -1205,14 +1456,39 @@
     return compactNumber(number);
   }
 
-  function resolveLegendPosition(legend, itemCount) {
+  function resolveLegendPosition(legend) {
     var position = legend && legend.position ? legend.position : "auto";
+    if (position && typeof position === "object") {
+      position = position.mode === "free" ? "free" : (position.mode || "auto");
+    }
+    if (LEGEND_POSITION_ALIASES[position]) position = LEGEND_POSITION_ALIASES[position];
     if (position !== "auto") return position;
     return "top";
   }
 
+  function legendAnchor(position) {
+    var map = {
+      "top-left": [0, 0],
+      "top-center": [0.5, 0],
+      "top-right": [1, 0],
+      "middle-left": [0, 0.5],
+      "middle-right": [1, 0.5],
+      "bottom-left": [0, 1],
+      "bottom-center": [0.5, 1],
+      "bottom-right": [1, 1],
+      top: [0.5, 0],
+      bottom: [0.5, 1],
+      left: [0, 0.5],
+      right: [1, 0.5]
+    };
+    return map[position] || [0.72, 0.08];
+  }
+
   function resolveLegendColumns(legend, itemCount, orientation) {
     if (legend && legend.columns && legend.columns !== "auto") return Math.max(1, Number(legend.columns) || 1);
+    if (legend && legend.rows && legend.rows !== "auto") {
+      return Math.max(1, Math.ceil((itemCount || 1) / Math.max(1, Number(legend.rows) || 1)));
+    }
     if (orientation === "vertical") return 1;
     if (itemCount > 8) return Math.min(6, Math.max(2, Math.ceil(itemCount / 8)));
     return itemCount > 4 ? 2 : 1;
@@ -1229,19 +1505,25 @@
     var maxHeight = Math.max(16, opts.maxHeight || 120);
     var orientation = opts.orientation === "vertical" || opts.orientation === "horizontal"
       ? opts.orientation
-      : ((items || []).length > 8 ? "horizontal" : "horizontal");
-    var columns = resolveLegendColumns(opts, (items || []).length, orientation);
+      : "horizontal";
+    var itemCount = (items || []).length;
+    var explicitCols = opts.columns && opts.columns !== "auto";
+    var explicitRows = opts.rows && opts.rows !== "auto";
+    var colCount = resolveLegendColumns(opts, itemCount, orientation);
     var rowH = fontSize + 4;
     var widths = (items || []).map(function (item) {
       return sampleLength + 6 + measure(item.label) + 4;
     });
-    var colCount = Math.max(1, columns);
     if (orientation === "vertical") colCount = 1;
-    var rows = Math.max(1, Math.ceil((items || []).length / colCount));
-    while (colCount > 1 && rows * rowH + (rows - 1) * rowGap > maxHeight) {
-      colCount += 1;
-      rows = Math.ceil((items || []).length / colCount);
-      if (colCount > 12) break;
+    if (explicitRows && !explicitCols) {
+      colCount = Math.max(1, Math.ceil(itemCount / Math.max(1, Number(opts.rows) || 1)));
+    }
+    var rows = Math.max(1, Math.ceil(itemCount / Math.max(1, colCount)));
+    if (!explicitCols && !explicitRows && orientation !== "vertical") {
+      while (colCount < 12 && rows * rowH + (rows - 1) * rowGap > maxHeight) {
+        colCount += 1;
+        rows = Math.ceil(itemCount / colCount);
+      }
     }
     var colWidths = [];
     for (var col = 0; col < colCount; col += 1) colWidths[col] = 0;
@@ -1257,7 +1539,7 @@
       var x = 0;
       for (var c = 0; c < column; c += 1) x += colWidths[c] + columnGap;
       var y = row * (rowH + rowGap);
-      if (y + rowH > maxHeight + 0.5) {
+      if (opts.wrap === false && y + rowH > maxHeight + 0.5) {
         overflow += 1;
         return;
       }
@@ -1265,8 +1547,9 @@
     });
     var width = colWidths.reduce(function (sum, value) { return sum + value; }, 0) + columnGap * Math.max(0, colCount - 1);
     var height = placed.length ? Math.max.apply(null, placed.map(function (entry) { return entry.y + entry.height; })) : 0;
-    width = Math.min(maxWidth, Math.max(width, 0));
-    return { placed: placed, width: width, height: height, overflow: overflow, columns: colCount };
+    if (!explicitCols) width = Math.min(maxWidth, Math.max(width, 0));
+    else width = Math.max(width, 0);
+    return { placed: placed, width: width, height: height, overflow: overflow, columns: colCount, rows: rows };
   }
 
   function dockLegendPosition(localX, localY, width, height) {
@@ -1288,7 +1571,10 @@
     SOFTWARE_VERSION: SOFTWARE_VERSION,
     PROJECT_FORMAT_VERSION: PROJECT_FORMAT_VERSION,
     SUPPORTED_PROJECT_FORMATS: SUPPORTED_PROJECT_FORMATS,
+    TIME_IN_SECONDS: TIME_IN_SECONDS,
     TIME_LABELS: TIME_LABELS,
+    LINE_TYPES: LINE_TYPES,
+    DEFAULT_FONT: DEFAULT_FONT,
     DEFAULT_GROUPS: DEFAULT_GROUPS,
     MAX_MAJOR_TICKS: MAX_MAJOR_TICKS,
     ZOOM_MIN: ZOOM_MIN,
@@ -1312,6 +1598,7 @@
     addDataset: addDataset,
     removeDataset: removeDataset,
     createPlot: createPlot,
+    ensureDefaultPlot: ensureDefaultPlot,
     addSeriesToPlot: addSeriesToPlot,
     findDataset: findDataset,
     findSeries: findSeries,
@@ -1320,8 +1607,11 @@
     seriesId: seriesId,
     resolvePlotSeries: resolvePlotSeries,
     convertSeriesX: convertSeriesX,
+    seriesXForPlot: seriesXForPlot,
+    plotTimeSettings: plotTimeSettings,
     plotExtents: plotExtents,
     numericExtent: numericExtent,
+    axisRange: axisRange,
     formatQuantityTitle: formatQuantityTitle,
     computeAutoXTitle: computeAutoXTitle,
     computeAutoYTitle: computeAutoYTitle,
@@ -1336,6 +1626,15 @@
     commonSuffix: commonSuffix,
     previewBatchRename: previewBatchRename,
     applyBatchRename: applyBatchRename,
+    selectedSeriesIds: selectedSeriesIds,
+    resolveRenameTarget: resolveRenameTarget,
+    applyRenameToSeriesIds: applyRenameToSeriesIds,
+    applySeriesStyle: applySeriesStyle,
+    normalizeSeriesStyle: normalizeSeriesStyle,
+    normalizeSeriesRef: normalizeSeriesRef,
+    normalizeTextStyle: normalizeTextStyle,
+    normalizePlotTextStyles: normalizePlotTextStyles,
+    strokeDasharray: strokeDasharray,
     screenToWorld: screenToWorld,
     worldToScreen: worldToScreen,
     plotsBoundingBox: plotsBoundingBox,
@@ -1354,6 +1653,7 @@
     autoTicks: autoTicks,
     layoutLegendItems: layoutLegendItems,
     resolveLegendPosition: resolveLegendPosition,
+    legendAnchor: legendAnchor,
     dockLegendPosition: dockLegendPosition,
     normalizeUi: normalizeUi,
     normalizeLegend: normalizeLegend,
