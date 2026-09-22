@@ -577,6 +577,19 @@ v0.2.4 收数据簇样式、颜色/线型编辑、标题对齐、About 层级和
 - About 使用模态层。分隔条坐标上的命中元素是对话框本身，不是分隔条。对话框 z-index 1000，分隔条 10。
 - 断网显示无法连接 GitHub。模拟 v0.2.4 显示不低于最新正式版。模拟 v0.3.0 显示发现新版本，按钮为「查看更新」「获取最新版」。关闭后画布仍在。
 - 打开 v0.1.0 夹具工程后标题对齐为左，保存再打开 Series 仍在，工程 JSON 不含更新状态。
-- 页面 kicker 为 Visualizer v0.2.4。真实 `releases/latest` 为 v0.2.1，本地 0.2.4 的状态是 `up-to-date`，不提示降级。
+- 页面 kicker 为 Visualizer v0.2.4。发布前真实 `releases/latest` 为 v0.2.1，本地 0.2.4 的状态是 `up-to-date`，不提示降级。
+
+---
+
+## 2026-09-22 发布 v0.2.4
+
+- 软件版本：`0.2.4`
+- 工程格式：`projectFormatVersion: "1.0"`
+- tag：`v0.2.4`
+- 页面：https://github.com/aidisen975-cmd/Visualizer/releases/tag/v0.2.4
+
+正式版，不是 Draft，也不是 Pre-release。附件 `Visualizer-v0.2.4.zip`（html + `visualizer-core.js` + `README.md`）。
+
+发布后用上一正式版 `0.2.1` 请求 `releases/latest`：状态为发现新版本，最新版 `0.2.4`，下载地址是 `Visualizer-v0.2.4.zip`。本地 `0.2.4` 的状态是已不低于最新正式版。`0.2.3` 同样能发现 `0.2.4`。
 
 
