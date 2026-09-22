@@ -147,6 +147,7 @@
       outline: 2px solid var(--focus);
       outline-offset: 2px;
     }
+    .tv-button:disabled { opacity: .55; cursor: default; }
     .tv-button--primary { border-color: var(--focus); background: var(--focus); color: #fff; }
     .tv-button--primary:hover { background: #155d91; color: #fff; }
     .tv-button--danger { color: var(--danger); }
@@ -186,7 +187,7 @@
       background: var(--line);
       cursor: col-resize;
       position: relative;
-      z-index: 6;
+      z-index: 10;
     }
     .tv-splitter:hover, .tv-splitter.is-active { background: var(--focus); }
     .tv-canvas-col {
@@ -211,7 +212,7 @@
     }
     .tv-layout-menu {
       position: absolute;
-      z-index: 20;
+      z-index: 100;
       display: grid;
       grid-template-columns: repeat(4, 64px);
       gap: 8px;
@@ -318,7 +319,7 @@
     }
     .tv-dataset-head {
       display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto auto;
+      grid-template-columns: auto minmax(0, 1fr) auto auto auto;
       gap: 6px;
       align-items: center;
       padding: 7px 8px;
@@ -365,13 +366,83 @@
     .tv-series-list { padding-bottom: 4px; }
     .tv-series-row {
       display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-columns: auto 10px 46px minmax(0, 1fr) auto;
       gap: 7px;
       align-items: center;
       padding: 5px 8px;
       font-size: 12px;
       user-select: none;
     }
+    .tv-series-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      justify-self: center;
+    }
+    .tv-line-preview {
+      display: block;
+      width: 46px;
+      height: 10px;
+      color: var(--ink);
+    }
+    .tv-cluster-style {
+      display: grid;
+      gap: 8px;
+      padding: 8px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .tv-color-row {
+      display: grid;
+      grid-template-columns: 36px minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+    }
+    .tv-color-row input[type="color"] {
+      width: 36px;
+      height: 28px;
+      padding: 0;
+      border: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .tv-field.is-invalid { border-color: var(--danger); }
+    .tv-field-error { color: var(--danger); font-size: 11px; }
+    .tv-line-current {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      min-height: 28px;
+      padding: 2px 8px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: inherit;
+      cursor: pointer;
+      text-align: left;
+    }
+    .tv-line-menu-list {
+      display: grid;
+      margin-top: 4px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .tv-line-menu-list[hidden] { display: none; }
+    .tv-line-option {
+      display: grid;
+      grid-template-columns: 14px 46px minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+      width: 100%;
+      min-height: 28px;
+      padding: 2px 6px;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      text-align: left;
+    }
+    .tv-line-option:hover, .tv-line-option.is-selected { background: var(--surface-2); }
+    .tv-line-check { color: var(--focus); font-size: 12px; }
     .tv-title-row {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
@@ -568,6 +639,7 @@
     }
     .tv-hint { margin: 8px 0 0; color: var(--faint); font-size: 11px; line-height: 1.45; text-wrap: pretty; }
     .tv-preview {
+      z-index: 1000;
       border: 0;
       padding: 0;
       width: min(96vw, 1280px);
@@ -576,7 +648,8 @@
       color: var(--ink);
       box-shadow: var(--shadow);
     }
-    .tv-preview::backdrop { background: rgba(18, 22, 24, .45); }
+    .tv-preview::backdrop,
+    .tv-about::backdrop { background: rgba(18, 22, 24, .45); }
     .tv-preview-bar {
       display: flex;
       justify-content: space-between;
@@ -610,11 +683,111 @@
       cursor: pointer;
     }
     .tv-icon-button:hover { border-color: var(--line); color: var(--ink); background: var(--surface); }
+    .tv-about {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      width: min(92vw, 420px);
+      height: fit-content;
+      max-height: min(78vh, 640px);
+      margin: auto;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 0;
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: var(--shadow);
+    }
+    .tv-about[open] {
+      display: flex;
+      flex-direction: column;
+    }
+    .tv-about-body {
+      padding: 14px 16px 16px;
+      overflow: auto;
+      min-height: 0;
+    }
+    .tv-about-name {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: -.03em;
+      font-weight: 720;
+    }
+    .tv-about-tagline { margin: 4px 0 0; color: var(--muted); }
+    .tv-about-meta {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px 16px;
+      margin: 14px 0;
+      padding: 10px 0;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+    .tv-about-meta dt { color: var(--muted); }
+    .tv-about-meta dd {
+      margin: 0;
+      font-family: "SFMono-Regular", "Cascadia Mono", "Noto Sans Mono", monospace;
+    }
+    .tv-update-status {
+      margin: 0 0 12px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface-2);
+      line-height: 1.5;
+    }
+    .tv-update-status[data-status="up-to-date"] { border-color: #7ba88d; color: var(--ok); }
+    .tv-update-status[data-status="available"] { border-color: var(--focus); }
+    .tv-update-status[data-status="error"] { border-color: #c66d61; }
+    .tv-update-heading { margin: 0 0 6px; font-size: 13px; }
+    .tv-update-version {
+      margin: 0;
+      font-family: "SFMono-Regular", "Cascadia Mono", "Noto Sans Mono", monospace;
+    }
+    .tv-update-notes {
+      max-height: 180px;
+      overflow: auto;
+      margin: 8px 0 0;
+      padding: 8px 10px;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--paper);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .tv-update-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .tv-about .tv-button:disabled { opacity: .55; cursor: default; }
+    .tv-about-releases {
+      display: inline-block;
+      margin-top: 14px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--focus);
+      font-size: 12px;
+      font-weight: 650;
+      cursor: pointer;
+    }
+    .tv-about-spin {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      margin-right: 6px;
+      border: 2px solid var(--line);
+      border-top-color: var(--focus);
+      border-radius: 50%;
+      vertical-align: -2px;
+      animation: tv-about-spin .7s linear infinite;
+    }
+    @keyframes tv-about-spin { to { transform: rotate(360deg); } }
     @media (max-width: 1100px) {
       .tv-status { min-width: 0; width: min(48vw, 280px); }
     }
     @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after { transition-duration: 1ms !important; }
+      *, *::before, *::after { transition-duration: 1ms !important; animation-duration: 1ms !important; }
     }
   </style>
 </head>
@@ -622,10 +795,11 @@
   <div class="tv-app" id="tvApp" data-theme="light">
     <header class="tv-header">
       <div class="tv-brand">
-        <p class="tv-kicker">Visualizer v0.2.3</p>
+        <p class="tv-kicker" id="tvKicker">Visualizer</p>
         <h1>实验数据可视化工作台</h1>
       </div>
       <div class="tv-header-meta">
+        <button type="button" class="tv-button" id="tvAboutOpen" data-role="open-about">关于</button>
         <div class="tv-dirty" id="tvDirty">未保存</div>
         <div class="tv-status" id="tvStatus" role="status">导入 CSV 开始，或打开已有工程。</div>
       </div>
@@ -695,6 +869,13 @@
     </div>
     <div class="tv-rename-stage" id="tvRenameStage"></div>
   </dialog>
+  <dialog class="tv-about" id="tvAboutDialog" aria-labelledby="tvAboutTitle">
+    <div class="tv-preview-bar">
+      <strong id="tvAboutTitle">关于 Visualizer</strong>
+      <button type="button" class="tv-button" id="tvAboutClose">关闭</button>
+    </div>
+    <div class="tv-about-body" id="tvAboutBody"></div>
+  </dialog>
   <script src="visualizer-core.js"></script>
   <script>
   (function () {
@@ -726,6 +907,7 @@
     var lastSelectedSeriesId = {};
     var checkedSeries = new Set();
     var collapsedDatasets = new Set();
+    var openClusterStyleId = null;
     var selectionAnchor = {};
     var activeDatasetId = null;
     var dataPanelActive = false;
@@ -1110,6 +1292,7 @@
       }, { width: 12, height: plot.textStyles.xTick.fontSize || 10, ascent: 0, descent: 0 });
       var metrics = {
         title: measureStyledText(plot.title || "未命名图", plot.textStyles.title),
+        titleAlign: (plot.textStyles.title && plot.textStyles.title.align) || "left",
         subtitle: measureStyledText(plot.subtitle, { fontFamily: plot.textStyles.title.fontFamily, fontSize: 11, fontWeight: "400" }),
         note: measureStyledText(plot.note, { fontFamily: plot.textStyles.title.fontFamily, fontSize: 10, fontWeight: "400" }),
         xAxisTitle: measureStyledText(xTitle, plot.textStyles.xAxisTitle),
@@ -1203,12 +1386,13 @@
       svg.__legendOverflow = legend.overflow || 0;
       svg.__plotArea = layout.plotArea;
       appendSvg(svg, "rect", { x: 0, y: 0, width: width, height: height, fill: plot.background || colors.surface });
-      applyText(svg, layout.titlePos.x, layout.titlePos.y, plot.textStyles.title, colors.ink, {}, plot.title || "未命名图");
+      var titleAnchor = { "text-anchor": layout.titleAnchor || "start" };
+      applyText(svg, layout.titlePos.x, layout.titlePos.y, plot.textStyles.title, colors.ink, titleAnchor, plot.title || "未命名图");
       if (plot.subtitle) {
-        applyText(svg, layout.subtitlePos.x, layout.subtitlePos.y, { fontFamily: plot.textStyles.title.fontFamily, fontSize: 11, fontColor: colors.muted, fontWeight: "400" }, colors.muted, {}, plot.subtitle);
+        applyText(svg, layout.subtitlePos.x, layout.subtitlePos.y, { fontFamily: plot.textStyles.title.fontFamily, fontSize: 11, fontColor: colors.muted, fontWeight: "400" }, colors.muted, titleAnchor, plot.subtitle);
       }
       if (plot.note) {
-        applyText(svg, layout.notePos.x, layout.notePos.y, { fontFamily: plot.textStyles.title.fontFamily, fontSize: 10, fontColor: colors.faint, fontWeight: "400" }, colors.faint, {}, plot.note);
+        applyText(svg, layout.notePos.x, layout.notePos.y, { fontFamily: plot.textStyles.title.fontFamily, fontSize: 10, fontColor: colors.faint, fontWeight: "400" }, colors.faint, titleAnchor, plot.note);
       }
       var axisStroke = plot.xAxis.lineColor || colors.ink;
       var axisWidth = plot.xAxis.lineWidth || 1.1;
@@ -1380,6 +1564,48 @@
       setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
     }
 
+    function clusterStylePanel(dataset) {
+      var panel = document.createElement("div");
+      panel.className = "tv-cluster-style";
+      var draft = {};
+      var color = colorControl("颜色", "#cfe3eb", function (hex) {
+        draft.color = hex;
+        paintApply();
+      }, { mixed: true });
+      var lineType = lineTypeControl("线型", "", function (id) {
+        draft.lineType = id;
+        paintApply();
+      });
+      var lineWidth = sliderNumberControl("线宽", "", {
+        min: core.LINE_WIDTH_MIN,
+        max: core.LINE_WIDTH_MAX,
+        step: core.LINE_WIDTH_STEP,
+        unit: "px",
+        mixed: true
+      });
+      lineWidth.onValue(function (value) {
+        draft.lineWidth = value;
+        paintApply();
+      });
+      var apply = document.createElement("button");
+      apply.type = "button";
+      apply.className = "tv-button tv-button--primary";
+      apply.textContent = "应用到该数据簇全部系列";
+      apply.disabled = true;
+      function paintApply() { apply.disabled = !Object.keys(draft).length; }
+      apply.addEventListener("click", function () {
+        if (!Object.keys(draft).length) return;
+        core.applyStyleToDataset(project, dataset.id, draft);
+        openClusterStyleId = null;
+        setDirty(true);
+        setStatus("已更新「" + (dataset.sourceFilename || dataset.name) + "」的线条样式。", "ok");
+        renderAll();
+      });
+      panel.addEventListener("click", function (event) { event.stopPropagation(); });
+      panel.append(color.wrap, lineType.wrap, lineWidth.wrap, apply);
+      return panel;
+    }
+
     function renderData() {
       dataPanel.replaceChildren();
       if (!project.datasets.length) {
@@ -1414,10 +1640,24 @@
         name.addEventListener("click", function (event) { event.stopPropagation(); });
         var count = document.createElement("span");
         count.className = "tv-dataset-count";
-        var selected = selectedCount(dataset);
-        count.textContent = selected
-          ? dataset.series.length + "条 · 已选" + selected
-          : dataset.series.length + "条";
+        function paintCount() {
+          count.textContent = "已选 " + selectedCount(dataset) + "/" + dataset.series.length;
+        }
+        paintCount();
+        var styleBtn = document.createElement("button");
+        styleBtn.type = "button";
+        styleBtn.className = "tv-button tv-button--tiny";
+        styleBtn.textContent = "样式";
+        styleBtn.setAttribute("aria-label", "设置 " + dataset.name + " 的数据簇样式");
+        styleBtn.addEventListener("click", function (event) {
+          event.stopPropagation();
+          if (openClusterStyleId === dataset.id) openClusterStyleId = null;
+          else {
+            openClusterStyleId = dataset.id;
+            collapsedDatasets.delete(dataset.id);
+          }
+          renderData();
+        });
         var remove = document.createElement("button");
         remove.type = "button";
         remove.className = "tv-icon-button";
@@ -1435,7 +1675,7 @@
           renderAll();
         });
         function toggleCollapsed(event) {
-          if (event.target === name || event.target === remove) return;
+          if (event.target === name || event.target === remove || event.target === styleBtn) return;
           event.preventDefault();
           if (collapsedDatasets.has(dataset.id)) collapsedDatasets.delete(dataset.id);
           else collapsedDatasets.add(dataset.id);
@@ -1443,8 +1683,9 @@
         }
         head.addEventListener("click", toggleCollapsed);
         head.addEventListener("mousedown", function () { activeDatasetId = dataset.id; });
-        head.append(toggle, name, count, remove);
+        head.append(toggle, name, count, styleBtn, remove);
         box.appendChild(head);
+        if (!collapsed && openClusterStyleId === dataset.id) box.appendChild(clusterStylePanel(dataset));
         if (!collapsed) {
           var tools = document.createElement("div");
           tools.className = "tv-dataset-tools";
@@ -1460,10 +1701,7 @@
             box.querySelectorAll(".tv-series-row input[type=checkbox]").forEach(function (input, index) {
               input.checked = checkedSeries.has(dataset.series[index].id);
             });
-            var n = selectedCount(dataset);
-            count.textContent = n
-              ? dataset.series.length + "条 · 已选" + n
-              : dataset.series.length + "条";
+            paintCount();
           }
           selectAll.addEventListener("click", function () {
             activeDatasetId = dataset.id;
@@ -1497,12 +1735,16 @@
               });
               refreshChecks();
             }, true);
+            var style = core.normalizeSeriesStyle(series.style, series.color);
+            var dot = document.createElement("span");
+            dot.className = "tv-series-dot";
+            dot.style.background = style.color || series.color || "#2477b6";
             var copy = document.createElement("span");
             copy.textContent = core.seriesDisplayName(series);
             copy.title = core.seriesOriginalName(series);
             var meta = document.createElement("small");
             meta.textContent = series.x.length + " pts";
-            row.append(check, copy, meta);
+            row.append(check, dot, linePreview(style.lineType), copy, meta);
             list.appendChild(row);
           });
           box.appendChild(list);
@@ -1766,6 +2008,139 @@
       return { wrap: field.wrap, input: select };
     }
 
+    function linePreview(lineType) {
+      var svg = document.createElementNS(svgNamespace, "svg");
+      svg.setAttribute("class", "tv-line-preview");
+      svg.setAttribute("viewBox", "0 0 46 10");
+      svg.setAttribute("aria-hidden", "true");
+      var line = document.createElementNS(svgNamespace, "line");
+      line.setAttribute("x1", "1");
+      line.setAttribute("x2", "45");
+      line.setAttribute("y1", "5");
+      line.setAttribute("y2", "5");
+      line.setAttribute("stroke", "currentColor");
+      line.setAttribute("stroke-width", "2");
+      line.setAttribute("stroke-linecap", "butt");
+      var dash = core.strokeDasharray(lineType);
+      if (dash) line.setAttribute("stroke-dasharray", dash);
+      svg.appendChild(line);
+      return svg;
+    }
+
+    function colorControl(labelText, value, onValid, opts) {
+      opts = opts || {};
+      var wrap = document.createElement("label");
+      var caption = document.createElement("span");
+      caption.className = "tv-prop-label";
+      caption.textContent = labelText;
+      var row = document.createElement("div");
+      row.className = "tv-color-row";
+      var picker = document.createElement("input");
+      picker.type = "color";
+      picker.setAttribute("aria-label", labelText);
+      var hex = document.createElement("input");
+      hex.className = "tv-field";
+      hex.type = "text";
+      hex.spellcheck = false;
+      hex.autocomplete = "off";
+      hex.setAttribute("aria-label", labelText + " HEX");
+      hex.placeholder = opts.mixed ? "混合" : "#cfe3eb";
+      var current = core.cssColorToHex(value);
+      picker.value = current || "#2477b6";
+      hex.value = opts.mixed ? "" : (current || "");
+      var error = document.createElement("span");
+      error.className = "tv-field-error";
+      error.hidden = true;
+      error.textContent = "请输入 6 位 HEX，例如 #cfe3eb";
+      function commit(next) {
+        picker.value = next;
+        hex.value = next;
+        hex.classList.remove("is-invalid");
+        hex.removeAttribute("aria-invalid");
+        error.hidden = true;
+        if (onValid) onValid(next);
+      }
+      picker.addEventListener("input", function () {
+        var next = core.normalizeHexColor(picker.value);
+        if (next) commit(next);
+      });
+      hex.addEventListener("input", function () {
+        var next = core.normalizeHexColor(hex.value);
+        if (!next) {
+          hex.classList.add("is-invalid");
+          hex.setAttribute("aria-invalid", "true");
+          error.hidden = false;
+          return;
+        }
+        var caret = hex.selectionStart;
+        hex.value = next;
+        if (caret != null) hex.setSelectionRange(next.length, next.length);
+        picker.value = next;
+        hex.classList.remove("is-invalid");
+        hex.removeAttribute("aria-invalid");
+        error.hidden = true;
+        if (onValid) onValid(next);
+      });
+      row.append(picker, hex);
+      wrap.append(caption, row, error);
+      return { wrap: wrap, input: picker, hex: hex };
+    }
+
+    function lineTypeControl(labelText, value, onChange) {
+      var wrap = document.createElement("div");
+      var caption = document.createElement("span");
+      caption.className = "tv-prop-label";
+      caption.textContent = labelText;
+      var current = document.createElement("button");
+      current.type = "button";
+      current.className = "tv-line-current";
+      var list = document.createElement("div");
+      list.className = "tv-line-menu-list";
+      list.hidden = true;
+      function paintCurrent() {
+        var spec = (core.LINE_STYLES || []).filter(function (item) { return item.id === value; })[0];
+        current.replaceChildren();
+        if (!spec) {
+          current.append(document.createTextNode("选择线型"));
+          return;
+        }
+        var mark = document.createElement("span");
+        mark.className = "tv-line-check";
+        mark.textContent = "✓";
+        current.append(mark, linePreview(value), document.createTextNode(spec.label));
+      }
+      function closeList() { list.hidden = true; }
+      current.addEventListener("click", function () { list.hidden = !list.hidden; });
+      (core.LINE_STYLES || []).forEach(function (item) {
+        var option = document.createElement("button");
+        option.type = "button";
+        option.className = "tv-line-option" + (item.id === value ? " is-selected" : "");
+        var mark = document.createElement("span");
+        mark.className = "tv-line-check";
+        mark.textContent = item.id === value ? "✓" : "";
+        option.append(mark, linePreview(item.id), document.createTextNode(item.label));
+        option.addEventListener("click", function (event) {
+          event.stopPropagation();
+          value = item.id;
+          paintCurrent();
+          Array.prototype.forEach.call(list.children, function (node, index) {
+            var spec = core.LINE_STYLES[index];
+            var chosen = !!(spec && spec.id === value);
+            node.classList.toggle("is-selected", chosen);
+            var tick = node.querySelector(".tv-line-check");
+            if (tick) tick.textContent = chosen ? "✓" : "";
+          });
+          list.hidden = true;
+          if (onChange) onChange(item.id);
+        });
+        list.appendChild(option);
+      });
+      paintCurrent();
+      wrap.append(caption, current, list);
+      wrap.closeList = closeList;
+      return { wrap: wrap, closeList: closeList };
+    }
+
     function fontFamilyControl(labelText, value) {
       var options = (core.FONT_FAMILIES || []).map(function (item) { return [item.value, item.label]; });
       var current = value || core.DEFAULT_FONT;
@@ -1857,8 +2232,10 @@
       size.input.type = "number";
       size.input.min = "6";
       size.input.max = "72";
-      var color = fieldControl("文字颜色", style.fontColor || "#1d2024");
-      color.input.type = "color";
+      var color = colorControl("文字颜色", style.fontColor || "#1d2024", function (hex) {
+        style.fontColor = hex;
+        onChange();
+      });
       var weight = document.createElement("label");
       var italic = document.createElement("label");
       var weightBox = document.createElement("input");
@@ -1873,12 +2250,11 @@
         style.fontFamily = family.input.value;
         var nextSize = Number(size.input.value);
         if (size.input.value !== "" && Number.isFinite(nextSize)) style.fontSize = core.clamp(nextSize, 6, 72);
-        style.fontColor = color.input.value;
         style.fontWeight = weightBox.checked ? "700" : "400";
         style.italic = italicBox.checked;
         onChange();
       }
-      [family.input, size.input, color.input, weightBox, italicBox].forEach(function (el) {
+      [family.input, size.input, weightBox, italicBox].forEach(function (el) {
         el.addEventListener("change", commit);
       });
       size.input.addEventListener("input", commit);
@@ -1955,8 +2331,10 @@
       decimals.input.max = "8";
       major.wrap.hidden = tickMode.value !== "manual";
       minor.wrap.hidden = minorMode.value !== "custom";
-      var lineColor = fieldControl("轴线颜色", axis.lineColor || "#1d2024");
-      lineColor.input.type = "color";
+      var lineColor = colorControl("轴线颜色", axis.lineColor || "#1d2024", function (hex) {
+        axis.lineColor = hex;
+        commit();
+      });
       var lineWidth = fieldControl("轴线宽度", axis.lineWidth == null ? 1.1 : axis.lineWidth);
       lineWidth.input.type = "number";
       lineWidth.input.step = "0.1";
@@ -2207,16 +2585,13 @@
         var sameWidth = refs.every(function (ref) {
           return core.normalizeSeriesStyle(ref.style, ref.color).lineWidth === firstStyle.lineWidth;
         });
-        var color = fieldControl("颜色", sameColor ? (firstStyle.color || "#2477b6") : "#2477b6");
-        color.input.type = "color";
+        var color = colorControl("颜色", sameColor ? (firstStyle.color || "#2477b6") : "#2477b6", function (hex) {
+          patchStyle({ color: hex });
+        }, { mixed: !sameColor });
         if (!sameColor) color.input.title = "所选 Series 颜色不同；仅在你明确设置后才会统一覆盖";
-        var lineType = selectControl("线型", firstStyle.lineType, [
-          ["solid", "实线"],
-          ["dashed", "虚线"],
-          ["dotted", "点线"],
-          ["dash-dot", "点划线"],
-          ["long-dash", "长虚线"]
-        ]);
+        var lineType = lineTypeControl("线型", firstStyle.lineType, function (id) {
+          patchStyle({ lineType: id });
+        });
         var lineWidth = sliderNumberControl("线宽", sameWidth ? firstStyle.lineWidth : "", {
           min: core.LINE_WIDTH_MIN,
           max: core.LINE_WIDTH_MAX,
@@ -2231,11 +2606,11 @@
         opacity.input.step = "0.05";
         function patchStyle(patch) {
           core.applySeriesStyle(plot, selectedIds, patch);
+          core.applyStyleToSeries(project, selectedIds, patch);
           setDirty(true);
           renderCanvas();
+          renderData();
         }
-        color.input.addEventListener("input", function () { patchStyle({ color: color.input.value }); });
-        lineType.input.addEventListener("change", function () { patchStyle({ lineType: lineType.input.value }); });
         lineWidth.onValue(function (value) { patchStyle({ lineWidth: value }); });
         opacity.input.addEventListener("change", function () { patchStyle({ opacity: Number(opacity.input.value) }); });
         styleSec.body.append(color.wrap, lineType.wrap, lineWidth.wrap, opacity.wrap);
@@ -2301,8 +2676,10 @@
       showBgBox.type = "checkbox";
       showBgBox.checked = plot.legend.showBackground !== false;
       showBg.append(showBgBox, document.createTextNode(" 显示背景"));
-      var bgColor = fieldControl("背景颜色", plot.legend.backgroundColor || "#ffffff");
-      bgColor.input.type = "color";
+      var bgColor = colorControl("背景颜色", plot.legend.backgroundColor || "#ffffff", function (hex) {
+        plot.legend.backgroundColor = hex;
+        commitLegend();
+      });
       var opacityPct = Math.round((Number.isFinite(Number(plot.legend.backgroundOpacity)) ? plot.legend.backgroundOpacity : 0.85) * 100);
       var bgOpacity = sliderNumberControl("背景透明度", opacityPct, { min: 0, max: 100, step: 1, unit: "%" });
       var showBorder = document.createElement("label");
@@ -2310,8 +2687,10 @@
       borderBox.type = "checkbox";
       borderBox.checked = !!(plot.legend.showBorder || plot.legend.border);
       showBorder.append(borderBox, document.createTextNode(" 显示边框"));
-      var borderColor = fieldControl("边框颜色", plot.legend.borderColor || "#cccccc");
-      borderColor.input.type = "color";
+      var borderColor = colorControl("边框颜色", plot.legend.borderColor || "#cccccc", function (hex) {
+        plot.legend.borderColor = hex;
+        commitLegend();
+      });
       var borderWidth = fieldControl("边框宽度", plot.legend.borderWidth == null ? 1 : plot.legend.borderWidth);
       borderWidth.input.type = "number";
       borderWidth.input.min = "0";
@@ -2423,10 +2802,8 @@
         setDirty(true);
         renderCanvas();
       });
-      var bgColor = fieldControl("背景", plot.background || "#ffffff");
-      bgColor.input.type = "color";
-      bgColor.input.addEventListener("change", function () {
-        plot.background = bgColor.input.value;
+      var bgColor = colorControl("背景", plot.background || "#ffffff", function (hex) {
+        plot.background = hex;
         setDirty(true);
         renderCanvas();
       });
@@ -2449,11 +2826,23 @@
       yPos.input.addEventListener("change", commitPos);
       xy.append(xPos.wrap, yPos.wrap);
       size.append(width.wrap, height.wrap);
+      var titleAlign = selectControl("标题对齐", plot.textStyles.title.align || "left", [
+        ["left", "左"],
+        ["center", "居中"],
+        ["right", "右"]
+      ]);
+      titleAlign.input.addEventListener("change", function () {
+        plot.textStyles.title.align = titleAlign.input.value === "center" || titleAlign.input.value === "right"
+          ? titleAlign.input.value
+          : "left";
+        setDirty(true);
+        renderCanvas();
+      });
       var titleStyleCap = document.createElement("span");
       titleStyleCap.className = "tv-prop-label";
       titleStyleCap.textContent = "图标题文字";
       chart.body.append(
-        title.wrap, subtitle.wrap, note.wrap, titleStyleCap,
+        title.wrap, titleAlign.wrap, subtitle.wrap, note.wrap, titleStyleCap,
         bindTextStyle(plot.textStyles.title, function () { setDirty(true); renderCanvas(); }),
         size, lock, bgColor.wrap, xy
       );
@@ -3080,6 +3469,175 @@
       buildCanvasSvg: buildCanvasSvg
     };
     renderAll();
+  }());
+  </script>
+  <script>
+  (function () {
+    "use strict";
+    var core = window.VisualizerCore;
+    if (!core || !core.APP_INFO || typeof core.checkForUpdates !== "function") return;
+    var aboutDialog = document.getElementById("tvAboutDialog");
+    var aboutBody = document.getElementById("tvAboutBody");
+    var kicker = document.getElementById("tvKicker");
+    if (kicker) kicker.textContent = core.APP_INFO.name + " v" + core.APP_INFO.version;
+    var updateState = core.createUpdateState();
+    var checkTicket = 0;
+
+    function el(tag, className, text) {
+      var node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text != null) node.textContent = text;
+      return node;
+    }
+
+    function actionButton(label, role, primary) {
+      var node = el("button", primary ? "tv-button tv-button--primary" : "tv-button", label);
+      node.type = "button";
+      node.setAttribute("data-role", role);
+      return node;
+    }
+
+    function formatReleaseDate(iso) {
+      var match = /^(\d{4}-\d{2}-\d{2})/.exec(String(iso || ""));
+      return match ? match[1] : "";
+    }
+
+    function openExternal(url) {
+      if (!url) return;
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+
+    function rememberUpdateCheck() {
+      try {
+        localStorage.setItem("visualizer.update.lastCheck", new Date().toISOString());
+      } catch (error) {
+        /* ponytail: storage can be blocked; the check result still shows */
+      }
+    }
+
+    function renderAbout() {
+      aboutBody.replaceChildren();
+      aboutBody.appendChild(el("h2", "tv-about-name", core.APP_INFO.name));
+      aboutBody.appendChild(el("p", "tv-about-tagline", "科研 / 工程数据可视化工具"));
+      var meta = el("dl", "tv-about-meta");
+      meta.appendChild(el("dt", "", "当前版本"));
+      meta.appendChild(el("dd", "", "v" + core.APP_INFO.version));
+      meta.appendChild(el("dt", "", "工程格式"));
+      meta.appendChild(el("dd", "", core.PROJECT_FORMAT_VERSION));
+      aboutBody.appendChild(meta);
+
+      var status = updateState.status;
+      if (status !== "idle") {
+        var box = el("div", "tv-update-status");
+        box.setAttribute("data-status", status);
+        box.setAttribute("role", "status");
+        if (status === "checking") {
+          var line = el("p", "tv-update-heading");
+          line.appendChild(el("span", "tv-about-spin"));
+          line.appendChild(document.createTextNode("正在检查更新…"));
+          box.appendChild(line);
+        } else if (status === "up-to-date") {
+          box.appendChild(el("p", "tv-update-heading", "当前版本不低于最新正式版本"));
+          box.appendChild(el("p", "", "当前版本"));
+          box.appendChild(el("p", "tv-update-version", "v" + updateState.currentVersion));
+          box.appendChild(el("p", "", "最新版本"));
+          box.appendChild(el("p", "tv-update-version", "v" + (updateState.latestVersion || updateState.currentVersion)));
+        } else if (status === "available") {
+          box.appendChild(el("p", "tv-update-heading", "发现新版本"));
+          box.appendChild(el("p", "", "当前版本"));
+          box.appendChild(el("p", "tv-update-version", "v" + updateState.currentVersion));
+          box.appendChild(el("p", "", "最新版本"));
+          box.appendChild(el("p", "tv-update-version", "v" + updateState.latestVersion));
+          if (updateState.releaseName) box.appendChild(el("p", "", updateState.releaseName));
+          var published = formatReleaseDate(updateState.publishedAt);
+          if (published) box.appendChild(el("p", "", "发布日期：" + published));
+          box.appendChild(el("p", "tv-update-heading", "更新内容"));
+          box.appendChild(el("pre", "tv-update-notes", updateState.releaseNotes || "此版本没有文字说明。"));
+          if (updateState.errorCode === "ASSET_NOT_FOUND" && updateState.errorMessage) {
+            box.appendChild(el("p", "", updateState.errorMessage));
+          }
+        } else {
+          box.appendChild(el("p", "tv-update-heading", "无法检查更新"));
+          box.appendChild(el("p", "", updateState.errorMessage || "无法连接到 GitHub，请检查网络后重试。"));
+        }
+        aboutBody.appendChild(box);
+      }
+
+      var actions = el("div", "tv-update-actions");
+      if (status === "available") {
+        actions.appendChild(actionButton("查看更新", "open-release", false));
+        actions.appendChild(actionButton("获取最新版", "download-update", true));
+      } else if (status === "error") {
+        var retry = actionButton("稍后重试", "check-update", false);
+        actions.appendChild(retry);
+        actions.appendChild(actionButton("打开 Releases 页面", "open-release", false));
+      } else {
+        var check = actionButton("检查更新", "check-update", false);
+        check.disabled = status === "checking";
+        actions.appendChild(check);
+      }
+      aboutBody.appendChild(actions);
+      var releases = actionButton("GitHub Releases", "open-releases", false);
+      releases.className = "tv-about-releases";
+      aboutBody.appendChild(releases);
+    }
+
+    function handleCheckUpdate() {
+      if (updateState.status === "checking") return;
+      updateState = core.createUpdateState();
+      updateState.status = "checking";
+      renderAbout();
+      var ticket = ++checkTicket;
+      core.checkForUpdates().then(function (next) {
+        if (ticket !== checkTicket) return;
+        updateState = next;
+        rememberUpdateCheck();
+        if (next.status === "error") console.error("Visualizer update check failed:", next.errorCode);
+        if (aboutDialog.open) renderAbout();
+      });
+    }
+
+    function handleOpenReleasePage() {
+      openExternal(updateState.releaseUrl || core.githubReleasesPageUrl());
+    }
+
+    function handleDownloadUpdate() {
+      if (!updateState.downloadUrl) {
+        handleOpenReleasePage();
+        return;
+      }
+      openExternal(updateState.downloadUrl);
+    }
+
+    function closeAbout() {
+      if (updateState.status !== "checking") updateState = core.createUpdateState();
+      if (aboutDialog.open && typeof aboutDialog.close === "function") aboutDialog.close();
+      else aboutDialog.removeAttribute("open");
+    }
+
+    aboutDialog.addEventListener("click", function (event) {
+      var node = event.target && event.target.closest ? event.target.closest("[data-role]") : null;
+      var role = node && node.getAttribute("data-role");
+      if (role === "check-update") handleCheckUpdate();
+      else if (role === "download-update") handleDownloadUpdate();
+      else if (role === "open-release") handleOpenReleasePage();
+      else if (role === "open-releases") openExternal(core.githubReleasesPageUrl());
+      else if (role === "dismiss-update") closeAbout();
+    });
+    document.getElementById("tvAboutOpen").addEventListener("click", function () {
+      renderAbout();
+      if (aboutDialog.open) return;
+      if (typeof aboutDialog.showModal === "function") aboutDialog.showModal();
+      else aboutDialog.setAttribute("open", "");
+    });
+    aboutDialog.addEventListener("cancel", function (event) {
+      event.preventDefault();
+      closeAbout();
+    });
+    document.getElementById("tvAboutClose").addEventListener("click", closeAbout);
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape" && aboutDialog.open) closeAbout();
+    });
   }());
   </script>
 </body>

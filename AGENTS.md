@@ -14,7 +14,7 @@
 ## 必用技能
 
 - 代码工作必须读取并使用 `ponytail`（默认 full）。
-- 前端设计和 UI 工作必须同时读取并使用 `web-design-engineer` 与 `algorithmic-art`，具体应用边界见项目 skill。
+- 前端设计和 UI 工作必须同时读取并使用 `frontend-design`、`web-design-engineer` 与 `algorithmic-art`，具体应用边界见项目 skill。
 - 通用技能使用当前环境已安装版本，不修改其全局内容；缺失时先查找同名技能，再明确报告，不静默跳过。
 
 生成 LaTeX 块公式时全部使用 `\[...\]` 包裹。

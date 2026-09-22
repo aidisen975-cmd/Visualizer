@@ -4,7 +4,7 @@
 
 - 软件版本：`0.2.3`
 - 工程格式：`projectFormatVersion: "1.0"`
-- 日期：2026-09-21
+- 日期：2026-09-22
 - GitHub 测试版：https://github.com/aidisen975-cmd/Visualizer/releases/tag/v0.2.3
 
 ## 如何运行
@@ -28,6 +28,9 @@ v0.2.3 基于 v0.2.2 做交互与排版修正，不进入 Local Zoom / Inset / C
 - Legend 自由位置支持背景透明度及边框控制
 - Line Width 扩展至 0.5–12 px，0.1 步进
 - 新增微软雅黑 / 宋体
+- About / 当前版本 / 工程格式
+- GitHub Release 手动检查更新、SemVer 比较、Release Notes、精确 ZIP 下载与 Release 页面 fallback
+- 更新检查失败不影响离线主流程；更新状态不写入工程 JSON
 
 已实现（累计到当前）：
 
@@ -48,6 +51,8 @@ v0.2.3 基于 v0.2.2 做交互与排版修正，不进入 Local Zoom / Inset / C
 - PNG/SVG 导出整张画布，没有「只导出选中单图」。
 - 图例自由拖动时覆盖图例项点击显隐，改用右侧眼睛按钮。
 - 本机没有微软雅黑 / 宋体时走 fallback，不报错。
+- 检查更新只告知并打开下载链接。解压新 ZIP、改用新版本仍由用户手动完成。
+- 当前 GitHub 最新正式版是 v0.2.1；v0.2.2 / v0.2.3 仍是 Pre-release，所以本机 0.2.3 会显示「不低于最新正式版本」。
 
 ## 下一步
 

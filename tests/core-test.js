@@ -308,7 +308,7 @@ assert(legend.columns >= 2, "大量图例自动多列");
 assert(legend.placed.length >= 20, "多列后尽量保留图例项");
 
 var v021 = core.parseProject(core.serializeProject(elecProject));
-assert(v021.softwareVersion === "0.2.3", "新工程写入 0.2.3");
+assert(v021.softwareVersion === "0.2.4", "新工程写入 0.2.4");
 assert(v021.plots[0].legend.visible === true, "legend 随工程保存");
 assert(v021.ui.leftPanelWidth >= 220, "ui layout 随工程保存");
 
@@ -441,7 +441,8 @@ var oldMigrated = core.parseProject(readFixture("TESTDATA_v010.tvproj.json"));
 assert(oldMigrated.plots[0].seriesRefs[0].style && oldMigrated.plots[0].seriesRefs[0].style.lineWidth === 1.5, "旧工程补齐 series.style");
 assert(oldMigrated.plots[0].xAxis.time && oldMigrated.plots[0].xAxis.time.displayUnit, "旧工程补齐 per-chart time");
 assert(oldMigrated.plots[0].textStyles && oldMigrated.plots[0].textStyles.title.fontSize === 14, "旧工程补齐 textStyles");
-assert(oldMigrated.softwareVersion === "0.2.3", "打开后 working copy 版本为 0.2.3，源文件未改");
+assert(oldMigrated.softwareVersion === "0.2.4", "打开后 working copy 版本为 0.2.4，源文件未改");
+assert(oldMigrated.plots[0].textStyles.title.align === "left", "旧工程标题对齐回退为左");
 
 var ids = ["s1", "s2", "s3", "s4", "s5"];
 var sel = core.applyMultiSelect({ ids: ids, selectedIds: [], anchorId: null }, { type: "toggle", id: "s3" });
@@ -544,8 +545,202 @@ assert(huge.grown, "文字过大时允许增大 Figure");
 assert(huge.plotArea.width >= core.FIGURE_LAYOUT.minPlotWidth, "Plot Area 不低于最小宽度");
 assert(huge.plotArea.height >= core.FIGURE_LAYOUT.minPlotHeight, "Plot Area 不低于最小高度");
 
-if (failed) {
-  console.error("\n" + failed + " failed");
-  process.exit(1);
+assert(core.APP_INFO.version === "0.2.4", "APP version 为 0.2.4");
+assert(core.SOFTWARE_VERSION === core.APP_INFO.version, "SOFTWARE_VERSION 与 APP_INFO.version 相同");
+assert(core.PROJECT_FORMAT_VERSION === "1.0", "工程格式仍为 1.0");
+assert(core.APP_INFO.version !== core.PROJECT_FORMAT_VERSION, "软件版本与工程格式分离");
+assert(core.normalizeVersionTag("v0.2.3") === "0.2.3", "v0.2.3 去掉前缀");
+assert(core.normalizeVersionTag("0.2.3") === "0.2.3", "裸版本保持不变");
+assert(core.compareSemVer("0.2.3", "0.2.3") === 0, "0.2.3 == 0.2.3");
+assert(core.compareSemVer("0.2.3", "0.2.4") < 0, "0.2.3 < 0.2.4");
+assert(core.compareSemVer("0.2.9", "0.2.10") < 0, "0.2.9 < 0.2.10");
+assert(core.compareSemVer("0.9.0", "0.10.0") < 0, "0.9.0 < 0.10.0");
+assert(core.compareSemVer("0.10.9", "0.10.10") < 0, "0.10.9 < 0.10.10");
+assert(core.compareSemVer("1.0.0", "0.99.99") > 0, "1.0.0 > 0.99.99");
+assert(core.compareSemVer("v0.3.0", "0.3.0") === 0, "tag 与裸版本相等");
+assert(core.parseSemVer("nope") === null, "非法版本解析为 null");
+assert(core.compareSemVer("0.2", "0.2.0") === null, "非三段版本不比较");
+
+var assetRelease = {
+  tag_name: "v0.3.0",
+  assets: [
+    { name: "Visualizer-v0.3.0-debug.zip", browser_download_url: "https://example.invalid/debug" },
+    { name: "example.zip", browser_download_url: "https://example.invalid/example" },
+    { name: "Visualizer-v0.3.0.zip", browser_download_url: "https://example.invalid/release.zip" }
+  ]
+};
+var matchedAsset = core.findReleaseAsset(assetRelease);
+assert(matchedAsset && matchedAsset.name === "Visualizer-v0.3.0.zip", "精确匹配正式 zip");
+assert(matchedAsset.browser_download_url.indexOf("debug") < 0, "不返回 debug 包");
+assert(core.findReleaseAsset({
+  tag_name: "v0.3.0",
+  assets: [{ name: "Visualizer-v0.3.0-debug.zip" }, { name: "example.zip" }]
+}) === null, "没有正式包时不回退到第一个附件");
+[null, {}, { name: "x" }, { tag_name: "latest" }, { tag_name: "v0.3" }, { tag_name: "v0.3.0" }, { tag_name: "v0.3.0", assets: [] }].forEach(function (sample) {
+  var evaluated;
+  try {
+    evaluated = core.evaluateLatestRelease("0.2.3", sample);
+  } catch (error) {
+    evaluated = null;
+  }
+  assert(evaluated && evaluated.status, "非法 Release 不抛出：" + JSON.stringify(sample));
+});
+assert(core.evaluateLatestRelease("0.2.3", null).errorCode === "INVALID_RELEASE", "null release");
+assert(core.evaluateLatestRelease("0.2.3", {}).errorCode === "INVALID_RELEASE", "空对象 release");
+assert(core.evaluateLatestRelease("0.2.3", { assets: [] }).errorCode === "INVALID_RELEASE", "缺少 tag_name");
+assert(core.evaluateLatestRelease("0.2.3", { tag_name: "latest", assets: [] }).errorCode === "INVALID_VERSION", "非法 tag");
+var missingZip = core.evaluateLatestRelease("0.2.3", {
+  tag_name: "v0.3.0",
+  name: "Visualizer v0.3.0",
+  body: "<script>alert(1)</script>",
+  html_url: "https://github.com/aidisen975-cmd/Visualizer/releases/tag/v0.3.0",
+  assets: []
+});
+assert(missingZip.status === "available" && missingZip.errorCode === "ASSET_NOT_FOUND", "缺少 zip 仍可展示新版本");
+assert(missingZip.downloadUrl === null, "缺少 zip 时没有下载地址");
+assert(missingZip.releaseNotes.indexOf("<script>") >= 0, "Release Notes 保持原文，交给界面转义");
+assetRelease.name = "Visualizer v0.3.0";
+assetRelease.body = "• Local Zoom";
+assetRelease.published_at = "2026-10-01T00:00:00Z";
+assetRelease.html_url = "https://github.com/aidisen975-cmd/Visualizer/releases/tag/v0.3.0";
+var newer = core.evaluateLatestRelease("0.2.3", assetRelease);
+assert(newer.status === "available" && newer.downloadUrl === "https://example.invalid/release.zip", "新版本带精确下载地址");
+assert(newer.latestVersion === "0.3.0" && newer.releaseName === "Visualizer v0.3.0", "读取 release 名称");
+assert(core.evaluateLatestRelease("0.2.3", { tag_name: "v0.2.3", assets: [] }).status === "up-to-date", "相同版本");
+assert(core.evaluateLatestRelease("0.9.0", { tag_name: "v0.3.0", assets: [] }).status === "up-to-date", "本地更高不算发现更新");
+assert(core.evaluateLatestRelease("0.2.4", { tag_name: "v0.3.0", prerelease: true, assets: [] }).errorCode === "NOT_STABLE", "prerelease 不是正式最新版");
+assert(core.evaluateLatestRelease("0.2.4", { tag_name: "v0.3.0", draft: true, assets: [] }).errorCode === "NOT_STABLE", "draft 不是正式最新版");
+assert(core.normalizeHexColor("  #CFE3EB ") === "#cfe3eb", "HEX 去空白、补大小写");
+assert(core.normalizeHexColor("cfe3eb") === "#cfe3eb", "HEX 可省略 #");
+assert(core.normalizeHexColor("#GGGGGG") === null, "非法 HEX 不产出颜色");
+assert(core.normalizeHexColor("") === null && core.normalizeHexColor("#1234") === null, "空值和短 HEX 无效");
+assert(core.isValidHexColor("CFE3EB") === true, "isValidHexColor 接受无 # 大写");
+assert(/^#[0-9a-f]{6}$/.test(core.cssColorToHex("hsl(205, 68%, 51%)")), "传感器 HSL 可显示为 HEX");
+assert(core.cssColorToHex("#GGGGGG") === null, "非法颜色不能转成 HEX");
+core.LINE_STYLES.forEach(function (item) {
+  assert(core.strokeDasharray(item.id) === item.dash, "线型 " + item.id + " 与 preview 共用 dash");
+});
+var groupProject = core.createProject({ projectName: "clusters" });
+var csvA = "Time(s),T1,T2\n0,1,2\n1,2,3\n2,3,4\n";
+var csvB = "Time(s),T1\n0,4\n1,5\n2,6\n";
+var dsA = core.parseDatasetFromCsv(csvA, { id: "ds-a", name: "A", sourceFilename: "A.csv" });
+var dsB = core.parseDatasetFromCsv(csvB, { id: "ds-b", name: "B", sourceFilename: "B.csv" });
+core.addDataset(groupProject, dsA);
+core.addDataset(groupProject, dsB);
+var groupPlot = core.createPlot(groupProject, { title: "Clusters" });
+core.addSeriesToPlot(groupProject, groupPlot, [dsA.series[0].id, dsA.series[1].id, dsB.series[0].id]);
+core.applySeriesStyle(groupPlot, [dsA.series[0].id], { color: "#ff0000", lineType: "dashed", lineWidth: 4 });
+core.applyStyleToSeries(groupProject, [dsA.series[0].id], { color: "#ff0000", lineType: "dashed", lineWidth: 4 });
+core.applySeriesStyle(groupPlot, [dsA.series[1].id], { color: "#0000ff", lineType: "dotted", lineWidth: 5 });
+core.applyStyleToSeries(groupProject, [dsA.series[1].id], { color: "#0000ff", lineType: "dotted", lineWidth: 5 });
+core.applyStyleToDataset(groupProject, "ds-a", { color: "#cfe3eb" });
+assert(groupPlot.seriesRefs[0].style.color === "#cfe3eb" && groupPlot.seriesRefs[0].style.lineType === "dashed" && groupPlot.seriesRefs[0].style.lineWidth === 4, "簇颜色不重置线型线宽");
+assert(groupPlot.seriesRefs[1].style.color === "#cfe3eb" && groupPlot.seriesRefs[1].style.lineType === "dotted" && groupPlot.seriesRefs[1].style.lineWidth === 5, "同簇第二条只改颜色");
+assert(groupPlot.seriesRefs[2].style.color !== "#cfe3eb", "其他数据簇不受影响");
+core.applySeriesStyle(groupPlot, [dsA.series[1].id], { color: "#ff0000", lineType: "dashed", lineWidth: 5 });
+core.applyStyleToSeries(groupProject, [dsA.series[1].id], { color: "#ff0000", lineType: "dashed", lineWidth: 5 });
+assert(groupPlot.seriesRefs[1].style.color === "#ff0000" && groupPlot.seriesRefs[0].style.color === "#cfe3eb", "单条样式覆盖簇赋值且不回写其他系列");
+core.applyStyleToDataset(groupProject, "ds-a", { color: "#112233" });
+assert(groupPlot.seriesRefs[0].style.color === "#112233" && groupPlot.seriesRefs[1].style.color === "#112233", "再次应用覆盖单独修改");
+var kept = groupPlot.seriesRefs[0].style.color;
+core.applyStyleToDataset(groupProject, "ds-a", { color: "#GGGGGG" });
+assert(groupPlot.seriesRefs[0].style.color === kept, "非法 HEX 不覆盖有效颜色");
+var restored = core.parseProject(core.serializeProject(groupProject));
+assert(restored.datasets[0].series[0].style.color === "#112233", "簇样式写入 Series 后可保存");
+assert(restored.projectFormatVersion === "1.0", "v0.2.4 不升级工程格式");
+var leftTitle = core.computePlotLayout(400, 300, {
+  title: { width: 80, height: 14, ascent: 11 },
+  titleAlign: "left"
+});
+var centerTitle = core.computePlotLayout(400, 300, {
+  title: { width: 80, height: 14, ascent: 11 },
+  titleAlign: "center"
+});
+var rightTitle = core.computePlotLayout(400, 300, {
+  title: { width: 80, height: 14, ascent: 11 },
+  titleAlign: "right"
+});
+assert(leftTitle.titlePos.x === core.FIGURE_LAYOUT.outerPadding && leftTitle.titleAnchor === "start", "标题左对齐");
+assert(centerTitle.titlePos.x === 200 && centerTitle.titleAnchor === "middle", "标题居中");
+assert(rightTitle.titlePos.x === 400 - core.FIGURE_LAYOUT.outerPadding && rightTitle.titleAnchor === "end", "标题右对齐");
+assert(core.normalizePlotTextStyles({}).title.align === "left", "缺省标题对齐为左");
+var page = fs.readFileSync(path.join(__dirname, "../temperature_trajectory_visualizer.html"), "utf8");
+assert(page.indexOf("aboutDialog.showModal") >= 0, "About 使用模态 showModal");
+assert(page.indexOf("aboutDialog.show()") < 0, "About 不再使用非模态 show");
+assert(page.indexOf("标题对齐") >= 0, "界面有标题对齐");
+assert(page.indexOf("应用到该数据簇全部系列") >= 0, "界面有簇样式应用");
+assert(page.indexOf("z-index: 1000") >= 0 && page.indexOf("z-index: 10") >= 0, "Modal 层级高于分隔条");
+var savedProject = core.serializeProject(project);
+assert(savedProject.indexOf("updateState") < 0, "工程不含 updateState");
+assert(savedProject.indexOf("latestVersion") < 0, "工程不含 latestVersion");
+assert(savedProject.indexOf("githubRelease") < 0, "工程不含 githubRelease");
+assert(savedProject.indexOf("lastUpdateCheck") < 0, "工程不含 lastUpdateCheck");
+
+function releaseResponse(status, body, jsonFails) {
+  return {
+    ok: status >= 200 && status < 300,
+    status: status,
+    json: function () {
+      if (jsonFails) return Promise.reject(new Error("bad json"));
+      return Promise.resolve(body);
+    }
+  };
 }
-console.log("\nall core tests passed");
+
+var seenUpdateUrl = "";
+var updateChecks = [
+  core.checkForUpdates({
+    fetch: function () { return Promise.reject(new TypeError("Failed to fetch")); }
+  }).then(function (state) {
+    assert(state.status === "error" && state.errorCode === "NETWORK_ERROR", "断网返回 NETWORK_ERROR 且不抛出");
+  }),
+  core.checkForUpdates({
+    fetch: function () { return Promise.resolve(releaseResponse(404, {})); }
+  }).then(function (state) {
+    assert(state.status === "error" && state.errorCode === "HTTP_ERROR", "HTTP 失败返回 HTTP_ERROR");
+  }),
+  core.checkForUpdates({
+    fetch: function () { return Promise.resolve(releaseResponse(429, {})); }
+  }).then(function (state) {
+    assert(state.status === "error" && state.errorCode === "RATE_LIMIT", "API 限流不抛出");
+  }),
+  core.checkForUpdates({
+    fetch: function () { return Promise.resolve(releaseResponse(200, null, true)); }
+  }).then(function (state) {
+    assert(state.status === "error" && state.errorCode === "INVALID_RELEASE", "损坏 JSON 返回 INVALID_RELEASE");
+  }),
+  core.fetchLatestRelease(function (url, init) {
+    seenUpdateUrl = url + " " + init.method + " " + init.headers.Accept + " " + init.cache;
+    assert(init.signal, "更新请求带超时信号");
+    return Promise.resolve(releaseResponse(200, { tag_name: "v0.2.3", assets: [] }));
+  }).then(function () {
+    assert(seenUpdateUrl === core.githubReleasesApiUrl() + " GET application/vnd.github+json no-store", "只请求 GitHub latest release");
+  }),
+  core.checkForUpdates({
+    version: "0.2.3",
+    fetch: function () {
+      return Promise.resolve(releaseResponse(200, {
+        tag_name: "v0.3.0",
+        name: "Visualizer v0.3.0",
+        body: "notes",
+        published_at: "2026-10-01T00:00:00Z",
+        html_url: "https://github.com/aidisen975-cmd/Visualizer/releases/tag/v0.3.0",
+        assets: [{ name: "Visualizer-v0.3.0.zip", browser_download_url: "https://example.invalid/Visualizer-v0.3.0.zip" }]
+      }));
+    }
+  }).then(function (state) {
+    assert(state.status === "available" && state.latestVersion === "0.3.0", "checkForUpdates 发现新版本");
+    assert(state.downloadUrl === "https://example.invalid/Visualizer-v0.3.0.zip", "checkForUpdates 使用精确 zip");
+  })
+];
+
+Promise.all(updateChecks).then(function () {
+  if (failed) {
+    console.error("\n" + failed + " failed");
+    process.exit(1);
+  }
+  console.log("\nall core tests passed");
+}).catch(function (error) {
+  console.error(error);
+  process.exit(1);
+});

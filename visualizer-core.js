@@ -1,8 +1,15 @@
-/* Visualizer v0.2.3 core: Project / Dataset / Series / Plot / Canvas. No DOM. */
+/* Visualizer core: Project / Dataset / Series / Plot / Canvas. No DOM. */
 (function (root) {
   "use strict";
 
-  var SOFTWARE_VERSION = "0.2.3";
+  var APP_INFO = Object.freeze({
+    name: "Visualizer",
+    version: "0.2.4",
+    repositoryOwner: "aidisen975-cmd",
+    repositoryName: "Visualizer",
+    updateChannel: "stable"
+  });
+  var SOFTWARE_VERSION = APP_INFO.version;
   var PROJECT_FORMAT_VERSION = "1.0";
   var SUPPORTED_PROJECT_FORMATS = ["1.0"];
   var TIME_IN_SECONDS = { ms: 0.001, s: 1, min: 60, h: 3600 };
@@ -39,8 +46,16 @@
     "inside-br": "bottom-right",
     floating: "free"
   };
-  var LINE_TYPES = ["solid", "dashed", "dotted", "dash-dot", "long-dash"];
-  var LINE_DASH = { solid: null, dashed: "6 4", dotted: "1.5 3", "dash-dot": "8 4 1.5 4", "long-dash": "14 6" };
+  var LINE_STYLES = [
+    { id: "solid", label: "实线", dash: null },
+    { id: "dashed", label: "虚线", dash: "6 4" },
+    { id: "dotted", label: "点线", dash: "1.5 3" },
+    { id: "dash-dot", label: "点划线", dash: "8 4 1.5 4" },
+    { id: "long-dash", label: "长虚线", dash: "14 6" }
+  ];
+  var LINE_TYPES = LINE_STYLES.map(function (item) { return item.id; });
+  var LINE_DASH = {};
+  LINE_STYLES.forEach(function (item) { LINE_DASH[item.id] = item.dash; });
   var DEFAULT_FONT = "Aptos, Helvetica Neue, Noto Sans SC, sans-serif";
   var FONT_FAMILIES = [
     { value: DEFAULT_FONT, label: "系统默认" },
@@ -105,10 +120,16 @@
     };
   }
 
+  function normalizeTitleAlign(value) {
+    return value === "center" || value === "right" ? value : "left";
+  }
+
   function normalizePlotTextStyles(raw) {
     var styles = raw && typeof raw === "object" ? raw : {};
+    var title = normalizeTextStyle(styles.title, { fontSize: 14, fontWeight: "700" });
+    title.align = normalizeTitleAlign(styles.title && styles.title.align);
     return {
-      title: normalizeTextStyle(styles.title, { fontSize: 14, fontWeight: "700" }),
+      title: title,
       xAxisTitle: normalizeTextStyle(styles.xAxisTitle, { fontSize: 11, fontWeight: "600" }),
       yAxisTitle: normalizeTextStyle(styles.yAxisTitle, { fontSize: 11, fontWeight: "600" }),
       xTick: normalizeTextStyle(styles.xTick, { fontSize: 10 }),
@@ -132,7 +153,70 @@
   }
 
   function strokeDasharray(lineType) {
-    return LINE_DASH[lineType] || null;
+    return Object.prototype.hasOwnProperty.call(LINE_DASH, lineType) ? LINE_DASH[lineType] : null;
+  }
+
+  function normalizeHexColor(value) {
+    var text = String(value == null ? "" : value).trim();
+    if (!text) return null;
+    if (text.charAt(0) !== "#") text = "#" + text;
+    if (!/^#[0-9a-fA-F]{6}$/.test(text)) return null;
+    return text.toLowerCase();
+  }
+
+  function isValidHexColor(value) {
+    return normalizeHexColor(value) != null;
+  }
+
+  function cssColorToHex(value) {
+    var direct = normalizeHexColor(value);
+    if (direct) return direct;
+    var match = /^hsla?\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%/i.exec(String(value == null ? "" : value).trim());
+    if (!match) return null;
+    var h = ((Number(match[1]) % 360) + 360) % 360 / 360;
+    var s = Math.min(100, Math.max(0, Number(match[2]))) / 100;
+    var l = Math.min(100, Math.max(0, Number(match[3]))) / 100;
+    function channel(p, q, t) {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    }
+    var r;
+    var g;
+    var b;
+    if (s === 0) r = g = b = l;
+    else {
+      var q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+      var p = 2 * l - q;
+      r = channel(p, q, h + 1 / 3);
+      g = channel(p, q, h);
+      b = channel(p, q, h - 1 / 3);
+    }
+    function byte(n) {
+      var v = Math.round(Math.min(1, Math.max(0, n)) * 255);
+      return (v < 16 ? "0" : "") + v.toString(16);
+    }
+    return "#" + byte(r) + byte(g) + byte(b);
+  }
+
+  function patchStyleObject(style, patch, fallbackColor) {
+    var next = normalizeSeriesStyle(style, fallbackColor);
+    if (!patch) return next;
+    if (patch.lineWidth != null && Number.isFinite(Number(patch.lineWidth))) {
+      next.lineWidth = clamp(Number(patch.lineWidth), LINE_WIDTH_MIN, LINE_WIDTH_MAX);
+    }
+    if (patch.lineType != null && LINE_TYPES.indexOf(patch.lineType) >= 0) next.lineType = patch.lineType;
+    if (patch.opacity != null && Number.isFinite(Number(patch.opacity))) {
+      next.opacity = clamp(Number(patch.opacity), 0, 1);
+    }
+    if (patch.color != null && patch.color !== "") {
+      var hex = normalizeHexColor(patch.color);
+      if (hex) next.color = hex;
+    }
+    return next;
   }
 
   function makeId(prefix) {
@@ -364,6 +448,8 @@
       var preferred = sensorId != null ? "T" + sensorId : (meta.name || meta.originalHeader);
       var localId = uniqueLocalId(preferred, columnIndex, usedLocalIds);
       var group = sensorId != null ? groupForSensor(sensorId, groups) : null;
+      var color = sensorId != null ? sensorColor(sensorId, group) : SERIES_COLORS[seriesIndex % SERIES_COLORS.length];
+      var style = normalizeSeriesStyle({ color: color }, color);
       return {
         id: seriesId(datasetId, localId),
         datasetId: datasetId,
@@ -378,7 +464,8 @@
         kind: "raw",
         role: sensorId != null ? "sensor" : "numeric",
         sensorId: sensorId,
-        color: sensorId != null ? sensorColor(sensorId, group) : SERIES_COLORS[seriesIndex % SERIES_COLORS.length],
+        color: style.color || color,
+        style: style,
         x: xs.slice(),
         y: ys[seriesIndex].slice()
       };
@@ -588,12 +675,13 @@
       var series = findSeries(project, id);
       if (!series) throw new Error("找不到曲线：" + id);
       if (plot.seriesRefs.some(function (ref) { return ref.seriesId === id; })) return;
+      var style = normalizeSeriesStyle(series.style, series.color);
       plot.seriesRefs.push(normalizeSeriesRef({
         seriesId: id,
         visible: true,
         selected: false,
-        color: series.color,
-        style: { color: series.color }
+        color: style.color || series.color,
+        style: style
       }));
     });
     syncPlotAxisAutoTitles(project, plot);
@@ -661,17 +749,32 @@
     (seriesIds || []).forEach(function (id) { idSet[id] = true; });
     (plot.seriesRefs || []).forEach(function (ref) {
       if (!idSet[ref.seriesId]) return;
-      ref.style = normalizeSeriesStyle(ref.style, ref.color);
-      if (patch.lineWidth != null && Number.isFinite(Number(patch.lineWidth))) ref.style.lineWidth = Number(patch.lineWidth);
-      if (patch.lineType != null) ref.style.lineType = patch.lineType;
-      if (patch.opacity != null) ref.style.opacity = Number(patch.opacity);
-      if (patch.color != null && patch.color !== "") {
-        ref.style.color = String(patch.color);
-        ref.color = ref.style.color;
-      }
-      ref.style = normalizeSeriesStyle(ref.style, ref.color);
+      ref.style = patchStyleObject(ref.style, patch, ref.color);
+      ref.color = ref.style.color || ref.color;
     });
     return plot;
+  }
+
+  function applyStyleToSeries(project, seriesIds, patch) {
+    var idSet = {};
+    (seriesIds || []).forEach(function (id) { idSet[id] = true; });
+    (project.datasets || []).forEach(function (dataset) {
+      (dataset.series || []).forEach(function (series) {
+        if (!idSet[series.id]) return;
+        series.style = patchStyleObject(series.style, patch, series.color);
+        if (series.style.color) series.color = series.style.color;
+      });
+    });
+    return seriesIds || [];
+  }
+
+  function applyStyleToDataset(project, datasetId, patch) {
+    var dataset = findDataset(project, datasetId);
+    if (!dataset) return [];
+    var ids = dataset.series.map(function (series) { return series.id; });
+    applyStyleToSeries(project, ids, patch);
+    (project.plots || []).forEach(function (plot) { applySeriesStyle(plot, ids, patch); });
+    return ids;
   }
 
   function convertSeriesX(series, sourceUnit, displayUnit, xIsTime) {
@@ -787,6 +890,7 @@
     }
     var originalName = String(raw.originalName || originalHeader || name);
     var displayName = String(raw.displayName || raw.label || name || localId);
+    var style = normalizeSeriesStyle(raw.style, raw.color || "#5d646b");
     return {
       id: id,
       datasetId: datasetId,
@@ -801,7 +905,8 @@
       kind: "raw",
       role: raw.role || "numeric",
       sensorId: raw.sensorId == null ? null : Number(raw.sensorId),
-      color: String(raw.color || "#5d646b"),
+      color: style.color || String(raw.color || "#5d646b"),
+      style: style,
       x: raw.x.map(function (value, index) { return finiteNumber(value, "曲线 " + localId + " x[" + index + "] 无效。"); }),
       y: raw.y.map(function (value, index) { return coerceStoredNumber(value, "曲线 " + localId + " y[" + index + "] 无效。"); })
     };
@@ -1046,6 +1151,183 @@
       copy.position = { mode: "free", x: copy.x, y: copy.y };
     }
     return copy;
+  }
+
+  function normalizeVersionTag(tag) {
+    var text = String(tag == null ? "" : tag).trim();
+    if (text.charAt(0) === "v" || text.charAt(0) === "V") text = text.slice(1);
+    return text;
+  }
+
+  function parseSemVer(version) {
+    var match = /^(\d+)\.(\d+)\.(\d+)$/.exec(normalizeVersionTag(version));
+    if (!match) return null;
+    return { major: Number(match[1]), minor: Number(match[2]), patch: Number(match[3]) };
+  }
+
+  function compareSemVer(leftVersion, rightVersion) {
+    var left = parseSemVer(leftVersion);
+    var right = parseSemVer(rightVersion);
+    if (!left || !right) return null;
+    if (left.major !== right.major) return left.major < right.major ? -1 : 1;
+    if (left.minor !== right.minor) return left.minor < right.minor ? -1 : 1;
+    if (left.patch !== right.patch) return left.patch < right.patch ? -1 : 1;
+    return 0;
+  }
+
+  function githubReleasesApiUrl() {
+    return "https://api.github.com/repos/" + APP_INFO.repositoryOwner + "/" + APP_INFO.repositoryName + "/releases/latest";
+  }
+
+  function githubReleasesPageUrl() {
+    return "https://github.com/" + APP_INFO.repositoryOwner + "/" + APP_INFO.repositoryName + "/releases";
+  }
+
+  function buildExpectedAssetName(tagName) {
+    return "Visualizer-" + String(tagName == null ? "" : tagName) + ".zip";
+  }
+
+  function findReleaseAsset(release) {
+    if (!release || typeof release !== "object" || !release.tag_name || !Array.isArray(release.assets)) return null;
+    var expected = buildExpectedAssetName(release.tag_name);
+    for (var i = 0; i < release.assets.length; i += 1) {
+      var asset = release.assets[i];
+      if (asset && asset.name === expected) return asset;
+    }
+    return null;
+  }
+
+  var UPDATE_ERROR_MESSAGES = {
+    NETWORK_ERROR: "无法连接到 GitHub，请检查网络后重试。",
+    HTTP_ERROR: "暂时无法读取 GitHub Release。这不会影响 Visualizer 的正常使用。",
+    RATE_LIMIT: "GitHub 暂时限制了请求，请稍后再试。这不会影响 Visualizer 的正常使用。",
+    INVALID_RELEASE: "收到的 Release 信息无法识别。这不会影响 Visualizer 的正常使用。",
+    INVALID_VERSION: "无法识别版本号。这不会影响 Visualizer 的正常使用。",
+    NOT_STABLE: "GitHub 返回的不是正式稳定版本。这不会影响 Visualizer 的正常使用。"
+  };
+
+  function createUpdateState(version) {
+    return {
+      status: "idle",
+      currentVersion: version || APP_INFO.version,
+      latestVersion: null,
+      releaseName: null,
+      releaseNotes: null,
+      publishedAt: null,
+      releaseUrl: null,
+      downloadUrl: null,
+      errorCode: null,
+      errorMessage: null
+    };
+  }
+
+  function evaluateLatestRelease(localVersion, release) {
+    var state = createUpdateState(localVersion);
+    state.releaseUrl = githubReleasesPageUrl();
+    if (!release || typeof release !== "object" || Array.isArray(release) || !release.tag_name) {
+      state.status = "error";
+      state.errorCode = "INVALID_RELEASE";
+      state.errorMessage = UPDATE_ERROR_MESSAGES.INVALID_RELEASE;
+      return state;
+    }
+    if (release.draft === true || release.prerelease === true) {
+      state.status = "error";
+      state.errorCode = "NOT_STABLE";
+      state.errorMessage = UPDATE_ERROR_MESSAGES.NOT_STABLE;
+      return state;
+    }
+    if (typeof release.html_url === "string" && release.html_url) state.releaseUrl = release.html_url;
+    var latest = normalizeVersionTag(release.tag_name);
+    var order = compareSemVer(localVersion, latest);
+    if (order === null) {
+      state.status = "error";
+      state.errorCode = "INVALID_VERSION";
+      state.errorMessage = UPDATE_ERROR_MESSAGES.INVALID_VERSION;
+      return state;
+    }
+    state.latestVersion = latest;
+    state.releaseName = typeof release.name === "string" ? release.name : "";
+    state.releaseNotes = typeof release.body === "string" ? release.body : "";
+    state.publishedAt = typeof release.published_at === "string" ? release.published_at : "";
+    if (order < 0) {
+      state.status = "available";
+      var asset = findReleaseAsset(release);
+      if (asset && typeof asset.browser_download_url === "string" && asset.browser_download_url) {
+        state.downloadUrl = asset.browser_download_url;
+      } else {
+        state.errorCode = "ASSET_NOT_FOUND";
+        state.errorMessage = "未找到 " + buildExpectedAssetName(release.tag_name) + "。";
+      }
+      return state;
+    }
+    state.status = "up-to-date";
+    return state;
+  }
+
+  function fetchLatestRelease(fetchImpl) {
+    var doFetch = fetchImpl;
+    if (typeof doFetch !== "function" && root && typeof root.fetch === "function") {
+      doFetch = root.fetch.bind(root);
+    }
+    if (typeof doFetch !== "function") {
+      var missing = new Error("fetch unavailable");
+      missing.code = "NETWORK_ERROR";
+      return Promise.reject(missing);
+    }
+    var controller = typeof AbortController === "function" ? new AbortController() : null;
+    var timer = controller ? setTimeout(function () { controller.abort(); }, 12000) : 0;
+    function finish() {
+      if (timer) clearTimeout(timer);
+    }
+    return Promise.resolve().then(function () {
+      var init = {
+        method: "GET",
+        headers: { Accept: "application/vnd.github+json" },
+        cache: "no-store"
+      };
+      if (controller) init.signal = controller.signal;
+      return doFetch(githubReleasesApiUrl(), init);
+    }).then(function (response) {
+      if (!response || !response.ok) {
+        var httpError = new Error("HTTP " + (response && response.status));
+        httpError.code = "HTTP_ERROR";
+        httpError.status = response ? response.status : 0;
+        throw httpError;
+      }
+      return Promise.resolve()
+        .then(function () { return response.json(); })
+        .catch(function () {
+          var invalid = new Error("invalid release json");
+          invalid.code = "INVALID_RELEASE";
+          throw invalid;
+        });
+    }).then(function (release) {
+      finish();
+      return release;
+    }, function (error) {
+      finish();
+      if (error && (error.code === "HTTP_ERROR" || error.code === "INVALID_RELEASE")) throw error;
+      var network = new Error(error && error.message ? error.message : "network");
+      network.code = "NETWORK_ERROR";
+      throw network;
+    });
+  }
+
+  function checkForUpdates(options) {
+    var localVersion = (options && options.version) || APP_INFO.version;
+    return fetchLatestRelease(options && options.fetch).then(function (release) {
+      return evaluateLatestRelease(localVersion, release);
+    }).catch(function (error) {
+      var state = createUpdateState(localVersion);
+      state.status = "error";
+      var code = error && error.code;
+      if (error && (error.status === 403 || error.status === 429)) code = "RATE_LIMIT";
+      if (code !== "HTTP_ERROR" && code !== "INVALID_RELEASE" && code !== "NETWORK_ERROR" && code !== "RATE_LIMIT") code = "NETWORK_ERROR";
+      state.errorCode = code;
+      state.errorMessage = UPDATE_ERROR_MESSAGES[code] || UPDATE_ERROR_MESSAGES.NETWORK_ERROR;
+      state.releaseUrl = githubReleasesPageUrl();
+      return state;
+    });
   }
 
   function serializeProject(project) {
@@ -1742,12 +2024,16 @@
     if (slot === "right" && legendW) right += legendW + G.legendGap;
 
     var neededWidth = left + G.minPlotWidth + right;
+    var titleSpan = (title.width || 0) + G.outerPadding * 2;
+    if (titleSpan > neededWidth) neededWidth = titleSpan;
     var neededHeight = top + G.minPlotHeight + bottom;
     var width = Math.max(Number(figureWidth) || 0, neededWidth);
     var height = Math.max(Number(figureHeight) || 0, neededHeight);
     var plotWidth = Math.max(G.minPlotWidth, width - left - right);
     var plotHeight = Math.max(G.minPlotHeight, height - top - bottom);
-    var titleX = G.outerPadding;
+    var titleAlign = metrics.titleAlign === "center" || metrics.titleAlign === "right" ? metrics.titleAlign : "left";
+    var titleAnchor = titleAlign === "center" ? "middle" : (titleAlign === "right" ? "end" : "start");
+    var titleX = titleAlign === "center" ? width / 2 : (titleAlign === "right" ? width - G.outerPadding : G.outerPadding);
     var titleY = G.outerPadding + (title.ascent || title.height);
     var subtitleY = titleY + (subtitle.height ? 4 + (subtitle.ascent || subtitle.height) : 0);
     var noteY = (subtitle.height ? subtitleY : titleY) + (note.height ? 4 + (note.ascent || note.height) : 0);
@@ -1777,6 +2063,8 @@
       margin: { top: top, right: right, bottom: bottom, left: left },
       plotArea: { x: left, y: top, width: plotWidth, height: plotHeight },
       legendBox: legendBox,
+      titleAlign: titleAlign,
+      titleAnchor: titleAnchor,
       titlePos: { x: titleX, y: titleY },
       subtitlePos: { x: titleX, y: subtitleY },
       notePos: { x: titleX, y: noteY },
@@ -1788,12 +2076,30 @@
   }
 
   var api = {
+    APP_INFO: APP_INFO,
     SOFTWARE_VERSION: SOFTWARE_VERSION,
     PROJECT_FORMAT_VERSION: PROJECT_FORMAT_VERSION,
+    githubReleasesApiUrl: githubReleasesApiUrl,
+    githubReleasesPageUrl: githubReleasesPageUrl,
+    normalizeVersionTag: normalizeVersionTag,
+    parseSemVer: parseSemVer,
+    compareSemVer: compareSemVer,
+    buildExpectedAssetName: buildExpectedAssetName,
+    findReleaseAsset: findReleaseAsset,
+    createUpdateState: createUpdateState,
+    evaluateLatestRelease: evaluateLatestRelease,
+    fetchLatestRelease: fetchLatestRelease,
+    checkForUpdates: checkForUpdates,
     SUPPORTED_PROJECT_FORMATS: SUPPORTED_PROJECT_FORMATS,
     TIME_IN_SECONDS: TIME_IN_SECONDS,
     TIME_LABELS: TIME_LABELS,
     LINE_TYPES: LINE_TYPES,
+    LINE_STYLES: LINE_STYLES,
+    normalizeHexColor: normalizeHexColor,
+    isValidHexColor: isValidHexColor,
+    cssColorToHex: cssColorToHex,
+    applyStyleToSeries: applyStyleToSeries,
+    applyStyleToDataset: applyStyleToDataset,
     LINE_WIDTH_MIN: LINE_WIDTH_MIN,
     LINE_WIDTH_MAX: LINE_WIDTH_MAX,
     LINE_WIDTH_STEP: LINE_WIDTH_STEP,

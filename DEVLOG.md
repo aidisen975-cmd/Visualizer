@@ -1,6 +1,6 @@
 # DEVLOG
 
-本文件放在仓库根目录，只追加、不覆盖，用于完整记录开发全过程。当前版本、如何运行和下一步见 [PROGRESS-v0.2.3.md](Progress/PROGRESS-v0.2.3.md)。
+本文件放在仓库根目录，只追加、不覆盖，用于完整记录开发全过程。当前版本、如何运行和下一步见 [PROGRESS-v0.2.4.md](Progress/PROGRESS-v0.2.4.md)。
 
 ---
 
@@ -487,5 +487,96 @@ v0.2.3 在 v0.2.2 上做交互与排版修正，不进入 Local Zoom / Inset / C
 - 页面：https://github.com/aidisen975-cmd/Visualizer/releases/tag/v0.2.3
 
 将当时工作区推到 `feat/v0.1.0`，打 tag `v0.2.3`，GitHub 标记为 Pre-release。附件 `Visualizer-v0.2.3.zip`（html + `visualizer-core.js` + `README.md`）。Mac / Windows 共用这一份浏览器页面，不打包原生客户端。
+
+---
+
+## v0.2.3 手动检查更新
+
+- 软件版本：`0.2.3`（未升版本）
+- 工程格式：`projectFormatVersion: "1.0"`（未改 schema）
+- 日期：2026-09-22
+
+在已发布的 v0.2.3 上加入 About 与手动检查 GitHub Release。不自动联网，不自动安装，不把更新状态写入工程。
+
+### 本轮实际完成
+
+- `APP_INFO` 成为软件版本、仓库和更新通道的唯一来源。`SOFTWARE_VERSION` 取自 `APP_INFO.version`。`projectFormatVersion` 仍是 `1.0`。
+- 核心模块增加 `normalizeVersionTag`、`parseSemVer`、`compareSemVer`、`findReleaseAsset`、`fetchLatestRelease`、`checkForUpdates`。只请求 `releases/latest`，精确匹配 `Visualizer-vX.Y.Z.zip`，找不到时不回退到 `assets[0]`。
+- 标题栏「关于」读取上述常量。检查中禁用按钮；结果分已是最新、本地更高、发现新版本、网络/HTTP/非法版本。Release Notes 用文本节点显示。下载和 Release 页面用 `window.open`，不覆盖本地文件。
+- 最后检查时间写入 `visualizer.update.lastCheck`。`serializeProject` 不包含更新状态。
+- 项目 skill `.agents/skills/visualizer-dev/SKILL.md` 增加版本命名、离线优先、App/Project 状态分离、LocalStorage 命名空间、发布流程等长期规则。没有新建第二份 skill。
+
+### 数据模型变化
+
+无。工程 JSON 字段未增删。
+
+### 明确未做
+
+- 启动自动检查、定时检查、自动解压、自动覆盖 HTML/JS、Beta channel、Electron/Tauri。
+- Local Zoom、Inset、Annotation、Cursor、Formula、MAE/RMSE 仍未做。
+
+### 验证
+
+#### Node（已执行）
+
+`node tests/core-test.js` 全部通过。覆盖 SemVer、`v` 前缀、精确 ZIP、非法 Release 不抛出、断网/HTTP/损坏 JSON、以及工程 JSON 不含更新字段。
+
+#### 浏览器（已执行，macOS / Cursor 内置浏览器，http://127.0.0.1:8891/）
+
+- 打开页面时资源只有 `visualizer-core.js`，没有 GitHub 请求。kicker 为 Visualizer v0.2.3，关于面板版本 v0.2.3、工程格式 1.0。
+- 真实 `releases/latest` 为 v0.2.1。点击检查更新后显示「当前版本不低于最新正式版本」。检查过程中仍可新建 Figure 2。
+- 模拟新版本：显示 v0.2.3 → v0.9.0、发布日期、更新说明；`<img onerror>` 作为文本显示。下载地址是 `Visualizer-v0.9.0.zip`，不是 debug 包。Release 页面与 Releases 列表分开。
+- 没有正式 ZIP 时主按钮变为「前往 Release 页面」。相同版本显示「已是最新版本」。断网显示「当前无法连接 GitHub」，关闭后主界面仍可导入 CSV、加入 Series、隐藏一条、预览 SVG，并用同一 SVG 栅格出 PNG。
+- 连续点击只发出一次请求。关闭关于面板后再次打开回到检查前的空状态。保存的工程 JSON 不含 `updateState` / `latestVersion`。
+
+### 已知限制
+
+- 用户仍需手动解压新 ZIP 并打开新版本。
+- 只比较 GitHub 最新正式版。v0.2.3 目前是 Pre-release，因此不会被 `releases/latest` 当成最新版。
+
+---
+
+## v0.2.4
+
+- 软件版本：`0.2.4`
+- 工程格式：`projectFormatVersion: "1.0"`（未升格式版本）
+- 日期：2026-09-22
+
+v0.2.4 收数据簇样式、颜色/线型编辑、标题对齐、About 层级和 GitHub 正式版检查。不进入 v0.3.0。
+
+### 本轮实际完成
+
+- 数据簇继续使用 Dataset id。面板按数据源分组，标题为「已选 n/总数」，可折叠。样式按钮把用户改过的颜色、线型、线宽一次性写入该 Dataset 的 Series，并同步已有 Plot 的 seriesRef。之后单独改 Series 不会被自动改回；再次点击应用才会覆盖。
+- 颜色控件增加 HEX 输入，非法值只标错，不写入上一次有效颜色。线型菜单的 SVG 预览读取 `LINE_STYLES`，与 `strokeDasharray` 相同。
+- 图标题增加 `textStyles.title.align`：`left` / `center` / `right`。旧工程缺省为左。标题宽度仍参与 Figure 留白。
+- About 改为 `showModal`，对话框 `z-index: 1000`，分隔条 `z-index: 10`。根因是原先 `dialog.show()` 不进入顶层，固定在右上角的 About 被 `z-index: 6` 的分隔条盖住。
+- 更新检查仍只请求 `releases/latest`。draft / prerelease 不当成正式版。比较使用 SemVer 数字。请求 12 秒超时。403/429 给出限流说明。失败不写入工程，也不阻断导入和绘图。版本号只改 `APP_INFO.version`。
+
+### 数据模型变化
+
+工程格式仍为 1.0。Series 增加可缺省的 `style`。图标题文字样式增加可缺省的 `align`。更新状态仍不进工程 JSON。
+
+### 明确未做
+
+- 自动安装、静默覆盖本地 HTML/JS、Electron、启动时自动检查。
+- Local Zoom、Inset、Annotation、Cursor、Formula、MAE/RMSE。
+
+### 验证
+
+#### Node（已执行）
+
+`node tests/core-test.js` 全部通过。覆盖簇样式部分更新、单独覆盖、再次应用、非法 HEX、标题对齐、SemVer `0.2.10 > 0.2.9`、prerelease/draft、限流和旧工程缺 `align`。
+
+#### 浏览器（已执行，macOS / Cursor 内置浏览器，http://127.0.0.1:8891/）
+
+- 两个 CSV 分成 A、B 两个数据簇，Series 不混组。折叠后 Series 隐藏，展开后已选数量仍在。
+- 簇样式粘贴 `CFE3EB` 后规范为 `#cfe3eb`，只改颜色时保留原线型和线宽。另一簇不变。非法 `#GGGGGG` 标错且不改上一次有效色。颜色选择器与 HEX 双向同步。
+- 再次只应用颜色时，先前单独改过的 Series 颜色被覆盖，线型和线宽保留。
+- 线型菜单五项的 SVG `stroke-dasharray` 分别为空、`6 4`、`1.5 3`、`8 4 1.5 4`、`14 6`，与绘图映射相同。
+- 标题左 / 中 / 右对应 `start` / `middle` / `end`。48px 右对齐标题仍在图框内。
+- About 使用模态层。分隔条坐标上的命中元素是对话框本身，不是分隔条。对话框 z-index 1000，分隔条 10。
+- 断网显示无法连接 GitHub。模拟 v0.2.4 显示不低于最新正式版。模拟 v0.3.0 显示发现新版本，按钮为「查看更新」「获取最新版」。关闭后画布仍在。
+- 打开 v0.1.0 夹具工程后标题对齐为左，保存再打开 Series 仍在，工程 JSON 不含更新状态。
+- 页面 kicker 为 Visualizer v0.2.4。真实 `releases/latest` 为 v0.2.1，本地 0.2.4 的状态是 `up-to-date`，不提示降级。
 
 
