@@ -308,7 +308,8 @@ assert(legend.columns >= 2, "大量图例自动多列");
 assert(legend.placed.length >= 20, "多列后尽量保留图例项");
 
 var v021 = core.parseProject(core.serializeProject(elecProject));
-assert(v021.softwareVersion === "0.2.4", "新工程写入 0.2.4");
+assert(v021.softwareVersion === "0.4.1", "新工程写入 0.4.1");
+assert(v021.schemaVersion === 2, "新工程写入 schemaVersion 2");
 assert(v021.plots[0].legend.visible === true, "legend 随工程保存");
 assert(v021.ui.leftPanelWidth >= 220, "ui layout 随工程保存");
 
@@ -441,7 +442,13 @@ var oldMigrated = core.parseProject(readFixture("TESTDATA_v010.tvproj.json"));
 assert(oldMigrated.plots[0].seriesRefs[0].style && oldMigrated.plots[0].seriesRefs[0].style.lineWidth === 1.5, "旧工程补齐 series.style");
 assert(oldMigrated.plots[0].xAxis.time && oldMigrated.plots[0].xAxis.time.displayUnit, "旧工程补齐 per-chart time");
 assert(oldMigrated.plots[0].textStyles && oldMigrated.plots[0].textStyles.title.fontSize === 14, "旧工程补齐 textStyles");
-assert(oldMigrated.softwareVersion === "0.2.4", "打开后 working copy 版本为 0.2.4，源文件未改");
+assert(oldMigrated.softwareVersion === "0.4.1", "打开后 working copy 版本为 0.4.1，源文件未改");
+assert(oldMigrated.plots[0].type === "normal" && oldMigrated.plots[0].topEdge.showLine === false, "旧工程补上普通图和默认关闭的上边轴");
+assert(oldMigrated.plots[0].xAxis.showLine === true && oldMigrated.plots[0].xAxis.showTickLabels === true && oldMigrated.plots[0].xAxis.tickDirection === "out", "旧工程底轴默认轴线、刻度标签和向外刻度");
+assert(oldMigrated.plots[0].showTitle === true && oldMigrated.plots[0].title !== "未命名图", "旧工程有标题时显示标题，不回写成未命名图");
+assert(oldMigrated.plots[0].groupStyles && Object.keys(oldMigrated.plots[0].groupStyles).length === 0, "旧工程缺 groupStyles 时补空对象");
+assert(oldMigrated.plots[0].insets.length === 0 && oldMigrated.plots[0].annotations.length === 0, "旧工程补齐 insets 与 annotations");
+assert(oldMigrated.plots[0].fixedCursors.length === 0 && oldMigrated.plots[0].exportCursors === false, "旧工程不带固定游标");
 assert(oldMigrated.plots[0].textStyles.title.align === "left", "旧工程标题对齐回退为左");
 
 var ids = ["s1", "s2", "s3", "s4", "s5"];
@@ -545,7 +552,7 @@ assert(huge.grown, "文字过大时允许增大 Figure");
 assert(huge.plotArea.width >= core.FIGURE_LAYOUT.minPlotWidth, "Plot Area 不低于最小宽度");
 assert(huge.plotArea.height >= core.FIGURE_LAYOUT.minPlotHeight, "Plot Area 不低于最小高度");
 
-assert(core.APP_INFO.version === "0.2.4", "APP version 为 0.2.4");
+assert(core.APP_INFO.version === "0.4.1", "APP version 为 0.4.1");
 assert(core.SOFTWARE_VERSION === core.APP_INFO.version, "SOFTWARE_VERSION 与 APP_INFO.version 相同");
 assert(core.PROJECT_FORMAT_VERSION === "1.0", "工程格式仍为 1.0");
 assert(core.APP_INFO.version !== core.PROJECT_FORMAT_VERSION, "软件版本与工程格式分离");
@@ -647,7 +654,7 @@ core.applyStyleToDataset(groupProject, "ds-a", { color: "#GGGGGG" });
 assert(groupPlot.seriesRefs[0].style.color === kept, "非法 HEX 不覆盖有效颜色");
 var restored = core.parseProject(core.serializeProject(groupProject));
 assert(restored.datasets[0].series[0].style.color === "#112233", "簇样式写入 Series 后可保存");
-assert(restored.projectFormatVersion === "1.0", "v0.2.4 不升级工程格式");
+assert(restored.projectFormatVersion === "1.0", "v0.3.1 不升级工程格式");
 var leftTitle = core.computePlotLayout(400, 300, {
   title: { width: 80, height: 14, ascent: 11 },
   titleAlign: "left"
@@ -688,6 +695,374 @@ function releaseResponse(status, body, jsonFails) {
 }
 
 var seenUpdateUrl = "";
+var frame = core.createPlotFrame([0, 100], [0, 50], { x: 40, y: 20, width: 200, height: 100 });
+var px = frame.dataToPixelX(25);
+var py = frame.dataToPixelY(10);
+assert(Math.abs(frame.pixelToDataX(px) - 25) < 1e-9, "data→pixel→data X 往返");
+assert(Math.abs(frame.pixelToDataY(py) - 10) < 1e-9, "data→pixel→data Y 往返");
+assert(Math.abs(frame.dataToPixelX(0) - 40) < 1e-9 && Math.abs(frame.dataToPixelY(50) - 20) < 1e-9, "数据原点对应 Plot Area 角点");
+
+var reversed = core.normalizeSelectionRange({ x: 10, y: 1 }, { x: 2, y: 8 }, "plot-a");
+assert(reversed.xMin === 2 && reversed.xMax === 10 && reversed.yMin === 1 && reversed.yMax === 8, "右到左、下到上的选区会排序");
+assert(core.normalizeSelectionRange({ x: "no", y: 1 }, { x: 2, y: 3 }, "plot-a") === null, "非法选区不生成范围");
+
+var mid = core.sampleSeriesY([0, 10], [0, 10], 5, "interpolate");
+assert(mid && mid.y === 5, "中点线性插值");
+var exact = core.sampleSeriesY([0, 10, 20], [1, 2, 4], 10, "interpolate");
+assert(exact && exact.y === 2, "精确采样点不插值");
+assert(core.sampleSeriesY([0, 10], [1, 2], 11, "nearest") === null, "超出 X 范围不外推");
+var nanGap = core.sampleSeriesY([0, 1, 2], [1, NaN, 3], 0.5, "interpolate");
+assert(nanGap === null, "插值不跨越 NaN 段");
+var nanPoint = core.sampleSeriesY([0, 1, 2], [1, NaN, 3], 1, "nearest");
+assert(nanPoint && nanPoint.x === 0 && nanPoint.y === 1, "最近值跳过 NaN，取相邻有效点");
+var uneven = core.sampleSeriesY([0, 1, 10], [0, 0, 9], 5.5, "interpolate");
+assert(uneven && Math.abs(uneven.y - 4.5) < 1e-9, "不等间隔线性插值");
+var nearest = core.sampleSeriesY([0, 10, 30], [1, 2, 3], 12, "nearest");
+assert(nearest && nearest.x === 10 && nearest.y === 2, "最近采样点");
+
+var inspectProject = core.createProject({ projectName: "inspect" });
+var inspectDs = core.parseDatasetFromCsv(expCsv, { id: "ds-i", name: "exp.csv", timeUnit: "s" });
+core.addDataset(inspectProject, inspectDs);
+var inspectPlot = core.createPlot(inspectProject, { title: "Inspect" });
+core.addSeriesToPlot(inspectProject, inspectPlot, ["ds-i::T1", "ds-i::T2"]);
+assert(core.writeAxisRange(inspectPlot.xAxis, 30, 0) && inspectPlot.xAxis.min === 0 && inspectPlot.xAxis.max === 30, "From > To 时交换为手动范围");
+assert(core.writeAxisRange(inspectPlot.yAxis, 1, 1) === false, "零跨度范围不写入");
+core.resetPlotView(inspectPlot);
+assert(inspectPlot.xAxis.mode === "auto" && inspectPlot.yAxis.mode === "auto", "Reset View 恢复自动范围");
+core.writeAxisRange(inspectPlot.xAxis, 0, 20);
+var inset = core.normalizeInset({
+  sourcePlotId: inspectPlot.id,
+  sourceRange: { xMin: 0, xMax: 20, yMin: 25, yMax: 27 },
+  rect: { x: 40, y: 40, width: 180, height: 100 },
+  seriesIds: ["ds-i::T1", "missing"],
+  title: "局部"
+}, inspectPlot.id);
+var annotation = core.normalizeAnnotation({
+  type: "text",
+  coordinateMode: "data",
+  anchor: { x: 10, y: 25.5 },
+  text: "峰"
+}, inspectPlot.id);
+inspectPlot.insets = [inset];
+inspectPlot.annotations = [annotation];
+inspectPlot.fixedCursors = [{ id: "A", x: 10 }, { id: "B", x: 20 }];
+inspectPlot.exportCursors = false;
+core.prunePlotInspection(inspectProject, inspectPlot);
+assert(inspectPlot.insets[0].seriesIds.join(",") === "ds-i::T1", "Inset 丢弃已删除的 Series");
+var inspectJson = core.serializeProject(inspectProject);
+var inspectBack = core.parseProject(inspectJson);
+assert(inspectBack.projectFormatVersion === "1.0", "检查功能不升级工程格式");
+assert(inspectBack.plots[0].insets[0].title === "局部" && inspectBack.plots[0].insets[0].sourceRange.xMax === 20, "Inset 往返");
+assert(inspectBack.plots[0].annotations[0].text === "峰" && inspectBack.plots[0].annotations[0].coordinateMode === "data", "Annotation 往返");
+assert(inspectBack.plots[0].fixedCursors[1].id === "B" && inspectBack.plots[0].fixedCursors[1].x === 20, "固定游标往返");
+assert(inspectBack.plots[0].xAxis.mode === "manual" && inspectBack.plots[0].xAxis.max === 20, "手动轴范围往返");
+assert(inspectBack.plots[0].exportCursors === false, "游标默认不导出");
+var yFit = core.insetYExtent(inspectProject, inspectPlot, inspectPlot.insets[0]);
+assert(yFit[0] < yFit[1], "Inset 自动 Y 有有效范围");
+
+var history = core.createHistory(2);
+var historyValue = 0;
+function executeHistory(next) {
+  var prev = historyValue;
+  historyValue = next;
+  history.push({
+    undo: function () { historyValue = prev; },
+    redo: function () { historyValue = next; }
+  });
+}
+executeHistory(1);
+executeHistory(2);
+assert(history.undo() && historyValue === 1, "undo 回到上一个值");
+assert(history.redo() && historyValue === 2, "redo 恢复该值");
+executeHistory(3);
+assert(history.canRedo() === false && historyValue === 3, "新操作清空 redo");
+executeHistory(4);
+assert(history.size().undo === 2, "历史长度不超过上限");
+history.undo();
+history.undo();
+assert(history.undo() === null, "超出历史后不再 undo");
+
+var stateProject = core.createProject({ projectName: "history-state" });
+var statePlot = core.createPlot(stateProject, { title: "Figure 1" });
+var beforeState = core.captureEditorState(stateProject);
+core.writeAxisRange(statePlot.xAxis, 1, 5);
+core.restoreEditorState(stateProject, beforeState);
+assert(stateProject.plots[0].xAxis.mode === "auto", "恢复编辑快照会还原轴范围");
+
+var styleProject = core.createProject({ projectName: "style-priority" });
+var styleCsv = "Time(s),T8,T9,T10\n0,1,2,3\n10,4,5,6\n";
+var styleDs = core.parseDatasetFromCsv(styleCsv, { id: "ds-style", name: "T8-T22", sourceFilename: "t.csv" });
+core.addDataset(styleProject, styleDs);
+var stylePlot = core.createPlot(styleProject, { title: "Figure 1" });
+core.addSeriesToPlot(styleProject, stylePlot, styleDs.series.map(function (series) { return series.id; }));
+core.applyGroupStyle(styleProject, stylePlot, "ds-style", { colorMode: "single", color: "#25884d", lineType: "solid", lineWidth: 2 });
+var grouped = core.resolvePlotSeries(styleProject, stylePlot);
+assert(grouped.every(function (item) { return item.style.color === "#25884d" && item.style.lineWidth === 2 && item.style.lineType === "solid"; }), "数据簇样式作用于当前图全部系列");
+core.applySeriesStyle(stylePlot, [styleDs.series[0].id], { color: "#ff0000" });
+var mixed = core.resolvePlotSeries(styleProject, stylePlot);
+assert(mixed[0].style.color === "#ff0000", "系列覆盖优先于数据簇样式");
+assert(mixed[1].style.color === "#25884d" && mixed[2].style.color === "#25884d", "未覆盖的系列保持数据簇颜色");
+var styleRound = core.parseProject(core.serializeProject(styleProject));
+var mixedBack = core.resolvePlotSeries(styleRound, styleRound.plots[0]);
+assert(mixedBack[0].style.color === "#ff0000" && mixedBack[1].style.color === "#25884d", "保存重开后系列覆盖不被数据簇盖掉");
+assert(styleRound.projectFormatVersion === "1.0", "样式字段不升级工程格式");
+core.applyGroupStyle(styleRound, styleRound.plots[0], "ds-style", { color: "#25884d", lineType: "solid", lineWidth: 2, colorMode: "single" });
+assert(core.resolvePlotSeries(styleRound, styleRound.plots[0]).every(function (item) { return item.style.color === "#25884d"; }), "再次应用到全部系列才覆盖单独设置");
+
+var frame = core.createPlotFrame([0, 1000], [0, 100], { x: 80, y: 40, width: 400, height: 200 });
+var reversed = core.normalizeSelectionRange(
+  { x: frame.pixelToDataX(480), y: frame.pixelToDataY(240) },
+  { x: frame.pixelToDataX(80), y: frame.pixelToDataY(40) },
+  "plot-1"
+);
+assert(reversed.xMin === 0 && reversed.xMax === 1000 && reversed.yMin === 0 && reversed.yMax === 100, "反向框选换成数据坐标且不按整图边距外推");
+assert(Math.abs(frame.pixelToDataX(80) - 0) < 1e-9 && Math.abs(frame.pixelToDataX(480) - 1000) < 1e-9, "Plot Area 原点对应数据范围");
+
+var snapProject = core.createProject({ projectName: "snap" });
+core.setCanvasSize(snapProject, 1600, 900);
+var snapA = core.createPlot(snapProject, { title: "Figure 1" });
+var snapB = core.createPlot(snapProject, { title: "Figure 2" });
+core.placePlotInSlot(snapA, "splitH", 0, snapProject.canvas);
+core.placePlotInSlot(snapB, "splitH", 1, snapProject.canvas);
+assert(snapA.layout.x < snapB.layout.x, "两列布局左图在右图左边");
+assert(snapA.layout.y === snapB.layout.y, "两列布局同一行");
+assert(snapA.layout.x + snapA.layout.width <= snapB.layout.x, "两列不重叠");
+assert(snapB.layout.x + snapB.layout.width <= 1600, "布局落在画布宽度内");
+var beforeResize = snapA.layout.x + "," + snapA.layout.width + "," + snapProject.canvas.width;
+core.canvasLayoutArea({ width: 1600, height: 900 });
+assert(snapProject.canvas.width === 1600 && beforeResize === snapA.layout.x + "," + snapA.layout.width + "," + snapProject.canvas.width, "读取布局区域不改画布和图坐标");
+
+var local = core.createLocalPlot(snapProject, stylePlot, { xMin: 2, xMax: 8, yMin: 1, yMax: 5 });
+assert(local.id !== stylePlot.id && local.xAxis.mode === "manual" && local.xAxis.min === 2 && local.xAxis.max === 8, "局部图使用框选 X 范围");
+assert(local.yAxis.min === 1 && local.yAxis.max === 5, "局部图使用框选 Y 范围");
+assert(stylePlot.xAxis.mode !== "manual" || stylePlot.xAxis.min !== 2, "局部图不改原图范围");
+assert(local.seriesRefs.length === 0, "局部视图不复制系列");
+assert(local.showTitle === false && local.legend.visible === false, "局部视图默认关闭标题和图例");
+assert(local.xAxis.showTitle === false && local.yAxis.showTitle === false, "局部视图默认关闭轴标题");
+assert(local.type === "detail" && local.detailSource && local.detailSource.autoFitY === true, "局部图记录来源并默认自动适配 Y");
+
+var fittedLocal = core.createLocalPlot(styleProject, stylePlot, { xMin: 0, xMax: 10, yMin: 0, yMax: 100 });
+assert(fittedLocal.xAxis.min === 0 && fittedLocal.xAxis.max === 10, "局部图 X 使用框选范围");
+assert(fittedLocal.yAxis.min < 1 && fittedLocal.yAxis.max > 6 && fittedLocal.yAxis.max < 8, "autoFitY 按区间内数据加 5% 边距，不用框选的整段 Y");
+assert(fittedLocal.detailSource.sourceRange.yMin === fittedLocal.yAxis.min, "来源框 Y 跟随局部图显示范围");
+assert(fittedLocal.detailSource.showSourceBox === true && fittedLocal.detailSource.showConnectorLines === true, "来源框和连接线默认打开");
+core.writeAxisRange(fittedLocal.xAxis, 2, 8);
+var emptyFit = core.syncDetailRange(styleProject, fittedLocal);
+assert(emptyFit === null && fittedLocal.yAxis.max > fittedLocal.yAxis.min, "X 范围内没有数据时不崩溃并保留 Y 范围");
+core.writeAxisRange(fittedLocal.xAxis, 0, 10);
+fittedLocal.detailSource.autoFitY = true;
+core.syncDetailRange(styleProject, fittedLocal);
+var flat = core.calculateVisibleYRange(styleProject, stylePlot, 0, 0, 0.05);
+assert(flat === null, "空 X 范围不产生 Y");
+var single = core.calculateVisibleYRange({
+  datasets: [{ id: "d", series: [{ id: "d::a", datasetId: "d", x: [1], y: [60], unit: "", displayName: "A", label: "A", name: "A", localId: "a", style: { color: "#000", lineType: "solid", lineWidth: 1, opacity: 1 }, color: "#000" }] }],
+  plots: []
+}, {
+  seriesRefs: [{ seriesId: "d::a", visible: true, style: { color: "#000", lineType: "solid", lineWidth: 1, opacity: 1 }, color: "#000", styleOverrides: null }],
+  xAxis: { time: { enabled: false } },
+  yAxis: {},
+  groupStyles: {}
+}, 0, 2, 0.05);
+assert(single && single[0] < 60 && single[1] > 60, "只有一个 Y 时仍留出边距");
+
+var zoomCsv = "Time(s),A,B,C,D\n0,10,10,10,10\n1550,35,35.3,36,37.5\n1700,35.8,36,37.1,38\n1800,35.4,36.5,36.2,39\n2000,50,50,50,50\n";
+var zoomProject = core.createProject({ projectName: "zoom" });
+var zoomDs = core.parseDatasetFromCsv(zoomCsv, { id: "ds-zoom", name: "zoom.csv", timeUnit: "s" });
+core.addDataset(zoomProject, zoomDs);
+var zoomMain = core.createPlot(zoomProject, { title: "Main" });
+core.addSeriesToPlot(zoomProject, zoomMain, zoomDs.series.map(function (series) { return series.id; }));
+var zoomLocal = core.createLocalPlot(zoomProject, zoomMain, { xMin: 1550, xMax: 1800, yMin: 0, yMax: 100 });
+assert(zoomLocal.detailSource.yRangeMode === "auto-window" && zoomLocal.detailSource.yPaddingRatio === 0.05, "新建局部图默认按当前 X 窗口适配 Y，边距 5%");
+var zoomDomain = core.calculateLocalViewDomain(zoomProject, zoomLocal);
+assert(zoomDomain.mode === "auto-window" && zoomDomain.emptyWindow === false, "窗口内有数据时不是空窗口");
+assert(Math.abs(zoomDomain.y[0] - 34.8) < 1e-9 && Math.abs(zoomDomain.y[1] - 39.2) < 1e-9, "1550–1800 的 Y 按窗口内 35–39 加 5% 边距，不用全曲线 10–50");
+assert(Math.abs(core.plotExtents(zoomProject, zoomLocal).y[0] - zoomDomain.y[0]) < 1e-9 && Math.abs(core.plotExtents(zoomProject, zoomLocal).y[1] - zoomDomain.y[1]) < 1e-9, "绘图范围与局部图 domain 一致");
+var hideCsv = "Time(s),A,B,C\n1550,35,35.5,20\n1800,36,36.5,25\n";
+var hideProject = core.createProject({ projectName: "hide" });
+var hideDs = core.parseDatasetFromCsv(hideCsv, { id: "ds-hide", name: "hide.csv", timeUnit: "s" });
+core.addDataset(hideProject, hideDs);
+var hideMain = core.createPlot(hideProject, { title: "Main" });
+core.addSeriesToPlot(hideProject, hideMain, hideDs.series.map(function (series) { return series.id; }));
+var hideLocal = core.createLocalPlot(hideProject, hideMain, { xMin: 1550, xMax: 1800, yMin: 0, yMax: 100 });
+var withHidden = core.calculateLocalViewDomain(hideProject, hideLocal);
+hideMain.seriesRefs[2].visible = false;
+var hiddenDomain = core.calculateLocalViewDomain(hideProject, hideLocal);
+assert(withHidden.y[0] < 21 && hiddenDomain.y[0] > 34 && hiddenDomain.y[1] < 37, "隐藏 Series 不参与 Auto Y");
+core.setDetailYRangeMode(zoomLocal.detailSource, "follow-main");
+var follow = core.calculateLocalViewDomain(zoomProject, zoomLocal);
+var mainY = core.plotExtents(zoomProject, zoomMain).y;
+assert(follow.mode === "follow-main" && follow.y[0] === mainY[0] && follow.y[1] === mainY[1], "FOLLOW_MAIN 使用主图 Y");
+core.writeAxisRange(zoomLocal.yAxis, 35, 39);
+core.setDetailYRangeMode(zoomLocal.detailSource, "manual");
+core.syncDetailRange(zoomProject, zoomLocal);
+var manualDomain = core.plotExtents(zoomProject, zoomLocal);
+assert(manualDomain.y[0] === 35 && manualDomain.y[1] === 39, "MANUAL 严格使用 35–39");
+core.setDetailYRangeMode(zoomLocal.detailSource, "auto-window");
+zoomLocal.detailSource.yPaddingRatio = 0;
+var rawPad = core.calculateLocalViewDomain(zoomProject, zoomLocal);
+assert(Math.abs(rawPad.y[0] - 35) < 1e-9 && Math.abs(rawPad.y[1] - 39) < 1e-9, "边距 0% 等于窗口 raw min/max");
+zoomLocal.detailSource.yPaddingRatio = 0.05;
+var pad5 = core.calculateAutoYRange([35, 39], 0.05);
+assert(Math.abs(pad5[0] - 34.8) < 1e-9 && Math.abs(pad5[1] - 39.2) < 1e-9, "边距 5% 按 span 扩展");
+var flatDomain = core.calculateAutoYRange([35, 35, 35], 0.05);
+assert(flatDomain[0] < 35 && flatDomain[1] > 35, "全部 Y 相同时 domain 不是零跨度");
+var dirtyYs = core.calculateAutoYRange([NaN, Infinity, -Infinity, null, undefined, 36, 37], 0);
+assert(dirtyYs[0] === 36 && dirtyYs[1] === 37, "NaN、Infinity、null 不进入范围");
+core.writeAxisRange(zoomLocal.xAxis, 1, 2);
+core.setDetailYRangeMode(zoomLocal.detailSource, "auto-window");
+var emptyZoom = core.syncDetailRange(zoomProject, zoomLocal);
+assert(emptyZoom === null && core.plotExtents(zoomProject, zoomLocal).y[1] > core.plotExtents(zoomProject, zoomLocal).y[0], "当前 X 窗口无数据时不崩溃");
+core.writeAxisRange(zoomLocal.xAxis, 0, 0.5);
+var xShift = core.calculateLocalViewDomain(zoomProject, zoomLocal);
+assert(xShift.y[0] < 10.5 && xShift.y[1] > 9.5 && xShift.y[1] < 20, "修改 X 后 AUTO_WINDOW 按新窗口重算 Y");
+var keptOpen = core.retainInspectorOpen({ chart: true, "chart.title": true, xAxis: true, "xAxis.line": true }, false, "viewport", null);
+assert(keptOpen.chart === true && keptOpen.xAxis === true && keptOpen["xAxis.line"] === true, "普通刷新不重置折叠");
+var switchedOpen = core.retainInspectorOpen(keptOpen, true, "viewport", null);
+assert(switchedOpen.viewport === true && switchedOpen.chart === false && switchedOpen.xAxis === false && switchedOpen["xAxis.line"] === true, "切换对象展开相关分组并保留子组默认");
+var oldManual = core.parseProject(JSON.stringify({
+  projectFormatVersion: "1.0",
+  projectName: "old-range",
+  datasets: zoomProject.datasets,
+  plots: [{
+    id: zoomMain.id,
+    title: "Main",
+    seriesRefs: zoomMain.seriesRefs
+  }, {
+    id: "old-manual",
+    type: "detail",
+    title: "",
+    xAxis: { mode: "manual", min: 1550, max: 1800 },
+    yAxis: { mode: "manual", min: 35, max: 39 },
+    detailSource: { sourceFigureId: zoomMain.id, sourceRange: { xMin: 1550, xMax: 1800, yMin: 35, yMax: 39 }, autoFitY: false }
+  }]
+}));
+var oldManualPlot = oldManual.plots.filter(function (plot) { return plot.id === "old-manual"; })[0];
+assert(oldManualPlot.detailSource.yRangeMode === "manual", "旧工程 autoFitY false 视为手动范围");
+assert(core.plotExtents(oldManual, oldManualPlot).y[0] === 35 && core.plotExtents(oldManual, oldManualPlot).y[1] === 39, "旧手动范围打开后仍是 35–39");
+var oldAuto = core.parseProject(JSON.stringify({
+  projectFormatVersion: "1.0",
+  projectName: "old-auto",
+  datasets: zoomProject.datasets,
+  plots: [{
+    id: zoomMain.id,
+    title: "Main",
+    seriesRefs: zoomMain.seriesRefs
+  }, {
+    id: "old-auto",
+    type: "detail",
+    xAxis: { mode: "manual", min: 1550, max: 1800 },
+    yAxis: { mode: "manual", min: 0, max: 100 },
+    detailSource: { sourceFigureId: zoomMain.id, sourceRange: { xMin: 1550, xMax: 1800, yMin: 0, yMax: 100 }, autoFitY: true, yPaddingRatio: 0.05 }
+  }]
+}));
+var oldAutoPlot = oldAuto.plots.filter(function (plot) { return plot.id === "old-auto"; })[0];
+assert(oldAutoPlot.detailSource.yRangeMode === "auto-window", "旧工程 autoFitY true 视为当前窗口自动适配");
+assert(Math.abs(core.plotExtents(oldAuto, oldAutoPlot).y[0] - 34.8) < 1e-9, "旧自动局部图按窗口重算，不用保存的 0–100");
+
+var inheritedId = stylePlot.seriesRefs[0].seriesId;
+core.applySeriesStyle(stylePlot, [inheritedId], { color: "#112233", lineWidth: 3, lineType: "dashed" });
+var inherited = core.resolvePlotSeries(styleProject, fittedLocal).filter(function (item) { return item.series.id === inheritedId; })[0];
+assert(inherited.style.color === "#112233" && inherited.style.lineWidth === 3 && inherited.style.lineType === "dashed", "局部视图系列样式跟随主图");
+stylePlot.seriesRefs[0].visible = false;
+assert(core.resolvePlotSeries(styleProject, fittedLocal)[0].visible === false, "局部视图跟随主图隐藏系列");
+stylePlot.seriesRefs[0].visible = true;
+assert(core.resolvePlotSeries(styleProject, fittedLocal)[0].visible === true, "局部视图跟随主图重新显示系列");
+var layerBefore = core.plotsInLayerOrder(styleProject).map(function (plot) { return plot.id + ":" + plot.zOrder; }).join(",");
+assert(core.plotsInLayerOrder(styleProject).map(function (plot) { return plot.id + ":" + plot.zOrder; }).join(",") === layerBefore, "读取图层顺序不会改变层级");
+core.movePlotLayer(styleProject, fittedLocal.id, "bottom");
+assert(core.plotsInLayerOrder(styleProject)[0].id === fittedLocal.id, "置底后局部视图在最下层");
+core.movePlotLayer(styleProject, fittedLocal.id, "top");
+assert(core.plotsInLayerOrder(styleProject)[core.plotsInLayerOrder(styleProject).length - 1].id === fittedLocal.id, "置顶后局部视图在最上层");
+var savedInherit = core.parseProject(core.serializeProject(styleProject));
+var savedDetail = savedInherit.plots.filter(function (plot) { return plot.id === fittedLocal.id; })[0];
+assert(savedDetail.seriesRefs.length === 0, "保存时不保留局部视图独立系列");
+assert(core.resolvePlotSeries(savedInherit, savedDetail).some(function (item) { return item.style.color === "#112233" && item.style.lineWidth === 3; }), "打开后局部视图仍跟随主图样式");
+assert(savedInherit.schemaVersion === 2 && savedInherit.projectFormatVersion === "1.0", "schemaVersion 与工程格式分开");
+var closedAxis = core.normalizeAxis({ autoTitle: "Time (s)", showTitle: false });
+assert(core.resolvedAxisTitle(closedAxis) === "", "关闭轴标题后标题不参与绘制");
+assert(core.resolvedAxisTitle(core.normalizeAxis({ autoTitle: "Time (s)" })) === "Time (s)", "旧轴缺省仍显示标题");
+var mag = core.effectiveMagnification(
+  { plotWidth: 400, plotHeight: 200, xMin: 0, xMax: 2000, yMin: 20, yMax: 46 },
+  { plotWidth: 400, plotHeight: 200, xMin: 1400, xMax: 1800, yMin: 36, yMax: 40 }
+);
+assert(Math.abs(mag.x - 5) < 1e-9 && Math.abs(mag.y - 6.5) < 1e-9, "有效放大使用 Plot Area 与数据范围");
+assert(core.effectiveMagnification({ plotWidth: 0, plotHeight: 10, xMin: 0, xMax: 1, yMin: 0, yMax: 1 }, { plotWidth: 10, plotHeight: 10, xMin: 0, xMax: 0, yMin: 0, yMax: 1 }).x === null, "范围或尺寸无效时放大倍率为空");
+var legacy = core.parseProject(JSON.stringify({
+  projectFormatVersion: "1.0",
+  projectName: "old-layer",
+  datasets: styleProject.datasets,
+  plots: [{
+    id: stylePlot.id,
+    title: "Figure 1",
+    name: "Figure 1",
+    seriesRefs: stylePlot.seriesRefs,
+    type: "normal"
+  }, {
+    id: "old-detail",
+    type: "detail",
+    title: "局部",
+    name: "局部图 1",
+    seriesRefs: [{ seriesId: inheritedId, visible: true, color: "#abcdef", style: { color: "#abcdef", lineType: "solid", lineWidth: 4, opacity: 1 }, styleOverrides: { color: true } }],
+    detailSource: { sourceFigureId: stylePlot.id, sourceRange: { xMin: 0, xMax: 10, yMin: 1, yMax: 5 }, autoFitY: true, yPaddingRatio: 0.05 }
+  }]
+}));
+assert(legacy.plots.every(function (plot) { return Number.isFinite(plot.zOrder); }), "旧工程补上稳定图层顺序");
+var legacyDetail = legacy.plots.filter(function (plot) { return plot.id === "old-detail"; })[0];
+assert(legacyDetail.seriesRefs.length === 0, "旧局部图加载后不再使用自己的系列样式");
+assert(core.resolvePlotSeries(legacy, legacyDetail).some(function (item) { return item.style.color === "#112233"; }), "旧局部图改为跟随来源主图");
+var removed = core.removePlot(snapProject, stylePlot.id);
+assert(removed.some(function (plot) { return plot.id === local.id; }), "删除主图时一并删除局部视图");
+assert(!snapProject.plots.some(function (plot) { return plot.id === local.id; }), "删除后不留下悬空局部视图");
+
+core.applySeriesStyle(stylePlot, [inheritedId], { color: "#ff0000", lineWidth: 1, lineType: "solid" });
+core.setGroupStyle(stylePlot, "ds-style", { colorMode: "palette", paletteId: "high-contrast" });
+var paletteSeries = core.resolvePlotSeries(styleProject, stylePlot);
+assert(paletteSeries[0].style.color === "#ff0000", "Palette 不覆盖已有 Series Override");
+assert(paletteSeries[1].style.color !== paletteSeries[2].style.color, "未覆盖的系列按 Palette 分配不同颜色");
+assert(core.paletteMinDistance("high-contrast", 15) > 0.08, "自动高对比的前 15 色在 OKLab 中可区分");
+var paletteRound = core.parseProject(core.serializeProject(styleProject));
+assert(paletteRound.plots[0].groupStyles["ds-style"].paletteId === "high-contrast", "Palette 随工程保存");
+assert(paletteRound.projectFormatVersion === "1.0", "Palette 不升级工程格式");
+
+var pointAnn = core.normalizeAnnotation({
+  type: "point",
+  seriesId: styleDs.series[0].id,
+  coordinateMode: "data",
+  anchor: { x: 10, y: 4 },
+  end: { x: 12, y: 8 },
+  text: "T8\nx = 10"
+}, stylePlot.id);
+var freeAnn = core.normalizeAnnotation({
+  type: "free",
+  coordinateMode: "plot",
+  anchor: { x: 0.2, y: 0.3 },
+  end: { x: 0.2, y: 0.3 },
+  text: "注"
+}, stylePlot.id);
+stylePlot.annotations = [pointAnn, freeAnn];
+var annBack = core.parseProject(core.serializeProject(styleProject));
+var savedPoint = annBack.plots[0].annotations[0];
+var savedFree = annBack.plots[0].annotations[1];
+assert(savedPoint.type === "point" && savedPoint.seriesId === styleDs.series[0].id && savedPoint.anchor.x === 10 && savedPoint.anchor.y === 4, "数据点标注保存 seriesId 和数据坐标");
+assert(savedFree.coordinateMode === "plot" && savedFree.anchor.x === 0.2, "自由文本保存图内归一化坐标");
+assert(!JSON.parse(core.serializeProject(styleProject)).plots[0].readoutCursor, "游标不写入工程");
+
+var page = fs.readFileSync(path.join(__dirname, "../temperature_trajectory_visualizer.html"), "utf8");
+assert(page.indexOf("check.dataset.seriesId = series.id") >= 0, "Checkbox 绑定稳定 series id");
+assert(page.indexOf("input.checked = checkedSeries.has(input.dataset.seriesId)") >= 0, "Checkbox 只读 checkedSeries");
+assert(page.indexOf('row.addEventListener("pointerdown"') >= 0, "选择在 pointerdown 写入，避免 click 默认动作回翻");
+assert(page.indexOf("添加到当前图") >= 0 && page.indexOf("clearDataSelection()") >= 0, "加入图后清空临时选择");
+assert(page.indexOf("已加入 ") >= 0, "右栏显示已加入而不是已选");
+assert(page.indexOf("创建局部视图") >= 0 && page.indexOf("createLocalFigure") >= 0, "框选可创建局部图");
+assert(page.indexOf("placeReadout") >= 0 && page.indexOf("readoutCursor = null") >= 0, "读数游标可清除");
+assert(page.indexOf('id="tvSaveProject"') >= 0 && page.indexOf('id="tvSaveProjectAs"') >= 0 && page.indexOf('id="tvExportPng"') >= 0 && page.indexOf('id="tvExportSvg"') >= 0, "保存和导出仍在工具栏");
+assert(page.indexOf('id="tvNewPlot"') >= 0 && page.indexOf('id="tvLayout"') >= 0 && page.indexOf('id="tvPreview"') >= 0 && page.indexOf('id="tvAboutOpen"') >= 0, "新建图、布局、预览、关于仍在工具栏");
+assert(page.indexOf("适配当前 X 范围") >= 0 && page.indexOf("auto-window") >= 0 && page.indexOf("follow-main") >= 0, "局部图有三种 Y 范围和适配按钮");
+assert(page.indexOf("导出设置") >= 0 && page.indexOf("轴线与刻度") >= 0, "属性栏按对象分组");
+assert(page.indexOf("canvasLayoutArea") >= 0, "快速布局使用画布坐标");
+assert(page.indexOf('section("画布 ') >= 0, "右侧有画布尺寸");
+assert(page.indexOf("tv-snap-pop") >= 0, "Figure 有 Snap Layout");
+
 var updateChecks = [
   core.checkForUpdates({
     fetch: function () { return Promise.reject(new TypeError("Failed to fetch")); }

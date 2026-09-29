@@ -1,6 +1,6 @@
 # DEVLOG
 
-本文件放在仓库根目录，只追加、不覆盖，用于完整记录开发全过程。当前版本、如何运行和下一步见 [PROGRESS-v0.2.4.md](Progress/PROGRESS-v0.2.4.md)。
+本文件放在仓库根目录，只追加、不覆盖，用于完整记录开发全过程。当前版本、如何运行和下一步见 [PROGRESS-v0.4.1.md](Progress/PROGRESS-v0.4.1.md)。
 
 ---
 
@@ -591,5 +591,261 @@ v0.2.4 收数据簇样式、颜色/线型编辑、标题对齐、About 层级和
 正式版，不是 Draft，也不是 Pre-release。附件 `Visualizer-v0.2.4.zip`（html + `visualizer-core.js` + `README.md`）。
 
 发布后用上一正式版 `0.2.1` 请求 `releases/latest`：状态为发现新版本，最新版 `0.2.4`，下载地址是 `Visualizer-v0.2.4.zip`。本地 `0.2.4` 的状态是已不低于最新正式版。`0.2.3` 同样能发现 `0.2.4`。
+
+---
+
+## v0.3.0
+
+- 软件版本：`0.3.0`
+- 工程格式：`projectFormatVersion: "1.0"`（未升格式版本）
+- 日期：2026-09-22
+
+v0.3.0 在 v0.2.4 的导入、排图、样式和导出之上，加入查看与标注。不重写绘图引擎，不引入构建链或 CDN。
+
+### 本轮实际完成
+
+- 坐标换算集中在 `createPlotFrame`。框选、读数、Inset 来源范围和数据标注共用它。
+- 框选只在 Plot Area 内开始。结束后可放大或创建局部图。放大写入现有轴的手动范围。只沿 X 拖出的细条不改 Y。
+- View Range 仍是 `axis.mode` / `min` / `max`。自动勾选、From / To、重置视图和框选放大是同一状态。非法数字或零跨度不写入；From > To 时交换。
+- Inset 按 Series 重绘，不是截图。可拖动、缩放，限制在所属 Figure 内。源范围和直线连接进入 SVG。删除 Series 后从 `seriesIds` 移除；没有可画曲线时显示空状态。
+- 读数使用垂直十字线和局部检查器，不整页重绘。单调 X 用二分查找。插值只发生在相邻且都有效的采样之间。固定 A/B 显示 ΔX 与每条可见曲线的 ΔY。
+- 标注四种：文字、箭头、标记、区域。`coordinateMode` 为 `data` 或 `canvas`。右侧列出当前图的标注，可选择、隐藏、删除。
+- 历史最多 100 条。新操作清空 redo。拖拽在按下时记快照，松开时提交一条。输入框聚焦时不触发 Delete 或撤销。
+- 预览与 PNG/SVG 仍走 `buildCanvasSvg()`。Inset、源范围和标注进入 SVG。选框、手柄、悬停读数不进入。固定游标仅在勾选导出时进入。
+
+### 数据模型变化
+
+工程格式仍为 1.0。Plot 增加可缺省字段：
+
+- `insets`
+- `annotations`（现在会规范化；旧文件里的空数组保持为空）
+- `fixedCursors`
+- `exportCursors`（默认 false）
+
+轴范围没有第二套 `plot.view`。
+
+### 明确未做
+
+- Formula、派生列、MAE/RMSE、Results
+- 双 Y 轴、轴联动、图拆分、Heatmap、3D
+- Electron / Tauri
+- Inset 复制
+- 连接线避障
+
+### 验证
+
+#### Node（已执行）
+
+`node tests/core-test.js` 全部通过。新增覆盖：坐标往返、反向选区、插值中点 / 精确点 / 越界 / NaN 间隙 / 不等间隔、最近点、轴范围交换、Inset 与标注及游标往返、历史 undo / redo / 清空 redo / 上限，以及 v0.1.0 工程补齐空数组。
+
+#### 浏览器（已执行，macOS / Cursor 内置浏览器，http://127.0.0.1:8891/）
+
+- 导入实验与仿真两份 CSV，同一图加入三条跨源曲线。
+- 框选后出现放大、创建局部图、取消。放大把 X/Y 切到手动范围；撤销后恢复，重做再写回。
+- 创建的 Inset 含三条 Series。导出 SVG 含局部图裁剪和源范围虚线，不含选框、手柄、悬停十字线。
+- 文字、箭头、标记、区域都能创建。删除文字后再撤销，四条都回到工程。
+- 读数检查器在同一 X 上列出多条曲线。点击两次得到 A/B。未勾选导出时，SVG 不含游标。
+- 重置视图回到自动范围，撤销后回到手动范围。拖动 Figure 后撤销，位置回到原处。
+- 直接解析 v0.1.0 夹具：格式仍是 1.0，曲线还在，insets / annotations / fixedCursors 为空。
+
+未在本轮逐项点选线宽、字体和布局模板；这些路径没有改数据模型，核心测试仍覆盖样式与布局往返。PNG 与预览共用 `buildCanvasSvg()`，本轮核对了这条 SVG，没有另存一张 PNG 文件。
+
+---
+
+## v0.3.1
+
+- 软件版本：`0.3.1`
+- 工程格式：`projectFormatVersion: "1.0"`（未升格式版本）
+- 日期：2026-09-22
+
+本版修复 v0.3.0 的选择、框选和读数，并调整左右栏职责、右栏数据簇、画布尺寸和单图 Snap。不更换绘图库或框架，不删除快速布局和系列样式。
+
+### 根因
+
+- Checkbox 晚一拍：系列行是 `<label>`，捕获阶段的点击先写入 `checkedSeries` 并刷新勾选，随后复选框的默认动作把 `checked` 翻回去。计数已经按 Set 画出来，所以第一次点击只增加「已选」，勾选要等下一次刷新才出现。
+- 框选按钮无效：选框出现后，`pointerup` 仍走 `finishPlotGesture`。对已经进入 `range-ready` 的手势，这次抬起把拖拽清掉并重画，动作按钮在 click 之前消失。
+- 读数竖线删不掉：点击调用 `placeCursor`，依次写入 `plot.fixedCursors` 的 A、B。这些游标每个覆盖层都画，并且会进工程。
+
+### 状态
+
+- `checkedSeries`：左栏临时选择。
+- `plot.seriesRefs`：已经加入 Figure 的系列。
+- `plot.groupStyles`、`seriesRef.styleOverrides`：数据簇样式和系列覆盖。
+- `readoutCursor`、框选 `drag`：临时 UI，不进工程。
+- `project.canvas.width/height`：布局坐标。`project.ui.canvasZoom`：视口缩放。
+
+### 验证
+
+#### Node（已执行）
+
+`node tests/core-test.js` 全部通过。覆盖数据簇样式与系列覆盖的保存重开、反向框选的数据坐标、1600×900 上的左右分区、局部图独立范围，以及页面里 Checkbox、已加入、局部图、读数、画布和 Snap 的接线。
+
+#### 浏览器（已执行，macOS / Cursor 内置浏览器，http://127.0.0.1:8765/）
+
+- 15 列第一次点击即勾选，计数「已选 1/15」；第二次两条同时勾选。全选、全不选、Shift、Ctrl/Cmd、Ctrl+A 与勾选一致。
+- 加入当前图后勾选归零，曲线仍在。导入第二份数据后勾选归零，已加入的曲线还在。新建图也会清空临时选择。
+- 右栏收起显示「已加入 2/3」和「已加入 1/55」，默认不铺开系列行。左栏没有样式按钮。
+- 数据簇设为绿色后，单条改为红色；保存再解析，红色覆盖仍在，另一条保持绿色。
+- 读数点击得到一根线；再点击只移动 X。Esc 和退出读数后线消失。导出 SVG 不含这根线，也不新增固定游标。
+- 反向框选后「放大到此范围」把轴切到手动范围；「重置视图」恢复自动。「取消」不改范围。「创建局部视图」生成独立 Figure，原图保持自动范围。
+- 画布设为 1600×700 后，适应窗口只改缩放。再设 16:9 得到 1600×900。两张图分别放入左右分区，坐标与该画布的槽位一致，适应窗口后坐标不变。
+
+### 明确未做
+
+- Formula、派生列、MAE/RMSE、Results
+- 双 Y 轴、轴联动、图拆分、Heatmap、3D
+- Electron / Tauri
+- 没有另存一张 PNG 文件。PNG 与 SVG 共用 `buildCanvasSvg()`，本轮核对了这条 SVG 不含读数游标。
+- 没有拖动操作系统窗口。用「适应窗口」改变视口缩放，确认画布逻辑尺寸和图坐标不变。
+
+---
+
+## v0.3.2
+
+- 软件版本：`0.3.2`
+- 工程格式：`projectFormatVersion: "1.0"`（未升格式版本）
+- 日期：2026-09-28
+
+本版不增加分析模块。把 v0.3.1 里已经有、但还不能当科研图用的局部图、坐标轴、标题、图例、布局入口、左栏、配色、读数和标注补完整。
+
+### 数据模型
+
+仍是格式 `1.0`。新字段都可选，打开旧工程时补默认值。
+
+- `plot.type`：`"normal"` 或 `"detail"`。`plot.name` 是编辑器名称。`plot.showTitle` 控制是否画出 `plot.title`。
+- `plot.detailSource`：来源图、数据范围、`autoFitY`、`yPaddingRatio`、来源框和连接线开关及线样式。
+- `plot.xAxis` / `plot.yAxis` 增加 `showLine`、`showMajorTicks`、`showMinorTicks`、`showTickLabels`、`tickDirection`。`plot.topEdge` / `plot.rightEdge` 只有这组显示开关，范围仍用下边和左边。
+- `plot.groupStyles[datasetId].colorMode` / `paletteId`。
+- 标注新增 `point`（数据坐标锚点 + `seriesId`）和 `free`（Plot Area 归一化坐标）。旧类型仍能读。
+- 不保存读数游标、悬停系列、菜单和选中框。
+
+### 行为
+
+- 局部图 Y 由 `calculateVisibleYRange` 计算：只取可见曲线、X 落在范围内、且为有限数的 Y。跨度大于 0 时按 `yPaddingRatio`（默认 0.05）向两端扩展；只有一个 Y 时用 `max(|y| * 0.01, 1e-6)`。没有有效点则保留原 Y，不崩溃。
+- 来源框用同一套 `dataToPixel`。连接线由 `detailConnectorLines` 生成，编辑层和 `buildCanvasSvg()` 共用。
+- 颜色由 `resolveSeriesStyle` 统一解析：系列覆盖 > 数据簇（统一色或 Palette）> 默认。Auto High Contrast 在 OKLab 里贪心选取与已选颜色最远的候选，共 32 色。
+- 读数 X 由 `snapReadout` 决定：先找各可见曲线上离鼠标数据 X 最近的采样点，再取屏幕距离最近的那条曲线的 X。标记画在各曲线该 X 的最近点上。
+- 数据点标注用 `findNearestDataPoint` 吸到真实采样点。文本框单独可拖，锚点不动。
+
+### 验证
+
+#### Node（已执行）
+
+`node tests/core-test.js` 全部通过。新增覆盖：局部图 X 与 autoFitY、空 X 窗口保留 Y、单点 Y 留边距、Palette 不覆盖系列颜色、高对比前 15 色 OKLab 距离、Palette 往返且格式仍为 1.0、数据点标注与自由文本往返、旧工程补上普通图类型和默认关闭的上边轴、有标题时不回写成「未命名图」。
+
+#### 浏览器（已执行，Cursor 内置 Chromium，http://127.0.0.1:8765/）
+
+- 版本号为 Visualizer v0.3.2。打开后有 Figure 1，工具栏含保存、另存为、新建图、布局、预览、导出 PNG、导出 SVG。图块上没有「布局」按钮。
+- 导入 15 条曲线后，左栏为勾选、颜色圆点、单行省略名称和点数。
+- Auto High Contrast 下 15 条颜色不同；T10 设为 `#FF0000` 后再换 Okabe-Ito，T10 仍是红色。
+- 框选范围 X 900–1100 的局部图 Y 约为 54.4–60.3，不再使用整段 45–66。来源框画在父图对应数据范围。右侧放不下时局部图改放到画布内。
+- 关闭标题后，导出 SVG 的文字节点里没有「未命名图」和「Figure 1」。
+- 顶部「布局」打开后，分区项写明作用于当前选中的图。
+- 没有另开系统 Chrome / Edge。读数圆点和标注拖拽没有逐项用手点完。
+
+### 明确未做
+
+- Formula、MAE/RMSE、Results、双 Y 轴、Heatmap、3D、图拆分、桌面打包
+- 没有另存 PNG 文件。PNG 与预览仍走 `buildCanvasSvg()`。
+
+---
+
+## v0.4.0
+
+- 软件版本：`0.4.0`
+- 工程格式：`projectFormatVersion: "1.0"`（未升格式版本）
+- 文档结构：`schemaVersion: 2`
+- 日期：2026-09-29
+
+本版把图层、选中和局部视图拆开。局部视图不再是复制出来的第二张主图，而是来源主图的另一个 Viewport。
+
+### 根因
+
+选中一张图时，页面做了两件会改变叠放的事：给 `.tv-plot.is-selected` 写 `z-index: 4`，再把该节点 `appendChild` 到画布末尾。局部视图和引导线因此被后点的主图盖住；完全盖住后也无法再点到。
+
+### 数据模型
+
+仍是格式 `1.0`。新增 `schemaVersion: 2`，缺省旧工程仍可打开。
+
+- `plot.zOrder`、`plot.visible`、`plot.locked`。缺 `zOrder` 时按原数组顺序补 1..n，不随机重排。
+- `plot.xAxis.showTitle` / `plot.yAxis.showTitle`。缺省为显示，避免旧图突然丢掉轴标题。
+- 局部视图继续用 `detailSource.sourceFigureId`。有来源主图时，加载和保存都清空局部视图自己的 `seriesRefs`，绘制走来源主图的系列、显隐和样式。
+- 新建局部视图默认：不显示图标题、轴标题、副刻度和图例；轴线、主刻度、刻度标签打开；Y 按 X 窗口自动适配，边距 5%。
+
+### 行为
+
+- 图层顺序只由 `movePlotLayer` 改变。选中框在 `.tv-selection-overlay`，画布纸张使用 `isolation: isolate`，避免对象 `z-index` 盖住侧栏。
+- 引导线与对应局部视图使用同一个 `zOrder`，并排在该图前面，所以线在来源图之上、局部图之下。导出 SVG 按同一顺序写入，不包含选中框和缩放手柄。
+- 有效放大：`(insetPlotSize * mainRange) / (mainPlotSize * insetRange)`。尺寸或范围无效时为 `null`。
+- 删除主图时，若存在局部视图，确认后与来源框、引导线一起删除。
+- 右侧分为「属性」和「图层」。主图与局部视图使用不同的折叠分组，展开状态按对象类型记住。局部视图属性里没有系列样式编辑。
+
+### 验证
+
+#### Node（已执行）
+
+`node tests/core-test.js` 全部通过。覆盖：局部视图不复制系列、样式和显隐跟随主图、保存后仍跟随、旧局部图丢弃独立样式、图层上移语义（置顶/置底）且重复读取不改顺序、轴标题开关、有效放大、删除主图连带局部视图、`schemaVersion` 与 `projectFormatVersion` 分离。
+
+#### 浏览器（已执行，Cursor 内置 Chromium，http://127.0.0.1:8765/）
+
+- 页头为 Visualizer v0.4.0。主图属性默认只展开「图表」，图标题、数据、系列样式、坐标轴、图例、局部视图、标注均为折叠。
+- 导入温度 CSV 后创建第二张主图和局部视图。连续 `pointerdown` 点三张图，`zOrder` 保持 `主图 1:1 | 局部视图 1:2 | 主图 2:3`。
+- 局部视图属性分组为：局部视图、范围与缩放、标题与坐标轴、图例、来源框与引导线、位置与尺寸、标注。只读文案为「数据：跟随主图」「系列样式：跟随主图」，没有系列样式编辑分组。
+- 主图 T1 设为 `#00aa88`、线宽 2.5、虚线后，局部视图路径的 stroke、stroke-width、dash 与主图相同。X 取 0–1 时自动 Y 收到约 24.98–25.42，不再停在框选时的 20–80。
+- 关闭主图标题后，导出 SVG 不再含 “Figure 1”，Plot Area 的 top 从 113 收到 91。
+- 导出 SVG 不含选中 overlay。引导线写在局部视图节点之前。图层页点击对象名称不改变 `zOrder`。
+- 没有另开系统 Chrome / Edge。
+
+### 明确未做
+
+- 图层列表拖拽排序。上移、下移、置顶、置底已可用。
+- Formula、MAE/RMSE、Results、双 Y 轴、Heatmap、3D、图拆分、桌面打包。
+
+## v0.4.1
+
+- 软件版本：`0.4.1`
+- 工程格式：`projectFormatVersion: "1.0"`（未升）
+- 文档结构：`schemaVersion: 2`
+
+本版修三件已经影响使用的事：右侧属性真正按对象折叠，局部图按当前 X 窗口展开 Y，顶部工具栏让出画布高度。不重写绘图引擎，不改 CSV，不升工程格式。
+
+### 根因
+
+局部图把拟合后的 Y 写成 `axis.mode = "manual"`，属性栏里的「自动」又把未勾选理解成用户关闭了 `autoFitY`。之后改 X 不再重算 Y。若 Y 轴模式变成 `"auto"`，范围又改用全部 Series 的整体 Y，而不是当前 X 窗口。界面上的倍率因此可以显示放大，曲线仍然挤在一起。
+
+右侧虽然已有分组标题，控件仍按长表单铺开，导出、字体和坐标轴混在同一条滚动里。顶栏是产品标题加一整行按钮，画布被压矮。
+
+### 数据模型
+
+格式仍是 `1.0`。局部图 `detailSource` 增加 `yRangeMode`（`follow-main` | `auto-window` | `manual`）和 `yPaddingRatio`（默认 0.05）。`autoFitY` 继续保存，且等于 `yRangeMode === "auto-window"`。旧工程缺 `yRangeMode` 时：`autoFitY === false` 视为手动，否则视为当前窗口自动适配。Accordion 展开状态只留在内存，不进工程。
+
+### 行为
+
+- 自动 Y 只取当前可见 Series、当前 X 窗口内的有限点，再按该 Y span 的百分比扩边。隐藏曲线、NaN、Infinity、null 不参与。span 为 0 时给最小宽度。窗口没有有效点时保留上次 Y，不写出 NaN。
+- 手动范围严格使用输入值。跟随主图使用主图当前 Y domain。新建局部图默认自动窗口和 5% 边距。「适配当前 X 范围」切回自动窗口。
+- `plotExtents` 对局部图返回 `calculateLocalViewDomain`。绘制前 `syncDetailRange` 把同一范围写回坐标轴，避免输入框和 renderer 各算各的。
+- 主图属性一级分组：图表、X Axis、Y Axis、图例、数据系列、局部视图、标注与引导线、导出设置。局部图选中后焦点改到局部图的范围与缩放。同一对象重绘不重置折叠；切换对象后只展开相关组。
+- 顶栏收成一行，约 52px。保存和导出使用原生菜单。副标题「实验数据可视化工作台」只出现在关于。
+
+### 验证
+
+#### Node（已执行）
+
+`node --check visualizer-core.js` 通过。`node tests/core-test.js` 全部通过。覆盖窗口 Y 34.8–39.2、隐藏 Series、三种模式、0% / 5% 边距、零跨度、NaN / Infinity、空窗口、手动 35–39、改 X 后重算、Accordion 记忆、旧工程 `autoFitY` 回退。
+
+#### 浏览器（已执行，Cursor 内置 Chromium，http://127.0.0.1:8765/）
+
+- 顶栏高度 52px，文案为 VISUALIZER v0.4.1。保存菜单含保存 / 另存为，导出菜单含 PNG / SVG。
+- 主图默认只展开「图表」。手动展开 X Axis 后修改名称触发重绘，X Axis 仍展开，其余一级分组仍收起。
+- 导入 0–2000 s、窗口内约 35–39 的四条曲线，局部图 X = 1550–1800、自动窗口、5% 边距。domain 与坐标轴均为 34.8–39.2。四条曲线在绘图区纵向约占 91% 高度。主图 Y 仍约为 8.4–51.6。
+- 边距 0% 得到 35–39，10% 得到 34.6–39.4。手动输入 35–39 后 domain 为 35–39。跟随主图与主图 Y 一致。适配按钮回到 34.8–39.2。隐藏最高那条曲线后 Y 收到约 34.90–37.21。
+- 没有另开系统 Chrome / Edge。
+
+### 明确未做
+
+- 统一的 `selectedObject` 模型。图例、引导线、文字还不能各自独占一整套属性焦点；标注和局部图沿用原有选中分支。
+- 图层列表拖拽排序。
+- Formula、MAE/RMSE、Results、双 Y 轴、Heatmap、3D、图拆分、桌面打包。
+
 
 

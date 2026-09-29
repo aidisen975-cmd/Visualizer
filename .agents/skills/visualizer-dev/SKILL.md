@@ -15,7 +15,7 @@ description: 在 Visualizer 实验数据可视化工具仓库中进行开发、�
 SOP 是 V1 唯一需求基线，本文件提炼约束，不复制或替代详细需求。
 先检查实际代码，再判断功能状态；不能把 SOP 的目标写成已实现功能。
 现有入口是根目录 `temperature_trajectory_visualizer.html`。
-当前进度读 `Progress/PROGRESS-v{softwareVersion}.md`（现为 [PROGRESS-v0.2.4.md](../../../Progress/PROGRESS-v0.2.4.md)）；开发全过程读根目录 [DEVLOG.md](../../../DEVLOG.md)。
+当前进度读 `Progress/PROGRESS-v{softwareVersion}.md`（现为 [PROGRESS-v0.4.1.md](../../../Progress/PROGRESS-v0.4.1.md)）；开发全过程读根目录 [DEVLOG.md](../../../DEVLOG.md)。
 只执行当前授权范围，不因完整阅读 SOP 就启动全部开发。
 
 用户当前明确指令优先。新增需求按 SOP 第 35 节分类为 V1 必须、V1 可选、V1 后延期或 V2；说明所属对象层、工程格式、旧工程兼容性、导出、跨平台和依赖体积的影响。
@@ -58,7 +58,7 @@ SOP 是 V1 唯一需求基线，本文件提炼约束，不复制或替代详细
 
 - 内部版本 `MAJOR.MINOR.PATCH`，集中在 `APP_INFO.version`（与 `SOFTWARE_VERSION` 同一值）。界面展示时才加 `v`。比较版本必须解析 major / minor / patch 后按数字比较，禁止字符串比较。Git tag 为 `vX.Y.Z`，Release 标题为 `Visualizer vX.Y.Z`，发行包为 `Visualizer-vX.Y.Z.zip`。
 - `APP_INFO.version` 与 `projectFormatVersion` 分开。只有工程 JSON schema 的兼容性变化才改 `projectFormatVersion`。已进入工程 JSON 的字段视为兼容 API，不随意重命名；必须改时要有 migration。`seriesId`、`plotId` 等稳定 ID 不随显示名变化。小版本新增字段必须能从旧工程缺省补齐，不能让旧工程打不开。
-- 数据簇就是 Dataset / Source，用稳定 `datasetId` 关联，不用文件名当主键，也不另建一套平行 Group 模型。数据簇样式是一次性批量写入该 Dataset 下 Series style（以及已引用这些 Series 的 Plot seriesRef）的工具，不是运行时永久继承。Series 单独样式可以覆盖这次批量结果；只有用户再次执行批量应用时才允许覆盖。
+- 数据簇就是 Dataset / Source，用稳定 `datasetId` 关联，不用文件名当主键，也不另建一套平行 Group 模型。当前图的数据簇样式存在 `plot.groupStyles[datasetId]`。绘制时的优先级是 Series Override > Group Style > Default。单独改过的字段记在 `seriesRef.styleOverrides`，重新渲染、保存和打开都不会被数据簇样式盖掉。只有用户再次执行「应用到该数据簇全部系列」时，才清掉这些 override 并重写该簇在当前图里的系列。
 - 颜色控件支持直接输入或粘贴 HEX，并与同一个颜色状态双向同步。非法色值不写入绘图状态。线型预览和 Renderer 共用 `LINE_STYLES` 的 dash pattern，不维护第二套线型定义。
 - 页面层级：内容在下，面板分隔条高于画布，普通浮动菜单高于分隔条，Modal（含 backdrop）高于分隔条、画布和普通浮动层。Modal 用 `showModal` 进入顶层，打开时挡住下层操作。不要只抬高某一根分隔条来压过弹窗。
 - 核心流程必须离线可用。网络能力可选、隔离、失败安全：GitHub 不可用不得影响导入、绘图、工程和导出。更新源只有 GitHub Releases（`releases/latest`），不另维护 `version.json`。当前浏览器架构只做用户主动检查、告知、下载 ZIP，不自动安装或覆盖本地文件，也不在启动时请求 GitHub。
@@ -67,6 +67,33 @@ SOP 是 V1 唯一需求基线，本文件提炼约束，不复制或替代详细
 - 领域对象沿用 Dataset、Series、Plot、Figure、Canvas、Legend、Annotation、Inset、Cursor、Project、App、Release、Update。持久化曲线用 Series，不用 curve / trace / line 指代同一对象。编辑选择与可见性分开：选中 Series 做批量编辑不改变它是否显示。
 - 发布顺序：更新 APP version → 更新 `Progress/PROGRESS-vX.Y.Z.md` → `DEVLOG.md` 追加且不覆盖旧章节 → Core Tests → 浏览器回归 → tag `vX.Y.Z` → Release 标题 `Visualizer vX.Y.Z`（正式版，不是 Draft / Prerelease）→ 上传 `Visualizer-vX.Y.Z.zip` → 用上一正式版验证手动检查更新。
 - Release Notes 用 New / Improved / Fixed / Compatibility。空栏省略。Compatibility 写明 project format 与旧工程是否可读。
+
+## V0.3.1 固定规则
+
+1. 左栏只做数据导入、浏览和选择。右栏负责当前 Figure 的数据、样式和图形属性。样式控件不放回左栏。
+2. 左侧临时选择（`checkedSeries`）和 Figure 成员（`plot.seriesRefs`）必须分开。Checkbox、已选数量、全选、Shift、Ctrl/Cmd 和「添加到当前图」只读这一份选择状态。
+3. 成功加入当前图后清空临时选择。导入新数据、切换当前 Figure 时也清空临时选择。已经在图里的曲线不因此删除。
+4. 右栏按数据簇列出当前图里的系列，默认收起。计数是「已加入 x/y」：x 是该簇已在当前图中的系列数，y 是该簇的系列总数。不要默认铺开未加入当前图的系列。
+5. 样式优先级：Series Override > Group Style > Default。覆盖记在 `seriesRef.styleOverrides`，不能靠 DOM 颜色反推。
+6. Figure 布局只用画布逻辑坐标（`canvas.width` / `canvas.height`）。浏览器窗口和视口缩放只改变 `canvasZoom`，不改变画布逻辑尺寸和图的布局坐标。
+7. 读数游标和框选是临时 UI 状态。退出模式、Esc 或切换 Figure 时清除。不写入工程、标注、PNG/SVG，也不进入永久对象的撤销历史。用户明确创建的 Annotation 才进入 Figure。
+8. Checkbox 是受控控件，`checked` 只来自统一选择状态。不用 `defaultChecked`，不用第二份 checked 状态，不用 `setTimeout` 或下一次点击来补齐勾选。
+
+## V0.4.0 固定规则
+
+1. 选中、拖动、改属性都不改变图层顺序。只有图层面板的上移、下移、置顶、置底会改 `zOrder`。不要用把节点 `appendChild` 到末尾，或给选中对象加高 `z-index`，来画选中框。
+2. 选中框和缩放手柄在 Selection Overlay 上。Overlay 永远盖在画布对象之上，不写入 `zOrder`，不进入 PNG / SVG。
+3. 局部视图是来源主图的另一个 Viewport，不是第二份 Series。用 `detailSource.sourceFigureId` 引用主图。绘制时的数据、显隐、名称和系列样式都读来源主图，不在局部视图上保存一套独立 `seriesRefs`。
+4. 图标题和轴标题用显式 `showTitle`。空字符串或透明色不能代替关闭。关闭后对应边距要收回。图层名称和画在图上的标题是两回事。
+
+## V0.4.1 固定规则
+
+1. 工作区四块职责固定。左侧是数据与对象：导入、数据源、数据簇、选择，以及以后的图层列表。中间画布只放图表、局部图、标注、引导线和排版交互。右侧只编辑当前选中对象的属性。顶部只放工程级操作：导入、新建、打开、保存、新建图、布局、预览、导出、关于。
+2. 新增属性先回答「它控制哪个对象」，再放进对应 Section。不要因为多了一个开关就把控件追加到右侧面板底部。字体、字号、颜色、粗细跟它所修饰的文字走；导出行为放进导出设置；重置视图放进范围与缩放。
+3. 右侧是可折叠 Accordion，不是一条长表单。同一对象上用户展开或收起的状态记在内存，普通重绘不得清掉。切换对象后只展开和该对象最相关的 Section，其余一级 Section 收起。Accordion 展开状态不写入工程 JSON。
+4. 局部视图 Y 有三种模式，记在 `detailSource.yRangeMode`：`follow-main` 用主图当前 Y domain；`auto-window` 只用当前可见 Series 在当前 X 窗口内的有限数据点，再按 Y span 的百分比加边距；`manual` 严格使用用户输入的 Y min/max，不再重算。新建局部视图默认 `auto-window`，边距 5%（`yPaddingRatio: 0.05`）。
+5. `auto-window` 不得先用整条曲线的 Y 再裁 X。隐藏 Series、NaN、Infinity、null 不参与计算。窗口内没有有效点时保留上一次有效 Y，不写出 NaN domain。span 为 0 时用最小显示宽度，避免 domain 两端相等。
+6. 绘图使用的 X/Y domain 必须和属性栏是同一套结果。局部图走 `calculateLocalViewDomain` / `plotExtents`，不能只改输入框。旧工程没有 `yRangeMode` 时：`autoFitY === false` 视为 `manual`，否则视为 `auto-window`。`autoFitY` 继续写成 `yRangeMode === "auto-window"`，不升 `projectFormatVersion`。
 
 ## 开发顺序
 
@@ -82,7 +109,7 @@ SOP 是 V1 唯一需求基线，本文件提炼约束，不复制或替代详细
 
 1. `DEVLOG.md` 放在仓库根目录，必须完整记录开发全过程。每个版本、仓库初始化、发布都追加独立章节，保留当时目标、完成项、数据模型变化、验证和未做事项；不得只保留最新版，不得用新章节覆盖或删改旧记录。
 2. 要展示最新的写在 progress 文件：当前版本、如何运行、已实现摘要、已知限制、下一步。不要把当前状态只写在 DEVLOG 顶部代替全程记录。
-3. 所有 progress 文件放在 `Progress/` 文件夹；命名必须带软件版本号，格式为 `Progress/PROGRESS-v{softwareVersion}.md`（当前 `Progress/PROGRESS-v0.2.4.md`）。升版本时在该文件夹新建对应文件，不把旧 progress 改名或覆盖，不把 progress 放在根目录。
+3. 所有 progress 文件放在 `Progress/` 文件夹；命名必须带软件版本号，格式为 `Progress/PROGRESS-v{softwareVersion}.md`（当前 `Progress/PROGRESS-v0.4.1.md`）。升版本时在该文件夹新建对应文件，不把旧 progress 改名或覆盖，不把 progress 放在根目录。
 4. 根目录 `README.md` 只描述当前软件版本已实现的能力与特色，给使用者和 GitHub 首页看。升版本、删功能或发布时必须按实际代码增删，文首版本号与当前 `PROGRESS-v*.md` 一致；不得把 SOP 未实现项写成已上线。不另存 README 历史副本，历史写在 `DEVLOG.md`。发布 zip 应包含该 README。
 
 交付代码或发布时同步更新：本轮追加根目录 `DEVLOG.md` 章节，写入或更新 `Progress/PROGRESS-v*.md`，并按当前已实现功能增删根目录 `README.md`。

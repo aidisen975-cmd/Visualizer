@@ -4,13 +4,14 @@
 
   var APP_INFO = Object.freeze({
     name: "Visualizer",
-    version: "0.2.4",
+    version: "0.4.1",
     repositoryOwner: "aidisen975-cmd",
     repositoryName: "Visualizer",
     updateChannel: "stable"
   });
   var SOFTWARE_VERSION = APP_INFO.version;
   var PROJECT_FORMAT_VERSION = "1.0";
+  var SCHEMA_VERSION = 2;
   var SUPPORTED_PROJECT_FORMATS = ["1.0"];
   var TIME_IN_SECONDS = { ms: 0.001, s: 1, min: 60, h: 3600 };
   var TIME_LABELS = { ms: "ms", s: "s", min: "min", h: "h" };
@@ -82,7 +83,9 @@
     leftWide: { id: "leftWide", label: "左大右小", cols: 3, rows: 1, spans: [[0, 0, 2, 1], [2, 0, 1, 1]], slots: ["large", "small"] },
     rightWide: { id: "rightWide", label: "左小右大", cols: 3, rows: 1, spans: [[0, 0, 1, 1], [1, 0, 2, 1]], slots: ["small", "large"] },
     triple: { id: "triple", label: "三等分", cols: 3, rows: 1, spans: [[0, 0, 1, 1], [1, 0, 1, 1], [2, 0, 1, 1]], slots: ["left", "center", "right"] },
+    splitV: { id: "splitV", label: "1:1 上下", cols: 1, rows: 2, spans: [[0, 0, 1, 1], [0, 1, 1, 1]], slots: ["top", "bottom"] },
     onePlusTwo: { id: "onePlusTwo", label: "一大两小", cols: 2, rows: 2, spans: [[0, 0, 1, 2], [1, 0, 1, 1], [1, 1, 1, 1]], slots: ["large", "smallTop", "smallBottom"] },
+    twoPlusOne: { id: "twoPlusOne", label: "两小一大", cols: 2, rows: 2, spans: [[0, 0, 1, 1], [0, 1, 1, 1], [1, 0, 1, 2]], slots: ["smallTop", "smallBottom", "large"] },
     grid2x2: { id: "grid2x2", label: "2×2", cols: 2, rows: 2, spans: [[0, 0, 1, 1], [1, 0, 1, 1], [0, 1, 1, 1], [1, 1, 1, 1]], slots: ["tl", "tr", "bl", "br"] },
     grid3x2: { id: "grid3x2", label: "3×2", cols: 3, rows: 2, spans: [[0, 0, 1, 1], [1, 0, 1, 1], [2, 0, 1, 1], [0, 1, 1, 1], [1, 1, 1, 1], [2, 1, 1, 1]], slots: ["r1c1", "r1c2", "r1c3", "r2c1", "r2c2", "r2c3"] }
   };
@@ -93,6 +96,29 @@
     { id: "group-4", label: "T38–T52", start: 38, end: 52, color: "#6b52a8" }
   ];
   var SERIES_COLORS = ["#2477b6", "#d36518", "#25884d", "#6b52a8", "#d14e3d", "#167b91", "#8b5a9d", "#272b2e"];
+  var PALETTE_LIST = [
+    { id: "high-contrast", label: "自动高对比" },
+    { id: "okabe-ito", label: "色盲友好" },
+    { id: "tol-muted", label: "柔和科研配色" },
+    { id: "set1", label: "高饱和分类配色" },
+    { id: "tableau-10", label: "Tableau 10" },
+    { id: "tol-bright", label: "Tol Bright" },
+    { id: "dark2", label: "ColorBrewer Dark" }
+  ];
+  var FIXED_PALETTES = {
+    "okabe-ito": ["#0072B2", "#E69F00", "#009E73", "#D55E00", "#CC79A7", "#56B4E9", "#F0E442", "#000000"],
+    "tol-muted": ["#332288", "#88CCEE", "#44AA99", "#117733", "#999933", "#DDCC77", "#CC6677", "#882255", "#AA4499"],
+    "set1": ["#E41A1C", "#377EB8", "#4DAF4A", "#984EA3", "#FF7F00", "#A65628", "#F781BF", "#999999", "#FFFF33"],
+    "tableau-10": ["#4E79A7", "#F28E2B", "#E15759", "#76B7B2", "#59A14F", "#EDC948", "#B07AA1", "#FF9DA7", "#9C755F", "#BAB0AC"],
+    "tol-bright": ["#4477AA", "#EE6677", "#228833", "#CCBB44", "#66CCEE", "#AA3377", "#BBBBBB"],
+    "dark2": ["#1B9E77", "#D95F02", "#7570B3", "#E7298A", "#66A61E", "#E6AB02", "#A6761D", "#666666"]
+  };
+  var CANVAS_PRESETS = {
+    "16:9": { width: 1600, height: 900, label: "16:9" },
+    "4:3": { width: 1600, height: 1200, label: "4:3" },
+    "a4-land": { width: 1123, height: 794, label: "A4 横向" },
+    "a4-port": { width: 794, height: 1123, label: "A4 纵向" }
+  };
 
   function defaultTextStyle(overrides) {
     var style = {
@@ -490,6 +516,7 @@
   function createProject(partial) {
     return {
       projectFormatVersion: PROJECT_FORMAT_VERSION,
+      schemaVersion: SCHEMA_VERSION,
       softwareVersion: SOFTWARE_VERSION,
       projectName: (partial && (partial.projectName || partial.name)) || "未命名工程",
       savedAt: null,
@@ -620,8 +647,9 @@
   }
 
   function resolvedAxisTitle(axis) {
-    if (axis && axis.titleMode === "custom") return String(axis.customTitle == null ? "" : axis.customTitle);
-    return String(axis && axis.autoTitle ? axis.autoTitle : "");
+    if (!axis || axis.showTitle === false) return "";
+    if (axis.titleMode === "custom") return String(axis.customTitle == null ? "" : axis.customTitle);
+    return String(axis.autoTitle ? axis.autoTitle : "");
   }
 
   function syncPlotAxisAutoTitles(project, plot) {
@@ -637,11 +665,82 @@
     return project;
   }
 
+  function plotEditorName(plot) {
+    if (!plot) return "";
+    if (plot.name) return String(plot.name);
+    var title = String(plot.title || "");
+    if (title && title !== "未命名图") return title;
+    return "Figure";
+  }
+
+  function plotDisplayTitle(plot) {
+    if (!plot || plot.showTitle === false) return "";
+    var text = String(plot.title || "").trim();
+    if (!text || text === "未命名图") return "";
+    return text;
+  }
+
+  function normalizeLineStroke(raw, fallback) {
+    var style = raw && typeof raw === "object" ? raw : {};
+    var width = Number(style.lineWidth);
+    var color = style.color ? normalizeHexColor(style.color) : null;
+    return {
+      color: color || (fallback && fallback.color) || "#1d4e89",
+      lineWidth: Number.isFinite(width) ? clamp(width, 0.5, 6) : ((fallback && fallback.lineWidth) || 1.25),
+      lineType: LINE_TYPES.indexOf(style.lineType) >= 0 ? style.lineType : ((fallback && fallback.lineType) || "solid")
+    };
+  }
+
+  function normalizeDetailSource(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    var range = raw.sourceRange || {};
+    var xMin = Number(range.xMin);
+    var xMax = Number(range.xMax);
+    var yMin = Number(range.yMin);
+    var yMax = Number(range.yMax);
+    if (![xMin, xMax, yMin, yMax].every(Number.isFinite)) return null;
+    if (xMin > xMax) { var swapX = xMin; xMin = xMax; xMax = swapX; }
+    if (yMin > yMax) { var swapY = yMin; yMin = yMax; yMax = swapY; }
+    var padding = Number(raw.yPaddingRatio);
+    var yRangeMode = normalizeYRangeMode(raw);
+    return {
+      sourceFigureId: String(raw.sourceFigureId || ""),
+      sourceRange: { xMin: xMin, xMax: xMax, yMin: yMin, yMax: yMax },
+      yRangeMode: yRangeMode,
+      autoFitY: yRangeMode === "auto-window",
+      yPaddingRatio: Number.isFinite(padding) ? clamp(padding, 0, 0.5) : 0.05,
+      showSourceBox: raw.showSourceBox !== false,
+      showConnectorLines: raw.showConnectorLines !== false,
+      boxStyle: normalizeLineStroke(raw.boxStyle, { color: "#1d4e89", lineWidth: 1.25, lineType: "solid" }),
+      connectorStyle: normalizeLineStroke(raw.connectorStyle, { color: "#1d4e89", lineWidth: 1, lineType: "dashed" })
+    };
+  }
+
+  function nextZOrder(project) {
+    var max = 0;
+    (project && project.plots || []).forEach(function (plot) {
+      var z = Number(plot.zOrder);
+      if (Number.isFinite(z) && z > max) max = z;
+    });
+    return max + 1;
+  }
+
   function createPlot(project, partial) {
     var index = ((project && project.plots && project.plots.length) || 0) + 1;
+    var isDetail = partial && partial.type === "detail";
+    var givenTitle = partial && partial.title != null ? String(partial.title) : "";
+    var title = givenTitle || (isDetail ? "" : ("Figure " + index));
+    var defaultName = isDetail ? ("局部视图 " + index) : ("主图 " + index);
+    var givenZ = Number(partial && partial.zOrder);
     var plot = {
       id: (partial && partial.id) || makeId("plot"),
-      title: (partial && partial.title) || ("Figure " + index),
+      name: (partial && partial.name) ? String(partial.name) : defaultName,
+      type: isDetail ? "detail" : "normal",
+      visible: !(partial && partial.visible === false),
+      locked: !!(partial && partial.locked),
+      zOrder: Number.isFinite(givenZ) ? givenZ : nextZOrder(project),
+      showTitle: partial && partial.showTitle != null ? !!partial.showTitle : title !== "" && title !== "未命名图",
+      title: title === "未命名图" ? "" : title,
       subtitle: (partial && partial.subtitle) || "",
       note: (partial && partial.note) || "",
       seriesRefs: Array.isArray(partial && partial.seriesRefs)
@@ -649,13 +748,20 @@
         : [],
       xAxis: normalizeAxis(partial && partial.xAxis),
       yAxis: normalizeAxis(partial && partial.yAxis),
+      topEdge: normalizeEdge(partial && partial.topEdge, "top"),
+      rightEdge: normalizeEdge(partial && partial.rightEdge, "right"),
+      detailSource: normalizeDetailSource(partial && partial.detailSource),
       layout: (partial && partial.layout) || nextPlotLayout(project),
       layoutSlot: partial && partial.layoutSlot ? String(partial.layoutSlot) : null,
       legendVisible: partial && partial.legendVisible === false ? false : true,
       legend: normalizeLegend(partial && partial.legend, partial && partial.legendVisible),
       textStyles: normalizePlotTextStyles(partial && partial.textStyles),
       background: partial && partial.background ? String(partial.background) : "",
-      annotations: Array.isArray(partial && partial.annotations) ? partial.annotations.slice() : [],
+      groupStyles: normalizeGroupStyles(partial && partial.groupStyles),
+      annotations: normalizeAnnotations(partial && partial.annotations, (partial && partial.id) || ""),
+      insets: normalizeInsets(partial && partial.insets, (partial && partial.id) || ""),
+      fixedCursors: normalizeFixedCursors(partial && partial.fixedCursors),
+      exportCursors: !!(partial && partial.exportCursors),
       lockAspect: !!(partial && partial.lockAspect),
       aspectRatio: Number.isFinite(Number(partial && partial.aspectRatio))
         ? Number(partial.aspectRatio)
@@ -665,7 +771,10 @@
       plot.aspectRatio = plot.layout.width / plot.layout.height;
     }
     project.plots.push(plot);
+    plot.annotations.forEach(function (item) { item.plotId = plot.id; });
+    plot.insets.forEach(function (item) { item.sourcePlotId = plot.id; });
     syncPlotAxisAutoTitles(project, plot);
+    finalizePlotInspection(project, plot);
     return plot;
   }
 
@@ -696,22 +805,35 @@
     project.datasets = project.datasets.filter(function (item) { return item.id !== datasetId; });
     project.plots.forEach(function (plot) {
       plot.seriesRefs = plot.seriesRefs.filter(function (ref) { return !removedIds.has(ref.seriesId); });
+      prunePlotInspection(project, plot);
     });
     syncAllPlotAxisAutoTitles(project);
   }
 
+  function sourcePlotOf(project, plot) {
+    if (!plot || plot.type !== "detail" || !plot.detailSource) return null;
+    var id = plot.detailSource.sourceFigureId;
+    if (!id || !project) return null;
+    var source = (project.plots || []).find(function (item) { return item.id === id && item.id !== plot.id; }) || null;
+    if (!source || source.type === "detail") return null;
+    return source;
+  }
+
   function resolvePlotSeries(project, plot) {
-    return plot.seriesRefs.map(function (ref) {
+    var host = sourcePlotOf(project, plot) || plot;
+    var palette = {};
+    return (host.seriesRefs || []).map(function (ref) {
       var series = findSeries(project, ref.seriesId);
       if (!series) return null;
-      var style = normalizeSeriesStyle(ref.style, ref.color || series.color);
-      if (ref.color) style.color = ref.color;
+      var index = palette[series.datasetId] || 0;
+      palette[series.datasetId] = index + 1;
+      var style = resolveSeriesStyle(host, series, ref, index);
       return {
         series: series,
         ref: ref,
         visible: ref.visible !== false,
         selected: !!ref.selected,
-        color: ref.color || style.color || series.color,
+        color: style.color || ref.color || series.color,
         style: style
       };
     }).filter(Boolean);
@@ -751,6 +873,11 @@
       if (!idSet[ref.seriesId]) return;
       ref.style = patchStyleObject(ref.style, patch, ref.color);
       ref.color = ref.style.color || ref.color;
+      if (!ref.styleOverrides) ref.styleOverrides = {};
+      if (patch && patch.color != null && patch.color !== "") ref.styleOverrides.color = true;
+      if (patch && patch.lineType != null) ref.styleOverrides.lineType = true;
+      if (patch && patch.lineWidth != null) ref.styleOverrides.lineWidth = true;
+      if (patch && patch.opacity != null) ref.styleOverrides.opacity = true;
     });
     return plot;
   }
@@ -775,6 +902,239 @@
     applyStyleToSeries(project, ids, patch);
     (project.plots || []).forEach(function (plot) { applySeriesStyle(plot, ids, patch); });
     return ids;
+  }
+
+  function hexByte(value) {
+    var text = Math.max(0, Math.min(255, Math.round(value))).toString(16);
+    return text.length < 2 ? "0" + text : text;
+  }
+
+  function srgbChannelToLinear(channel) {
+    var c = channel / 255;
+    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  }
+
+  function linearToSrgbByte(channel) {
+    var c = Math.min(1, Math.max(0, channel));
+    var encoded = c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
+    return hexByte(encoded * 255);
+  }
+
+  function oklabToSrgb(lab) {
+    var l_ = lab.L + 0.3963377774 * lab.a + 0.2158037573 * lab.b;
+    var m_ = lab.L - 0.1055613458 * lab.a - 0.0638541728 * lab.b;
+    var s_ = lab.L - 0.0894841775 * lab.a - 1.2914855480 * lab.b;
+    var l = l_ * l_ * l_;
+    var m = m_ * m_ * m_;
+    var s = s_ * s_ * s_;
+    return {
+      r: 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+      g: -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+      b: -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s
+    };
+  }
+
+  function hexToOklab(hex) {
+    var raw = normalizeHexColor(hex);
+    if (!raw) return null;
+    var r = srgbChannelToLinear(parseInt(raw.slice(1, 3), 16));
+    var g = srgbChannelToLinear(parseInt(raw.slice(3, 5), 16));
+    var b = srgbChannelToLinear(parseInt(raw.slice(5, 7), 16));
+    var l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+    var m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+    var s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+    return {
+      L: 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+      a: 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+      b: 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s
+    };
+  }
+
+  function oklabDistance(left, right) {
+    if (!left || !right) return 0;
+    var dL = left.L - right.L;
+    var da = left.a - right.a;
+    var db = left.b - right.b;
+    return Math.sqrt(dL * dL + da * da + db * db);
+  }
+
+  function buildHighContrastPalette(count) {
+    var candidates = [];
+    var lights = [0.46, 0.55, 0.64, 0.73];
+    var chromas = [0.09, 0.13, 0.17];
+    lights.forEach(function (L) {
+      chromas.forEach(function (C) {
+        for (var hue = 0; hue < 360; hue += 8) {
+          var rad = hue * Math.PI / 180;
+          var lab = { L: L, a: C * Math.cos(rad), b: C * Math.sin(rad) };
+          var rgb = oklabToSrgb(lab);
+          if (rgb.r < -0.02 || rgb.r > 1.02 || rgb.g < -0.02 || rgb.g > 1.02 || rgb.b < -0.02 || rgb.b > 1.02) continue;
+          candidates.push({
+            lab: lab,
+            hex: "#" + linearToSrgbByte(rgb.r) + linearToSrgbByte(rgb.g) + linearToSrgbByte(rgb.b)
+          });
+        }
+      });
+    });
+    if (!candidates.length) return SERIES_COLORS.slice();
+    var selected = [candidates[0]];
+    var bestSeed = candidates[0];
+    var bestSeedScore = -1;
+    candidates.forEach(function (item) {
+      var score = oklabDistance(item.lab, { L: 0.55, a: -0.02, b: -0.12 });
+      if (score < 0.08 && item.lab.L > bestSeedScore) {
+        bestSeed = item;
+        bestSeedScore = item.lab.L;
+      }
+    });
+    selected = [bestSeed];
+    var target = Math.max(1, count || 24);
+    while (selected.length < target) {
+      var winner = null;
+      var winnerDist = -1;
+      candidates.forEach(function (item) {
+        var minDist = Infinity;
+        selected.forEach(function (have) {
+          var dist = oklabDistance(item.lab, have.lab);
+          if (dist < minDist) minDist = dist;
+        });
+        if (minDist > winnerDist) {
+          winnerDist = minDist;
+          winner = item;
+        }
+      });
+      if (!winner) break;
+      selected.push(winner);
+    }
+    return selected.map(function (item) { return item.hex; });
+  }
+
+  var HIGH_CONTRAST_PALETTE = buildHighContrastPalette(32);
+
+  function paletteColors(paletteId) {
+    if (paletteId === "high-contrast" || !FIXED_PALETTES[paletteId]) return HIGH_CONTRAST_PALETTE;
+    return FIXED_PALETTES[paletteId];
+  }
+
+  function paletteColor(paletteId, index) {
+    var colors = paletteColors(paletteId || "high-contrast");
+    var slot = Math.abs(Number(index) || 0) % colors.length;
+    return colors[slot];
+  }
+
+  function paletteMinDistance(paletteId, count) {
+    var total = Math.max(2, Number(count) || 2);
+    var labs = [];
+    var i;
+    for (i = 0; i < total; i += 1) labs.push(hexToOklab(paletteColor(paletteId, i)));
+    var minDist = Infinity;
+    for (i = 0; i < labs.length; i += 1) {
+      for (var j = i + 1; j < labs.length; j += 1) {
+        minDist = Math.min(minDist, oklabDistance(labs[i], labs[j]));
+      }
+    }
+    return minDist;
+  }
+
+  function normalizeStyleOverrides(raw) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    var out = {};
+    if (raw.color) out.color = true;
+    if (raw.lineType) out.lineType = true;
+    if (raw.lineWidth) out.lineWidth = true;
+    if (raw.opacity) out.opacity = true;
+    return out;
+  }
+
+  function normalizeGroupStyle(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    var style = { colorMode: raw.colorMode === "palette" ? "palette" : "single" };
+    if (raw.paletteId && (raw.paletteId === "high-contrast" || FIXED_PALETTES[raw.paletteId])) style.paletteId = raw.paletteId;
+    else if (style.colorMode === "palette") style.paletteId = "high-contrast";
+    var color = raw.color ? normalizeHexColor(raw.color) : null;
+    if (color) style.color = color;
+    if (LINE_TYPES.indexOf(raw.lineType) >= 0) style.lineType = raw.lineType;
+    if (Number.isFinite(Number(raw.lineWidth))) style.lineWidth = clamp(Number(raw.lineWidth), LINE_WIDTH_MIN, LINE_WIDTH_MAX);
+    return style;
+  }
+
+  function normalizeGroupStyles(raw) {
+    var out = {};
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+    Object.keys(raw).forEach(function (key) {
+      var style = normalizeGroupStyle(raw[key]);
+      if (style) out[String(key)] = style;
+    });
+    return out;
+  }
+
+  function resolveSeriesStyle(plot, series, ref, paletteIndex) {
+    var own = normalizeSeriesStyle(ref && ref.style, (ref && ref.color) || (series && series.color));
+    var overrides = (ref && ref.styleOverrides) || {};
+    var group = plot && plot.groupStyles && series ? plot.groupStyles[series.datasetId] : null;
+    if (!group) return own;
+    var next = normalizeSeriesStyle(own, own.color);
+    if (!overrides.color) {
+      if (group.colorMode === "palette") next.color = paletteColor(group.paletteId || "high-contrast", paletteIndex || 0);
+      else if (group.color) next.color = group.color;
+    }
+    if (!overrides.lineType && group.lineType) next.lineType = group.lineType;
+    if (!overrides.lineWidth && group.lineWidth != null) next.lineWidth = group.lineWidth;
+    return next;
+  }
+
+  function applyGroupStyle(project, plot, datasetId, patch) {
+    if (!plot || !datasetId) return null;
+    if (!plot.groupStyles) plot.groupStyles = {};
+    var prev = plot.groupStyles[datasetId] || {};
+    var next = {
+      colorMode: patch && patch.colorMode === "palette" ? "palette" : (patch && patch.colorMode === "single" ? "single" : (prev.colorMode || "single")),
+      paletteId: (patch && patch.paletteId) || prev.paletteId || "high-contrast",
+      color: prev.color || null,
+      lineType: prev.lineType || null,
+      lineWidth: prev.lineWidth != null ? prev.lineWidth : null
+    };
+    if (patch && patch.color) {
+      var hex = normalizeHexColor(patch.color);
+      if (hex) next.color = hex;
+    }
+    if (patch && LINE_TYPES.indexOf(patch.lineType) >= 0) next.lineType = patch.lineType;
+    if (patch && patch.lineWidth != null && Number.isFinite(Number(patch.lineWidth))) {
+      next.lineWidth = clamp(Number(patch.lineWidth), LINE_WIDTH_MIN, LINE_WIDTH_MAX);
+    }
+    plot.groupStyles[datasetId] = next;
+    var index = 0;
+    (plot.seriesRefs || []).forEach(function (ref) {
+      var series = findSeries(project, ref.seriesId);
+      if (!series || series.datasetId !== datasetId) return;
+      ref.styleOverrides = {};
+      var color = next.colorMode === "palette" ? paletteColor(next.paletteId, index) : next.color;
+      index += 1;
+      var stylePatch = {};
+      if (color) stylePatch.color = color;
+      if (next.lineType) stylePatch.lineType = next.lineType;
+      if (next.lineWidth != null) stylePatch.lineWidth = next.lineWidth;
+      ref.style = patchStyleObject(ref.style, stylePatch, ref.color);
+      ref.color = ref.style.color || ref.color;
+    });
+    return next;
+  }
+
+  function setGroupStyle(plot, datasetId, patch) {
+    if (!plot || !datasetId) return null;
+    if (!plot.groupStyles) plot.groupStyles = {};
+    var prev = plot.groupStyles[datasetId] || {};
+    var merged = {
+      colorMode: patch && patch.colorMode ? patch.colorMode : prev.colorMode,
+      paletteId: patch && patch.paletteId ? patch.paletteId : prev.paletteId,
+      color: patch && patch.color ? patch.color : prev.color,
+      lineType: patch && patch.lineType ? patch.lineType : prev.lineType,
+      lineWidth: patch && patch.lineWidth != null ? patch.lineWidth : prev.lineWidth
+    };
+    var next = normalizeGroupStyle(merged);
+    if (!next) return null;
+    plot.groupStyles[datasetId] = next;
+    return next;
   }
 
   function convertSeriesX(series, sourceUnit, displayUnit, xIsTime) {
@@ -814,7 +1174,7 @@
     return convertSeriesX(series, time.sourceUnit, time.displayUnit, time.enabled);
   }
 
-  function plotExtents(project, plot) {
+  function seriesExtents(project, plot) {
     var visible = resolvePlotSeries(project, plot).filter(function (item) { return item.visible; });
     var xs = [];
     var ys = [];
@@ -830,6 +1190,19 @@
     };
   }
 
+  function plotExtents(project, plot) {
+    if (plot && plot.type === "detail" && plot.detailSource) {
+      var domain = calculateLocalViewDomain(project, plot);
+      return {
+        x: domain.x,
+        y: domain.y,
+        visibleCount: domain.visibleCount,
+        emptyWindow: !!domain.emptyWindow
+      };
+    }
+    return seriesExtents(project, plot);
+  }
+
   function normalizeAxisTime(raw) {
     var time = raw && typeof raw === "object" ? raw : {};
     return {
@@ -839,12 +1212,25 @@
     };
   }
 
+  function normalizeEdge(raw, side) {
+    var quiet = side === "top" || side === "right";
+    var edge = raw && typeof raw === "object" ? raw : {};
+    return {
+      showLine: edge.showLine == null ? !quiet : !!edge.showLine,
+      showMajorTicks: edge.showMajorTicks == null ? !quiet : !!edge.showMajorTicks,
+      showMinorTicks: edge.showMinorTicks == null ? !quiet : !!edge.showMinorTicks,
+      showTickLabels: edge.showTickLabels == null ? !quiet : !!edge.showTickLabels,
+      tickDirection: edge.tickDirection === "in" ? "in" : "out"
+    };
+  }
+
   function normalizeAxis(raw) {
     var axis = raw && typeof raw === "object" ? raw : {};
     var decimals = axis.decimals == null || axis.decimals === "" ? null : Number(axis.decimals);
     var majorTick = axis.majorTick == null || axis.majorTick === "" ? null : Number(axis.majorTick);
     var minorTick = axis.minorTick == null || axis.minorTick === "" ? null : Number(axis.minorTick);
     var lineWidth = Number(axis.lineWidth);
+    var edge = normalizeEdge(axis, "bottom");
     return {
       mode: axis.mode === "manual" ? "manual" : "auto",
       min: axis.min == null || axis.min === "" ? null : Number(axis.min),
@@ -860,6 +1246,12 @@
       decimals: Number.isFinite(decimals) && decimals >= 0 ? Math.min(8, Math.round(decimals)) : null,
       lineColor: axis.lineColor ? String(axis.lineColor) : "",
       lineWidth: Number.isFinite(lineWidth) ? clamp(lineWidth, 0.5, 6) : 1.1,
+      showLine: edge.showLine,
+      showMajorTicks: edge.showMajorTicks,
+      showMinorTicks: edge.showMinorTicks,
+      showTickLabels: edge.showTickLabels,
+      showTitle: axis.showTitle == null ? true : !!axis.showTitle,
+      tickDirection: edge.tickDirection,
       time: normalizeAxisTime(axis.time)
     };
   }
@@ -1020,7 +1412,8 @@
       visible: ref.visible !== false,
       selected: !!ref.selected,
       color: style.color || color,
-      style: style
+      style: style,
+      styleOverrides: normalizeStyleOverrides(ref.styleOverrides)
     };
   }
 
@@ -1041,14 +1434,27 @@
         italic: legend.italic
       });
     }
+    var storedTitle = raw.title == null ? "" : String(raw.title);
+    var title = storedTitle === "未命名图" ? "" : storedTitle;
+    var showTitle = raw.showTitle == null ? title !== "" : !!raw.showTitle;
+    var zOrder = Number(raw.zOrder);
     return {
       id: String(raw.id || makeId("plot")),
-      title: String(raw.title || "未命名图"),
+      name: raw.name ? String(raw.name) : (title || "Figure"),
+      type: raw.type === "detail" ? "detail" : "normal",
+      visible: raw.visible === false ? false : true,
+      locked: !!raw.locked,
+      zOrder: Number.isFinite(zOrder) ? zOrder : null,
+      showTitle: showTitle,
+      title: title,
       subtitle: String(raw.subtitle || ""),
       note: String(raw.note || ""),
       seriesRefs: Array.isArray(raw.seriesRefs) ? raw.seriesRefs.map(normalizeSeriesRef) : [],
       xAxis: normalizeAxis(raw.xAxis),
       yAxis: normalizeAxis(raw.yAxis),
+      topEdge: normalizeEdge(raw.topEdge, "top"),
+      rightEdge: normalizeEdge(raw.rightEdge, "right"),
+      detailSource: normalizeDetailSource(raw.detailSource),
       layout: {
         x: Number.isFinite(Number(layout.x)) ? Number(layout.x) : LAYOUT_PADDING,
         y: Number.isFinite(Number(layout.y)) ? Number(layout.y) : LAYOUT_PADDING,
@@ -1060,7 +1466,11 @@
       legend: legend,
       textStyles: textStyles,
       background: raw.background ? String(raw.background) : "",
-      annotations: Array.isArray(raw.annotations) ? raw.annotations.slice() : [],
+      groupStyles: normalizeGroupStyles(raw.groupStyles),
+      annotations: normalizeAnnotations(raw.annotations, raw.id),
+      insets: normalizeInsets(raw.insets, raw.id),
+      fixedCursors: normalizeFixedCursors(raw.fixedCursors),
+      exportCursors: !!raw.exportCursors,
       lockAspect: !!raw.lockAspect,
       aspectRatio: aspectRatio
     };
@@ -1096,6 +1506,7 @@
     var dataPlots = Array.isArray(data.plots) ? data.plots : [];
     var project = {
       projectFormatVersion: PROJECT_FORMAT_VERSION,
+      schemaVersion: SCHEMA_VERSION,
       softwareVersion: SOFTWARE_VERSION,
       projectName: projectName,
       savedAt: data.savedAt ? String(data.savedAt) : null,
@@ -1132,6 +1543,10 @@
       }
     });
     if (!project.plots.length) ensureDefaultPlot(project);
+    assignLayerOrder(project);
+    project.plots.forEach(function (plot) {
+      if (sourcePlotOf(project, plot)) plot.seriesRefs = [];
+    });
     assertUniqueSeriesIds(project);
     project.plots.forEach(function (plot) {
       plot.seriesRefs.forEach(function (ref) {
@@ -1140,6 +1555,7 @@
         }
       });
     });
+    project.plots.forEach(function (plot) { finalizePlotInspection(project, plot); });
     syncAllPlotAxisAutoTitles(project);
     syncCanvasToPlots(project);
     return project;
@@ -1334,12 +1750,14 @@
     assertUniqueSeriesIds(project);
     var payload = {
       projectFormatVersion: PROJECT_FORMAT_VERSION,
+      schemaVersion: SCHEMA_VERSION,
       softwareVersion: SOFTWARE_VERSION,
       projectName: project.projectName,
       savedAt: new Date().toISOString(),
       datasets: project.datasets,
       plots: (project.plots || []).map(function (plot) {
         var copy = cloneJson(plot);
+        if (sourcePlotOf(project, plot)) copy.seriesRefs = [];
         copy.legend = serializeLegend(plot.legend);
         return copy;
       }),
@@ -1562,6 +1980,360 @@
       if (!plot.lockAspect) plot.aspectRatio = plot.layout.height ? plot.layout.width / plot.layout.height : plot.aspectRatio;
     });
     return plots;
+  }
+
+  function canvasLayoutArea(canvas) {
+    return {
+      width: Math.max(400, Number(canvas && canvas.width) || 1280),
+      height: Math.max(300, Number(canvas && canvas.height) || 800),
+      padding: LAYOUT_PADDING,
+      gap: LAYOUT_GAP
+    };
+  }
+
+  function setCanvasSize(project, width, height) {
+    if (!project.canvas) project.canvas = { width: 1280, height: 800, zoom: 1 };
+    project.canvas.width = Math.max(400, Math.round(Number(width) || project.canvas.width));
+    project.canvas.height = Math.max(300, Math.round(Number(height) || project.canvas.height));
+    return project.canvas;
+  }
+
+  function placePlotInSlot(plot, templateId, slotIndex, canvas) {
+    var spec = LAYOUT_TEMPLATES[templateId];
+    if (!plot || !spec) return null;
+    var slots = layoutSlots(templateId, canvasLayoutArea(canvas));
+    var slot = slots[slotIndex];
+    if (!slot) return null;
+    plot.layout.x = slot.x;
+    plot.layout.y = slot.y;
+    plot.layout.width = Math.max(240, slot.width);
+    plot.layout.height = Math.max(180, slot.height);
+    plot.layoutSlot = (spec.slots && spec.slots[slotIndex]) || ("slot" + slotIndex);
+    if (!plot.lockAspect) plot.aspectRatio = plot.layout.height ? plot.layout.width / plot.layout.height : plot.aspectRatio;
+    return plot;
+  }
+
+  function normalizeYRangeMode(raw) {
+    var mode = raw && raw.yRangeMode;
+    if (mode === "follow-main" || mode === "auto-window" || mode === "manual") return mode;
+    if (raw && raw.autoFitY === false) return "manual";
+    return "auto-window";
+  }
+
+  function setDetailYRangeMode(source, mode) {
+    if (!source) return source;
+    source.yRangeMode = normalizeYRangeMode({ yRangeMode: mode });
+    source.autoFitY = source.yRangeMode === "auto-window";
+    return source;
+  }
+
+  function localXWindow(plot) {
+    var source = plot && plot.detailSource;
+    var xMin = Number(plot && plot.xAxis && plot.xAxis.min);
+    var xMax = Number(plot && plot.xAxis && plot.xAxis.max);
+    if (!(xMax > xMin) && source && source.sourceRange) {
+      xMin = Number(source.sourceRange.xMin);
+      xMax = Number(source.sourceRange.xMax);
+    }
+    if (!Number.isFinite(xMin) || !Number.isFinite(xMax) || !(xMax > xMin)) return null;
+    return xMin < xMax ? [xMin, xMax] : [xMax, xMin];
+  }
+
+  function getVisibleWindowData(project, plot, xMin, xMax) {
+    var lowX = Number(xMin);
+    var highX = Number(xMax);
+    var ys = [];
+    if (!Number.isFinite(lowX) || !Number.isFinite(highX) || !(highX > lowX)) return ys;
+    resolvePlotSeries(project, plot).forEach(function (item) {
+      if (!item.visible) return;
+      var dataset = findDataset(project, item.series.datasetId);
+      var xs = seriesXForPlot(project, plot, item.series, dataset);
+      var values = item.series.y || [];
+      values.forEach(function (y, index) {
+        if (y == null || xs[index] == null) return;
+        var x = Number(xs[index]);
+        var value = Number(y);
+        if (!Number.isFinite(x) || !Number.isFinite(value)) return;
+        if (x < lowX || x > highX) return;
+        ys.push(value);
+      });
+    });
+    return ys;
+  }
+
+  function applyRangePadding(min, max, paddingRatio) {
+    var low = Number(min);
+    var high = Number(max);
+    if (!Number.isFinite(low) || !Number.isFinite(high)) return null;
+    if (low > high) {
+      var swap = low;
+      low = high;
+      high = swap;
+    }
+    var ratio = Number(paddingRatio);
+    if (!Number.isFinite(ratio) || ratio < 0) ratio = 0;
+    if (ratio > 0.5) ratio = 0.5;
+    if (high === low) {
+      var delta = Math.max(Math.abs(low) * 0.01, 1e-6);
+      return [low - delta, high + delta];
+    }
+    var pad = (high - low) * ratio;
+    return [low - pad, high + pad];
+  }
+
+  function normalizeDomain(min, max) {
+    return applyRangePadding(min, max, 0);
+  }
+
+  function calculateAutoYRange(ys, paddingRatio) {
+    var low = Infinity;
+    var high = -Infinity;
+    (ys || []).forEach(function (value) {
+      if (!Number.isFinite(value)) return;
+      if (value < low) low = value;
+      if (value > high) high = value;
+    });
+    if (!Number.isFinite(low) || !Number.isFinite(high)) return null;
+    return applyRangePadding(low, high, paddingRatio);
+  }
+
+  function calculateVisibleYRange(project, plot, xMin, xMax, paddingRatio) {
+    return calculateAutoYRange(getVisibleWindowData(project, plot, xMin, xMax), paddingRatio);
+  }
+
+  function fallbackDetailY(project, plot) {
+    var source = plot && plot.detailSource;
+    var stored = source && source.sourceRange ? normalizeDomain(source.sourceRange.yMin, source.sourceRange.yMax) : null;
+    if (stored) return stored;
+    var main = sourcePlotOf(project, plot);
+    if (main) return seriesExtents(project, main).y;
+    var axis = plot && plot.yAxis ? normalizeDomain(plot.yAxis.min, plot.yAxis.max) : null;
+    return axis || [0, 1];
+  }
+
+  function calculateLocalViewDomain(project, plot) {
+    var source = plot && plot.detailSource;
+    var xWindow = localXWindow(plot);
+    var x = xWindow || [0, 1];
+    var mode = source ? source.yRangeMode : "auto-window";
+    var visibleCount = resolvePlotSeries(project, plot).filter(function (item) { return item.visible; }).length;
+    if (mode === "manual") {
+      var manual = plot && plot.yAxis ? normalizeDomain(plot.yAxis.min, plot.yAxis.max) : null;
+      return {
+        x: x,
+        y: manual || fallbackDetailY(project, plot),
+        visibleCount: visibleCount,
+        emptyWindow: false,
+        mode: mode
+      };
+    }
+    if (mode === "follow-main") {
+      var main = sourcePlotOf(project, plot);
+      return {
+        x: x,
+        y: main ? seriesExtents(project, main).y : fallbackDetailY(project, plot),
+        visibleCount: visibleCount,
+        emptyWindow: false,
+        mode: mode
+      };
+    }
+    var fitted = xWindow ? calculateAutoYRange(getVisibleWindowData(project, plot, xWindow[0], xWindow[1]), source ? source.yPaddingRatio : 0.05) : null;
+    if (!fitted) {
+      return {
+        x: x,
+        y: fallbackDetailY(project, plot),
+        visibleCount: visibleCount,
+        emptyWindow: true,
+        mode: "auto-window"
+      };
+    }
+    return { x: x, y: fitted, visibleCount: visibleCount, emptyWindow: false, mode: "auto-window" };
+  }
+
+  function syncDetailRange(project, plot) {
+    if (!plot || plot.type !== "detail" || !plot.detailSource) return null;
+    var source = plot.detailSource;
+    setDetailYRangeMode(source, source.yRangeMode);
+    var domain = calculateLocalViewDomain(project, plot);
+    if (domain.x[1] > domain.x[0] && localXWindow(plot)) {
+      writeAxisRange(plot.xAxis, domain.x[0], domain.x[1]);
+      source.sourceRange.xMin = domain.x[0];
+      source.sourceRange.xMax = domain.x[1];
+    }
+    if (domain.mode === "manual") {
+      if (plot.yAxis && Number(plot.yAxis.max) > Number(plot.yAxis.min)) {
+        source.sourceRange.yMin = Number(plot.yAxis.min);
+        source.sourceRange.yMax = Number(plot.yAxis.max);
+      }
+      return [source.sourceRange.yMin, source.sourceRange.yMax];
+    }
+    if (domain.emptyWindow) return null;
+    writeAxisRange(plot.yAxis, domain.y[0], domain.y[1]);
+    source.sourceRange.yMin = domain.y[0];
+    source.sourceRange.yMax = domain.y[1];
+    return domain.y;
+  }
+
+  function retainInspectorOpen(previous, switched, focusKey, childKey) {
+    var next = {};
+    var source = previous || {};
+    Object.keys(source).forEach(function (key) {
+      if (!switched) {
+        next[key] = !!source[key];
+        return;
+      }
+      var top = key.split(".")[0];
+      if (key === focusKey || key === childKey) next[key] = true;
+      else if (top === focusKey) next[key] = false;
+      else if (key.indexOf(".") >= 0) next[key] = !!source[key];
+      else next[key] = false;
+    });
+    if (switched && focusKey) next[focusKey] = true;
+    if (switched && childKey) next[childKey] = true;
+    return next;
+  }
+
+  function createLocalPlot(project, source, range) {
+    if (!source || !range) return null;
+    var detailCount = (project.plots || []).filter(function (item) { return item.type === "detail"; }).length + 1;
+    var plot = createPlot(project, {
+      name: "局部视图 " + detailCount,
+      type: "detail",
+      title: "",
+      showTitle: false,
+      seriesRefs: [],
+      xAxis: cloneJson(source.xAxis),
+      yAxis: cloneJson(source.yAxis),
+      legend: cloneJson(source.legend),
+      legendVisible: false,
+      textStyles: cloneJson(source.textStyles),
+      background: source.background || "",
+      lockAspect: !!source.lockAspect,
+      aspectRatio: source.aspectRatio
+    });
+    plot.seriesRefs = [];
+    plot.groupStyles = {};
+    plot.showTitle = false;
+    plot.title = "";
+    plot.legend.visible = false;
+    plot.legendVisible = false;
+    plot.xAxis.showTitle = false;
+    plot.yAxis.showTitle = false;
+    plot.xAxis.showMinorTicks = false;
+    plot.yAxis.showMinorTicks = false;
+    plot.topEdge = normalizeEdge(null, "top");
+    plot.rightEdge = normalizeEdge(null, "right");
+    plot.layout.width = Math.max(420, Math.round((source.layout.width || DEFAULT_FIGURE_WIDTH) * 0.62));
+    plot.layout.height = Math.max(280, Math.round((source.layout.height || DEFAULT_FIGURE_HEIGHT) * 0.62));
+    var canvasWidth = project.canvas && project.canvas.width ? project.canvas.width : 1280;
+    var canvasHeight = project.canvas && project.canvas.height ? project.canvas.height : 800;
+    var maxX = Math.max(LAYOUT_PADDING, canvasWidth - plot.layout.width - LAYOUT_PADDING);
+    var maxY = Math.max(LAYOUT_PADDING, canvasHeight - plot.layout.height - LAYOUT_PADDING);
+    var nextX = Math.round((source.layout.x || 0) + (source.layout.width || 0) + LAYOUT_GAP);
+    var nextY = Math.round(source.layout.y || LAYOUT_PADDING);
+    if (nextX > maxX) {
+      nextX = maxX;
+      nextY = Math.min(maxY, Math.round((source.layout.y || LAYOUT_PADDING) + (source.layout.height || 0) * 0.42));
+    }
+    plot.layout.x = Math.min(Math.max(LAYOUT_PADDING, nextX), maxX);
+    plot.layout.y = Math.min(Math.max(LAYOUT_PADDING, nextY), maxY);
+    writeAxisRange(plot.xAxis, range.xMin, range.xMax);
+    plot.detailSource = normalizeDetailSource({
+      sourceFigureId: source.id,
+      sourceRange: {
+        xMin: Math.min(range.xMin, range.xMax),
+        xMax: Math.max(range.xMin, range.xMax),
+        yMin: Math.min(range.yMin, range.yMax),
+        yMax: Math.max(range.yMin, range.yMax)
+      },
+      yRangeMode: "auto-window",
+      autoFitY: true,
+      yPaddingRatio: 0.05,
+      showSourceBox: true,
+      showConnectorLines: true
+    });
+    var fitted = syncDetailRange(project, plot);
+    if (!fitted && Number(range.yMax) > Number(range.yMin)) {
+      writeAxisRange(plot.yAxis, range.yMin, range.yMax);
+      if (plot.detailSource) {
+        plot.detailSource.sourceRange.yMin = plot.yAxis.min;
+        plot.detailSource.sourceRange.yMax = plot.yAxis.max;
+      }
+    }
+    placePlotAbove(project, plot, source);
+    return plot;
+  }
+
+  function plotsInLayerOrder(project) {
+    return (project.plots || []).map(function (plot, index) {
+      return { plot: plot, index: index };
+    }).sort(function (a, b) {
+      var az = Number(a.plot.zOrder);
+      var bz = Number(b.plot.zOrder);
+      var dz = (Number.isFinite(az) ? az : a.index) - (Number.isFinite(bz) ? bz : b.index);
+      if (dz) return dz;
+      return a.index - b.index;
+    }).map(function (item) { return item.plot; });
+  }
+
+  function assignLayerOrder(project) {
+    plotsInLayerOrder(project).forEach(function (plot, index) { plot.zOrder = index + 1; });
+    return project;
+  }
+
+  function placePlotAbove(project, plot, anchor) {
+    var ordered = plotsInLayerOrder(project).filter(function (item) { return item.id !== plot.id; });
+    var index = ordered.findIndex(function (item) { return anchor && item.id === anchor.id; });
+    ordered.splice(index < 0 ? ordered.length : index + 1, 0, plot);
+    ordered.forEach(function (item, i) { item.zOrder = i + 1; });
+    return plot;
+  }
+
+  function movePlotLayer(project, plotId, command) {
+    var ordered = plotsInLayerOrder(project);
+    var index = ordered.findIndex(function (plot) { return plot.id === plotId; });
+    if (index < 0) return ordered;
+    var next = index;
+    if (command === "up") next = Math.min(ordered.length - 1, index + 1);
+    if (command === "down") next = Math.max(0, index - 1);
+    if (command === "top") next = ordered.length - 1;
+    if (command === "bottom") next = 0;
+    if (next !== index) {
+      var item = ordered.splice(index, 1)[0];
+      ordered.splice(next, 0, item);
+    }
+    ordered.forEach(function (plot, i) { plot.zOrder = i + 1; });
+    return ordered;
+  }
+
+  function detailChildren(project, plotId) {
+    return (project.plots || []).filter(function (plot) {
+      return plot.detailSource && plot.detailSource.sourceFigureId === plotId;
+    });
+  }
+
+  function removePlot(project, plotId) {
+    var drop = {};
+    drop[plotId] = true;
+    detailChildren(project, plotId).forEach(function (plot) { drop[plot.id] = true; });
+    var removed = (project.plots || []).filter(function (plot) { return drop[plot.id]; });
+    project.plots = (project.plots || []).filter(function (plot) { return !drop[plot.id]; });
+    assignLayerOrder(project);
+    return removed;
+  }
+
+  function effectiveMagnification(main, inset) {
+    function ratio(insetSize, mainSize, mainRange, insetRange) {
+      if (!(insetSize > 0) || !(mainSize > 0) || !(mainRange > 0) || !(insetRange > 0)) return null;
+      var value = (insetSize * mainRange) / (mainSize * insetRange);
+      return Number.isFinite(value) && value > 0 ? value : null;
+    }
+    var a = main || {};
+    var b = inset || {};
+    return {
+      x: ratio(b.plotWidth, a.plotWidth, Number(a.xMax) - Number(a.xMin), Number(b.xMax) - Number(b.xMin)),
+      y: ratio(b.plotHeight, a.plotHeight, Number(a.yMax) - Number(a.yMin), Number(b.yMax) - Number(b.yMin))
+    };
   }
 
   function snapThresholdWorld(zoom) {
@@ -1997,6 +2769,8 @@
     var yTitle = boxSize(metrics.yAxisTitle);
     var xTick = boxSize(metrics.xTick);
     var yTick = boxSize(metrics.yTick);
+    var topTick = boxSize(metrics.topTick);
+    var rightTick = boxSize(metrics.rightTick);
     var legend = boxSize(metrics.legend);
     var slot = legendLayoutSlot(metrics.legendPosition);
     var legendW = legend.width;
@@ -2009,6 +2783,7 @@
     var top = G.outerPadding + header;
     if (header) top += G.titleGap;
     if (slot === "top" && legendH) top += legendH + G.legendGap;
+    if (topTick.height) top += G.tickLabelGap + topTick.height;
     top += Math.max(yTick.height, xTick.height) / 2;
 
     var bottom = G.outerPadding + G.tickLabelGap + xTick.height;
@@ -2021,6 +2796,7 @@
     if (slot === "left" && legendW) left += legendW + G.legendGap;
 
     var right = Math.max(G.outerPadding, xTick.width / 2 + 4);
+    if (rightTick.width) right += G.tickLabelGap + rightTick.width;
     if (slot === "right" && legendW) right += legendW + G.legendGap;
 
     var neededWidth = left + G.minPlotWidth + right;
@@ -2071,14 +2847,508 @@
       xAxisTitlePos: { x: left + plotWidth / 2, y: xTitleY },
       yAxisTitlePos: { x: yTitleX, y: top + plotHeight / 2 },
       xTickY: top + plotHeight + G.tickLabelGap + (xTick.ascent || xTick.height * 0.8),
-      yTickX: left - G.tickLabelGap
+      yTickX: left - G.tickLabelGap,
+      topTickY: top - G.tickLabelGap,
+      rightTickX: left + plotWidth + G.tickLabelGap
     };
+  }
+
+  var HISTORY_LIMIT = 100;
+
+  function unitOpacity(value, fallback) {
+    var n = Number(value);
+    return Number.isFinite(n) ? clamp(n, 0, 1) : fallback;
+  }
+
+  function createPlotFrame(xRange, yRange, plotArea) {
+    var area = plotArea || { x: 0, y: 0, width: 1, height: 1 };
+    var x0 = Number(xRange && xRange[0]);
+    var x1 = Number(xRange && xRange[1]);
+    var y0 = Number(yRange && yRange[0]);
+    var y1 = Number(yRange && yRange[1]);
+    var width = Number(area.width) || 1;
+    var height = Number(area.height) || 1;
+    var dx = x1 - x0 || 1;
+    var dy = y1 - y0 || 1;
+    var originX = Number(area.x) || 0;
+    var originY = Number(area.y) || 0;
+    return {
+      dataToPixelX: function (x) { return originX + (Number(x) - x0) / dx * width; },
+      dataToPixelY: function (y) { return originY + (y1 - Number(y)) / dy * height; },
+      pixelToDataX: function (px) { return x0 + (Number(px) - originX) / width * dx; },
+      pixelToDataY: function (py) { return y1 - (Number(py) - originY) / height * dy; }
+    };
+  }
+
+  function normalizeSelectionRange(start, end, plotId) {
+    var xMin = Number(start && start.x);
+    var xMax = Number(end && end.x);
+    var yMin = Number(start && start.y);
+    var yMax = Number(end && end.y);
+    if (![xMin, xMax, yMin, yMax].every(Number.isFinite)) return null;
+    if (xMin > xMax) { var swapX = xMin; xMin = xMax; xMax = swapX; }
+    if (yMin > yMax) { var swapY = yMin; yMin = yMax; yMax = swapY; }
+    return {
+      xMin: xMin,
+      xMax: xMax,
+      yMin: yMin,
+      yMax: yMax,
+      plotId: plotId ? String(plotId) : "",
+      xOnly: !!(end && end.xOnly)
+    };
+  }
+
+  function writeAxisRange(axis, min, max) {
+    var low = Number(min);
+    var high = Number(max);
+    if (!axis || !Number.isFinite(low) || !Number.isFinite(high) || low === high) return false;
+    if (low > high) { var swap = low; low = high; high = swap; }
+    axis.mode = "manual";
+    axis.min = low;
+    axis.max = high;
+    return true;
+  }
+
+  function resetPlotView(plot) {
+    if (plot && plot.xAxis) plot.xAxis.mode = "auto";
+    if (plot && plot.yAxis) plot.yAxis.mode = "auto";
+    return plot;
+  }
+
+  function sampleSeriesY(xs, ys, x, mode) {
+    if (!Number.isFinite(x) || !xs || !ys || xs.length !== ys.length) return null;
+    var finite = [];
+    var i;
+    for (i = 0; i < xs.length; i += 1) {
+      if (Number.isFinite(xs[i]) && Number.isFinite(ys[i])) finite.push(i);
+    }
+    if (!finite.length) return null;
+    var low = xs[finite[0]];
+    var high = low;
+    for (i = 1; i < finite.length; i += 1) {
+      if (xs[finite[i]] < low) low = xs[finite[i]];
+      if (xs[finite[i]] > high) high = xs[finite[i]];
+    }
+    if (x < low || x > high) return null;
+    if (mode === "interpolate") return interpolateSeriesY(xs, ys, x);
+    return nearestSeriesY(xs, ys, finite, x);
+  }
+
+  function nearestSeriesY(xs, ys, finite, x) {
+    var increasing = true;
+    var decreasing = true;
+    var i;
+    for (i = 1; i < finite.length; i += 1) {
+      if (xs[finite[i]] < xs[finite[i - 1]]) increasing = false;
+      if (xs[finite[i]] > xs[finite[i - 1]]) decreasing = false;
+    }
+    var best = finite[0];
+    if (increasing || decreasing) {
+      var lo = 0;
+      var hi = finite.length - 1;
+      while (lo < hi) {
+        var mid = (lo + hi) >> 1;
+        var probe = xs[finite[mid]];
+        if (increasing ? probe < x : probe > x) lo = mid + 1;
+        else hi = mid;
+      }
+      best = finite[lo];
+      if (lo > 0 && Math.abs(xs[finite[lo - 1]] - x) <= Math.abs(xs[best] - x)) best = finite[lo - 1];
+    } else {
+      // ponytail: non-monotonic X is a linear scan; binary search only applies when X is sorted
+      var bestD = Math.abs(xs[best] - x);
+      for (i = 1; i < finite.length; i += 1) {
+        var dist = Math.abs(xs[finite[i]] - x);
+        if (dist < bestD) { bestD = dist; best = finite[i]; }
+      }
+    }
+    return { x: xs[best], y: ys[best], index: best };
+  }
+
+  function interpolateSeriesY(xs, ys, x) {
+    var i;
+    for (i = 0; i < xs.length; i += 1) {
+      if (Number.isFinite(xs[i]) && Number.isFinite(ys[i]) && xs[i] === x) return { x: xs[i], y: ys[i], index: i };
+    }
+    for (i = 0; i < xs.length - 1; i += 1) {
+      if (!Number.isFinite(xs[i]) || !Number.isFinite(ys[i]) || !Number.isFinite(xs[i + 1]) || !Number.isFinite(ys[i + 1])) continue;
+      var left = xs[i];
+      var right = xs[i + 1];
+      if (left === right) continue;
+      var segLow = Math.min(left, right);
+      var segHigh = Math.max(left, right);
+      if (x < segLow || x > segHigh) continue;
+      var t = (x - left) / (right - left);
+      return { x: x, y: ys[i] + t * (ys[i + 1] - ys[i]), index: i };
+    }
+    return null;
+  }
+
+  function findNearestPoint(xs, ys, x) {
+    if (!Number.isFinite(x) || !xs || !ys || xs.length !== ys.length) return null;
+    var finite = [];
+    var i;
+    for (i = 0; i < xs.length; i += 1) {
+      if (Number.isFinite(xs[i]) && Number.isFinite(ys[i])) finite.push(i);
+    }
+    if (!finite.length) return null;
+    return nearestSeriesY(xs, ys, finite, x);
+  }
+
+  function findNearestDataPoint(project, plot, frame, pixelX, pixelY) {
+    if (!frame || !Number.isFinite(pixelX) || !Number.isFinite(pixelY)) return null;
+    var best = null;
+    resolvePlotSeries(project, plot).forEach(function (item) {
+      if (!item.visible) return;
+      var dataset = findDataset(project, item.series.datasetId);
+      var xs = seriesXForPlot(project, plot, item.series, dataset);
+      var ys = item.series.y;
+      var i;
+      for (i = 0; i < xs.length; i += 1) {
+        if (!Number.isFinite(xs[i]) || !Number.isFinite(ys[i])) continue;
+        var px = frame.dataToPixelX(xs[i]);
+        var py = frame.dataToPixelY(ys[i]);
+        var dist = Math.hypot(px - pixelX, py - pixelY);
+        if (!best || dist < best.dist) {
+          best = {
+            dist: dist,
+            seriesId: item.series.id,
+            name: seriesDisplayName(item.series),
+            unit: String(item.series.unit || ""),
+            x: xs[i],
+            y: ys[i],
+            index: i,
+            color: item.color
+          };
+        }
+      }
+    });
+    return best;
+  }
+
+  function snapReadout(project, plot, frame, pixelX, pixelY) {
+    var dataX = frame ? frame.pixelToDataX(pixelX) : pixelX;
+    var best = null;
+    resolvePlotSeries(project, plot).forEach(function (item) {
+      if (!item.visible) return;
+      var dataset = findDataset(project, item.series.datasetId);
+      var xs = seriesXForPlot(project, plot, item.series, dataset);
+      var sample = findNearestPoint(xs, item.series.y, dataX);
+      if (!sample || !frame) return;
+      var dist = Math.hypot(frame.dataToPixelX(sample.x) - pixelX, frame.dataToPixelY(sample.y) - pixelY);
+      if (!best || dist < best.dist) best = { dist: dist, seriesId: item.series.id, x: sample.x, y: sample.y };
+    });
+    return {
+      x: best ? best.x : dataX,
+      nearestSeriesId: best ? best.seriesId : "",
+      rows: readPlotAtX(project, plot, best ? best.x : dataX, "nearest")
+    };
+  }
+
+  function detailConnectorLines(sourceBox, figureRect) {
+    var box = sourceBox || {};
+    var fig = figureRect || {};
+    var x1 = Number(box.x1);
+    var x2 = Number(box.x2);
+    var y1 = Number(box.y1);
+    var y2 = Number(box.y2);
+    var fx = Number(fig.x);
+    var fy = Number(fig.y);
+    var fw = Number(fig.width);
+    var fh = Number(fig.height);
+    if (![x1, x2, y1, y2, fx, fy, fw, fh].every(Number.isFinite)) return [];
+    var cx = (x1 + x2) / 2;
+    var cy = (y1 + y2) / 2;
+    var mx = fx + fw / 2;
+    var my = fy + fh / 2;
+    var from;
+    var to;
+    if (Math.abs(mx - cx) >= Math.abs(my - cy)) {
+      if (mx >= cx) {
+        from = [{ x: x2, y: y1 }, { x: x2, y: y2 }];
+        to = [{ x: fx, y: fy }, { x: fx, y: fy + fh }];
+      } else {
+        from = [{ x: x1, y: y1 }, { x: x1, y: y2 }];
+        to = [{ x: fx + fw, y: fy }, { x: fx + fw, y: fy + fh }];
+      }
+    } else if (my >= cy) {
+      from = [{ x: x1, y: y2 }, { x: x2, y: y2 }];
+      to = [{ x: fx, y: fy }, { x: fx + fw, y: fy }];
+    } else {
+      from = [{ x: x1, y: y1 }, { x: x2, y: y1 }];
+      to = [{ x: fx, y: fy + fh }, { x: fx + fw, y: fy + fh }];
+    }
+    return [0, 1].map(function (index) {
+      return { x1: from[index].x, y1: from[index].y, x2: to[index].x, y2: to[index].y };
+    }).filter(function (line) {
+      var midX = (line.x1 + line.x2) / 2;
+      var midY = (line.y1 + line.y2) / 2;
+      return !(midX > fx + 4 && midX < fx + fw - 4 && midY > fy + 4 && midY < fy + fh - 4);
+    });
+  }
+
+  function readPlotAtX(project, plot, x, mode) {
+    return resolvePlotSeries(project, plot).filter(function (item) { return item.visible; }).map(function (item) {
+      var dataset = findDataset(project, item.series.datasetId);
+      var xs = seriesXForPlot(project, plot, item.series, dataset);
+      var sample = sampleSeriesY(xs, item.series.y, x, mode === "interpolate" ? "interpolate" : "nearest");
+      return {
+        seriesId: item.series.id,
+        name: seriesDisplayName(item.series),
+        unit: String(item.series.unit || ""),
+        color: item.color,
+        y: sample ? sample.y : null,
+        x: sample ? sample.x : null
+      };
+    });
+  }
+
+  function normalizeFixedCursors(raw) {
+    if (!Array.isArray(raw)) return [];
+    return raw.map(function (cursor) {
+      if (!cursor || !Number.isFinite(Number(cursor.x))) return null;
+      return { id: cursor.id === "B" ? "B" : "A", x: Number(cursor.x) };
+    }).filter(Boolean).slice(0, 2);
+  }
+
+  function normalizeInset(raw, plotId) {
+    if (!raw || typeof raw !== "object") return null;
+    var range = raw.sourceRange || {};
+    var rect = raw.rect || {};
+    var xMin = Number(range.xMin);
+    var xMax = Number(range.xMax);
+    var yMin = Number(range.yMin);
+    var yMax = Number(range.yMax);
+    if (![xMin, xMax, yMin, yMax].every(Number.isFinite)) return null;
+    if (xMin > xMax) { var swapX = xMin; xMin = xMax; xMax = swapX; }
+    if (yMin > yMax) { var swapY = yMin; yMin = yMax; yMax = swapY; }
+    var xAxis = raw.xAxis || {};
+    var yAxis = raw.yAxis || {};
+    var style = raw.style || {};
+    var width = Number(rect.width);
+    var height = Number(rect.height);
+    return {
+      id: String(raw.id || makeId("inset")),
+      sourcePlotId: String(raw.sourcePlotId || plotId || ""),
+      sourceRange: { xMin: xMin, xMax: xMax, yMin: yMin, yMax: yMax },
+      rect: {
+        x: Number.isFinite(Number(rect.x)) ? Number(rect.x) : 24,
+        y: Number.isFinite(Number(rect.y)) ? Number(rect.y) : 24,
+        width: Number.isFinite(width) ? Math.max(80, width) : 220,
+        height: Number.isFinite(height) ? Math.max(60, height) : 140
+      },
+      seriesIds: Array.isArray(raw.seriesIds) ? raw.seriesIds.map(String) : [],
+      xAxis: {
+        auto: xAxis.auto === true,
+        min: Number.isFinite(Number(xAxis.min)) ? Number(xAxis.min) : xMin,
+        max: Number.isFinite(Number(xAxis.max)) ? Number(xAxis.max) : xMax
+      },
+      yAxis: {
+        auto: yAxis.auto !== false,
+        min: Number.isFinite(Number(yAxis.min)) ? Number(yAxis.min) : null,
+        max: Number.isFinite(Number(yAxis.max)) ? Number(yAxis.max) : null
+      },
+      title: raw.title == null ? "" : String(raw.title),
+      showLegend: !!raw.showLegend,
+      visible: raw.visible !== false,
+      style: {
+        backgroundColor: style.backgroundColor ? String(style.backgroundColor) : "#ffffff",
+        backgroundOpacity: unitOpacity(style.backgroundOpacity, 0.92),
+        borderColor: style.borderColor ? String(style.borderColor) : "#1d2024",
+        borderWidth: Number.isFinite(Number(style.borderWidth)) ? clamp(Number(style.borderWidth), 0, 8) : 1
+      },
+      connector: { visible: !raw.connector || raw.connector.visible !== false }
+    };
+  }
+
+  function normalizeInsets(raw, plotId) {
+    if (!Array.isArray(raw)) return [];
+    return raw.map(function (item) { return normalizeInset(item, plotId); }).filter(Boolean);
+  }
+
+  function clampInsetRect(rect, figureWidth, figureHeight) {
+    var boundsW = Math.max(1, Number(figureWidth) || 1);
+    var boundsH = Math.max(1, Number(figureHeight) || 1);
+    var width = clamp(Number(rect.width) || 80, Math.min(80, boundsW), boundsW);
+    var height = clamp(Number(rect.height) || 60, Math.min(60, boundsH), boundsH);
+    return {
+      x: clamp(Number(rect.x) || 0, 0, Math.max(0, boundsW - width)),
+      y: clamp(Number(rect.y) || 0, 0, Math.max(0, boundsH - height)),
+      width: width,
+      height: height
+    };
+  }
+
+  function normalizeAnnotation(raw, plotId) {
+    if (!raw || typeof raw !== "object") return null;
+    var types = { text: true, arrow: true, marker: true, region: true, point: true, free: true };
+    if (!types[raw.type]) return null;
+    var anchor = raw.anchor || {};
+    var end = raw.end || {};
+    if (!Number.isFinite(Number(anchor.x)) || !Number.isFinite(Number(anchor.y))) return null;
+    var style = raw.style || {};
+    var endX = Number(end.x);
+    var endY = Number(end.y);
+    return {
+      id: String(raw.id || makeId("ann")),
+      plotId: String(raw.plotId || plotId || ""),
+      type: raw.type,
+      seriesId: raw.seriesId ? String(raw.seriesId) : "",
+      coordinateMode: raw.coordinateMode === "canvas" ? "canvas" : (raw.coordinateMode === "plot" ? "plot" : "data"),
+      visible: raw.visible !== false,
+      name: raw.name ? String(raw.name) : "",
+      anchor: { x: Number(anchor.x), y: Number(anchor.y) },
+      end: {
+        x: Number.isFinite(endX) ? endX : Number(anchor.x),
+        y: Number.isFinite(endY) ? endY : Number(anchor.y)
+      },
+      text: raw.text == null ? "" : String(raw.text),
+      marker: raw.marker === "square" || raw.marker === "diamond" ? raw.marker : "circle",
+      style: {
+        fontFamily: String(style.fontFamily || DEFAULT_FONT),
+        fontSize: clamp(Number(style.fontSize) || 12, 6, 72),
+        fontWeight: style.fontWeight === "700" || style.fontWeight === "bold" ? "700" : "400",
+        color: style.color ? String(style.color) : "#1d2024",
+        lineWidth: Number.isFinite(Number(style.lineWidth)) ? clamp(Number(style.lineWidth), 0.5, 8) : 1.2,
+        backgroundColor: style.backgroundColor ? String(style.backgroundColor) : "#ffffff",
+        backgroundOpacity: unitOpacity(style.backgroundOpacity, 0.85),
+        borderColor: style.borderColor ? String(style.borderColor) : "#1d2024",
+        borderWidth: Number.isFinite(Number(style.borderWidth)) ? clamp(Number(style.borderWidth), 0, 8) : 1,
+        fillColor: style.fillColor ? String(style.fillColor) : "#1e6eaa",
+        fillOpacity: unitOpacity(style.fillOpacity, 0.16)
+      }
+    };
+  }
+
+  function normalizeAnnotations(raw, plotId) {
+    if (!Array.isArray(raw)) return [];
+    return raw.map(function (item) { return normalizeAnnotation(item, plotId); }).filter(Boolean);
+  }
+
+  function prunePlotInspection(project, plot) {
+    var live = {};
+    (plot.seriesRefs || []).forEach(function (ref) {
+      if (findSeries(project, ref.seriesId)) live[ref.seriesId] = true;
+    });
+    (plot.insets || []).forEach(function (inset) {
+      inset.seriesIds = (inset.seriesIds || []).filter(function (id) { return !!live[id]; });
+    });
+    return plot;
+  }
+
+  function finalizePlotInspection(project, plot) {
+    plot.insets = plot.insets || [];
+    plot.annotations = plot.annotations || [];
+    plot.fixedCursors = plot.fixedCursors || [];
+    plot.insets.forEach(function (inset) {
+      inset.rect = clampInsetRect(inset.rect, plot.layout.width, plot.layout.height);
+    });
+    return prunePlotInspection(project, plot);
+  }
+
+  function insetYExtent(project, plot, inset) {
+    if (inset.yAxis && inset.yAxis.auto === false && Number.isFinite(Number(inset.yAxis.min)) && Number.isFinite(Number(inset.yAxis.max)) && Number(inset.yAxis.min) < Number(inset.yAxis.max)) {
+      return [Number(inset.yAxis.min), Number(inset.yAxis.max)];
+    }
+    var xMin = inset.xAxis && inset.xAxis.auto === false ? Number(inset.xAxis.min) : inset.sourceRange.xMin;
+    var xMax = inset.xAxis && inset.xAxis.auto === false ? Number(inset.xAxis.max) : inset.sourceRange.xMax;
+    var wanted = {};
+    (inset.seriesIds || []).forEach(function (id) { wanted[id] = true; });
+    var ys = [];
+    resolvePlotSeries(project, plot).forEach(function (item) {
+      if (!item.visible || !wanted[item.series.id]) return;
+      var dataset = findDataset(project, item.series.datasetId);
+      var xs = seriesXForPlot(project, plot, item.series, dataset);
+      item.series.y.forEach(function (y, index) {
+        if (!Number.isFinite(xs[index]) || !Number.isFinite(y)) return;
+        if (xs[index] < xMin || xs[index] > xMax) return;
+        ys.push(y);
+      });
+    });
+    return numericExtent(ys, 0.04);
+  }
+
+  function insetRanges(project, plot, inset) {
+    var xMin = inset.xAxis && inset.xAxis.auto === false ? Number(inset.xAxis.min) : inset.sourceRange.xMin;
+    var xMax = inset.xAxis && inset.xAxis.auto === false ? Number(inset.xAxis.max) : inset.sourceRange.xMax;
+    if (!(xMin < xMax)) { xMin = inset.sourceRange.xMin; xMax = inset.sourceRange.xMax; }
+    return { x: [xMin, xMax], y: insetYExtent(project, plot, inset) };
+  }
+
+  function createHistory(limit) {
+    var max = Number.isFinite(Number(limit)) ? Number(limit) : HISTORY_LIMIT;
+    var past = [];
+    var future = [];
+    return {
+      push: function (entry) {
+        past.push(entry);
+        if (past.length > max) past.shift();
+        future = [];
+        return entry;
+      },
+      undo: function () {
+        if (!past.length) return null;
+        var entry = past.pop();
+        future.push(entry);
+        if (typeof entry.undo === "function") entry.undo();
+        return entry;
+      },
+      redo: function () {
+        if (!future.length) return null;
+        var entry = future.pop();
+        past.push(entry);
+        if (typeof entry.redo === "function") entry.redo();
+        return entry;
+      },
+      canUndo: function () { return past.length > 0; },
+      canRedo: function () { return future.length > 0; },
+      clear: function () { past = []; future = []; },
+      size: function () { return { undo: past.length, redo: future.length }; }
+    };
+  }
+
+  function captureEditorState(project) {
+    var series = [];
+    (project.datasets || []).forEach(function (dataset) {
+      (dataset.series || []).forEach(function (item) {
+        series.push({
+          id: item.id,
+          color: item.color,
+          style: cloneJson(item.style || {}),
+          displayName: item.displayName,
+          label: item.label
+        });
+      });
+    });
+    return { plots: cloneJson(project.plots || []), series: series };
+  }
+
+  function restoreEditorState(project, snap) {
+    var copy = cloneJson(snap || { plots: [], series: [] });
+    project.plots = (copy.plots || []).map(normalizePlot);
+    var saved = {};
+    (copy.series || []).forEach(function (item) { saved[item.id] = item; });
+    (project.datasets || []).forEach(function (dataset) {
+      (dataset.series || []).forEach(function (item) {
+        var previous = saved[item.id];
+        if (!previous) return;
+        item.color = previous.color;
+        item.style = cloneJson(previous.style || {});
+        item.displayName = previous.displayName;
+        item.label = previous.label;
+      });
+    });
+    project.plots.forEach(function (plot) { finalizePlotInspection(project, plot); });
+    syncAllPlotAxisAutoTitles(project);
+    syncCanvasToPlots(project);
+    return project;
   }
 
   var api = {
     APP_INFO: APP_INFO,
     SOFTWARE_VERSION: SOFTWARE_VERSION,
     PROJECT_FORMAT_VERSION: PROJECT_FORMAT_VERSION,
+    SCHEMA_VERSION: SCHEMA_VERSION,
     githubReleasesApiUrl: githubReleasesApiUrl,
     githubReleasesPageUrl: githubReleasesPageUrl,
     normalizeVersionTag: normalizeVersionTag,
@@ -2100,6 +3370,9 @@
     cssColorToHex: cssColorToHex,
     applyStyleToSeries: applyStyleToSeries,
     applyStyleToDataset: applyStyleToDataset,
+    applyGroupStyle: applyGroupStyle,
+    resolveSeriesStyle: resolveSeriesStyle,
+    normalizeGroupStyles: normalizeGroupStyles,
     LINE_WIDTH_MIN: LINE_WIDTH_MIN,
     LINE_WIDTH_MAX: LINE_WIDTH_MAX,
     LINE_WIDTH_STEP: LINE_WIDTH_STEP,
@@ -2116,6 +3389,12 @@
     LAYOUT_PADDING: LAYOUT_PADDING,
     LAYOUT_GAP: LAYOUT_GAP,
     LAYOUT_TEMPLATES: LAYOUT_TEMPLATES,
+    CANVAS_PRESETS: CANVAS_PRESETS,
+    SERIES_COLORS: SERIES_COLORS,
+    PALETTE_LIST: PALETTE_LIST,
+    paletteColor: paletteColor,
+    paletteMinDistance: paletteMinDistance,
+    setGroupStyle: setGroupStyle,
     makeId: makeId,
     cloneJson: cloneJson,
     clamp: clamp,
@@ -2137,10 +3416,29 @@
     assertUniqueSeriesIds: assertUniqueSeriesIds,
     seriesId: seriesId,
     resolvePlotSeries: resolvePlotSeries,
+    sourcePlotOf: sourcePlotOf,
     convertSeriesX: convertSeriesX,
     seriesXForPlot: seriesXForPlot,
     plotTimeSettings: plotTimeSettings,
     plotExtents: plotExtents,
+    plotEditorName: plotEditorName,
+    plotDisplayTitle: plotDisplayTitle,
+    calculateVisibleYRange: calculateVisibleYRange,
+    getVisibleWindowData: getVisibleWindowData,
+    calculateAutoYRange: calculateAutoYRange,
+    applyRangePadding: applyRangePadding,
+    normalizeDomain: normalizeDomain,
+    calculateLocalViewDomain: calculateLocalViewDomain,
+    normalizeYRangeMode: normalizeYRangeMode,
+    setDetailYRangeMode: setDetailYRangeMode,
+    retainInspectorOpen: retainInspectorOpen,
+    syncDetailRange: syncDetailRange,
+    findNearestPoint: findNearestPoint,
+    findNearestDataPoint: findNearestDataPoint,
+    snapReadout: snapReadout,
+    detailConnectorLines: detailConnectorLines,
+    normalizeEdge: normalizeEdge,
+    normalizeDetailSource: normalizeDetailSource,
     numericExtent: numericExtent,
     axisRange: axisRange,
     formatQuantityTitle: formatQuantityTitle,
@@ -2174,6 +3472,17 @@
     setPlotSize: setPlotSize,
     layoutSlots: layoutSlots,
     applyLayoutTemplate: applyLayoutTemplate,
+    canvasLayoutArea: canvasLayoutArea,
+    setCanvasSize: setCanvasSize,
+    placePlotInSlot: placePlotInSlot,
+    createLocalPlot: createLocalPlot,
+    plotsInLayerOrder: plotsInLayerOrder,
+    assignLayerOrder: assignLayerOrder,
+    placePlotAbove: placePlotAbove,
+    movePlotLayer: movePlotLayer,
+    detailChildren: detailChildren,
+    removePlot: removePlot,
+    effectiveMagnification: effectiveMagnification,
     snapPlotMove: snapPlotMove,
     snapPlotResize: snapPlotResize,
     snapThresholdWorld: snapThresholdWorld,
@@ -2193,7 +3502,27 @@
     normalizeUi: normalizeUi,
     normalizeLegend: normalizeLegend,
     normalizeAxis: normalizeAxis,
-    normalizePlot: normalizePlot
+    normalizePlot: normalizePlot,
+    HISTORY_LIMIT: HISTORY_LIMIT,
+    createPlotFrame: createPlotFrame,
+    normalizeSelectionRange: normalizeSelectionRange,
+    writeAxisRange: writeAxisRange,
+    resetPlotView: resetPlotView,
+    sampleSeriesY: sampleSeriesY,
+    readPlotAtX: readPlotAtX,
+    normalizeFixedCursors: normalizeFixedCursors,
+    normalizeInset: normalizeInset,
+    normalizeInsets: normalizeInsets,
+    clampInsetRect: clampInsetRect,
+    normalizeAnnotation: normalizeAnnotation,
+    normalizeAnnotations: normalizeAnnotations,
+    prunePlotInspection: prunePlotInspection,
+    finalizePlotInspection: finalizePlotInspection,
+    insetYExtent: insetYExtent,
+    insetRanges: insetRanges,
+    createHistory: createHistory,
+    captureEditorState: captureEditorState,
+    restoreEditorState: restoreEditorState
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;
