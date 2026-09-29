@@ -847,5 +847,18 @@ v0.3.0 在 v0.2.4 的导入、排图、样式和导出之上，加入查看与�
 - 图层列表拖拽排序。
 - Formula、MAE/RMSE、Results、双 Y 轴、Heatmap、3D、图拆分、桌面打包。
 
+---
+
+## 2026-09-29 发布 v0.4.1
+
+- 软件版本：`0.4.1`
+- 工程格式：`projectFormatVersion: "1.0"`
+- tag：`v0.4.1`
+- 页面：https://github.com/aidisen975-cmd/Visualizer/releases/tag/v0.4.1
+
+正式版，不是 Draft，也不是 Pre-release。附件 `Visualizer-v0.4.1.zip`（html + `visualizer-core.js` + `README.md`，三个文件在压缩包根目录）。
+
+发布后用上一正式版 `0.2.4` 请求 `releases/latest`：状态为发现新版本，最新版 `0.4.1`，下载地址是 `Visualizer-v0.4.1.zip`。本地 `0.4.1` 的状态是已不低于最新正式版。
+
 
 

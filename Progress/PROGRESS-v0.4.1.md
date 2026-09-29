@@ -6,7 +6,8 @@
 
 软件版本：`0.4.1`（只改 `APP_INFO.version`）  
 工程格式：`projectFormatVersion: "1.0"`（未升格式版本）  
-文档结构：`schemaVersion: 2`
+文档结构：`schemaVersion: 2`  
+正式版：https://github.com/aidisen975-cmd/Visualizer/releases/tag/v0.4.1
 
 ## 如何运行
 
