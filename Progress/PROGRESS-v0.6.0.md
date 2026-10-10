@@ -7,7 +7,8 @@
 软件版本：`0.6.0`  
 工程格式：`projectFormatVersion: "1.1"`（仍读取 `1.0`）  
 文档结构：`schemaVersion: 2`（未升）  
-模板格式：`templateFormatVersion: 1`
+模板格式：`templateFormatVersion: 1`  
+正式版：https://github.com/aidisen975-cmd/Visualizer/releases/tag/v0.6.0
 
 ## 如何运行
 

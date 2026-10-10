@@ -1002,6 +1002,19 @@ Series Override
 
 同一画布放同一图窗的第二个实例、系统保存框里保存后再打开、十余个图窗的压力，以及 Edge。这些没有标成通过。
 
+---
+
+## 2026-10-10 发布 v0.6.0
+
+- 软件版本：`0.6.0`
+- 工程格式：`projectFormatVersion: "1.1"`
+- tag：`v0.6.0`
+- 页面：https://github.com/aidisen975-cmd/Visualizer/releases/tag/v0.6.0
+
+正式版，不是 Draft，也不是 Pre-release。附件 `Visualizer-v0.6.0.zip`（html + `visualizer-core.js` + `README.md`，三个文件在压缩包根目录）。
+
+发布后用上一正式版 `0.4.1` 请求 `releases/latest`：状态为发现新版本，最新版 `0.6.0`，下载地址是 `Visualizer-v0.6.0.zip`。本地 `0.6.0` 的状态是当前版本不低于最新正式版本。
+
 
 
 
