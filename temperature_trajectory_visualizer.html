@@ -8,6 +8,7 @@
   <title>Visualizer</title>
   <style>
     :root {
+      /* Figure tokens. theme() reads these for axes, grid, paper and export. */
       --paper: #fbfbfa;
       --surface: #ffffff;
       --surface-2: #f5f6f5;
@@ -20,9 +21,20 @@
       --shadow: 0 12px 30px rgba(27, 34, 38, .08);
       --danger: #aa3f34;
       --ok: #35694b;
-      --radius: 5px;
-      --side: 268px;
+      --radius: 7px;
+      --side: 276px;
       --props: 300px;
+      /* Workbench chrome. Not read by the figure renderer. */
+      --frame: #f6f2ea;
+      --desk: #efe4d4;
+      --ui: #1c1b19;
+      --secondary: #4a453f;
+      --rule: #ddd4c6;
+      --export: #3a3228;
+      --export-ink: #f6f1e8;
+      --ui-font: "Iowan Old Style", "Palatino Linotype", Palatino, "Songti SC", STSong, serif;
+      --chrome-shadow: 0 10px 24px -14px rgba(40, 32, 20, .4);
+      --paper-shadow: 0 1px 0 rgba(60, 44, 28, .1), 0 14px 26px -12px rgba(60, 44, 28, .38);
     }
     [data-theme="dark"] {
       --paper: #15191b;
@@ -37,56 +49,95 @@
       --shadow: 0 12px 32px rgba(0, 0, 0, .22);
       --danger: #e08b82;
       --ok: #8fbf9e;
+      --frame: #15191b;
+      --desk: #101416;
+      --ui: #f1f3f1;
+      --secondary: #bcc3c4;
+      --rule: #354045;
+      --export: #243038;
+      --export-ink: #f1f3f1;
+      --chrome-shadow: 0 12px 32px rgba(0, 0, 0, .22);
+      --paper-shadow: 0 12px 32px rgba(0, 0, 0, .22);
     }
     * { box-sizing: border-box; }
     html, body { height: 100%; }
     body {
       margin: 0;
-      background: var(--paper);
-      color: var(--ink);
-      font-family: "Aptos", "Helvetica Neue", "Noto Sans SC", "PingFang SC", sans-serif;
-      font-size: 13px;
+      background: var(--frame);
+      color: var(--ui);
+      font-family: var(--ui-font);
+      font-size: 14px;
+      line-height: 1.45;
+      font-variant-numeric: tabular-nums;
       text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
     }
-    button, input, select, textarea { font: inherit; color: inherit; }
-    button { color: inherit; }
+    button, input, select, textarea, code, kbd { font: inherit; color: inherit; font-variant-numeric: tabular-nums; }
+    button { color: inherit; cursor: pointer; }
     .tv-app {
       display: grid;
-      grid-template-rows: 52px minmax(0, 1fr);
+      grid-template-rows: 52px auto minmax(0, 1fr) auto;
       height: 100%;
+      min-width: 760px;
+      background: var(--frame);
     }
     .tv-topbar {
-      display: flex;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
       align-items: center;
-      gap: 8px;
       height: 52px;
-      padding: 0 8px;
-      border-bottom: 1px solid var(--line);
-      background: var(--surface);
+      padding: 0 16px 0 20px;
+      border-bottom: 1px solid var(--rule);
+      background: var(--frame);
       min-width: 0;
     }
-    .tv-brand { flex: 0 0 auto; }
-    .tv-kicker {
-      margin: 0;
-      color: var(--ink);
-      font: 650 13px/1 "Aptos", "Helvetica Neue", "Noto Sans SC", sans-serif;
-      letter-spacing: .04em;
+    .tv-bar { display: flex; align-items: center; gap: 2px; min-width: 0; }
+    .tv-bar-right { justify-content: flex-end; }
+    .tv-brand {
+      margin: 0 22px 0 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--ui);
+      font-family: var(--ui-font);
+      font-size: 22px;
+      font-weight: 500;
+      line-height: 1;
+      cursor: pointer;
     }
-    .tv-dirty, .tv-status {
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.2;
-    }
-    .tv-dirty {
-      flex: 0 1 auto;
+    .tv-doc {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
       min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .tv-dirty.is-dirty { color: #8a5a16; }
+    .tv-doc-name {
+      font-family: var(--ui-font);
+      font-size: 16px;
+      font-weight: 400;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .tv-dirty, .tv-status {
+      color: var(--secondary);
+      font-size: 12px;
+      line-height: 1.2;
+      font-weight: 400;
+    }
+    .tv-dirty { flex: none; }
+    .tv-dirty.is-dirty { color: var(--ui); }
+    .tv-dirty.is-dirty::before {
+      content: "";
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      margin-right: 6px;
+      border-radius: 50%;
+      background: #8d6b4a;
+      vertical-align: 1px;
+    }
     .tv-status {
-      flex: 1 1 80px;
       min-width: 0;
       margin: 0;
       overflow: hidden;
@@ -95,51 +146,61 @@
     }
     .tv-status[data-tone="error"] { color: var(--danger); }
     .tv-status[data-tone="ok"] { color: var(--ok); }
-    .tv-toolbar {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      flex: 0 0 auto;
-    }
     .tv-topbar .tv-button,
     .tv-topbar .tv-file-button,
     .tv-topbar .tv-menu > summary {
-      min-height: 28px;
-      padding: 0 8px;
+      height: 30px;
+      min-height: 30px;
+      padding: 0 10px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--ui);
+      font-size: 14px;
+      font-weight: 400;
+    }
+    .tv-topbar .tv-button:hover,
+    .tv-topbar .tv-file-button:hover,
+    .tv-topbar .tv-menu > summary:hover {
+      border-color: transparent;
+      background: rgba(255, 255, 255, .45);
+      color: var(--ui);
     }
     .tv-menu { position: relative; }
     .tv-menu > summary {
       display: inline-flex;
       align-items: center;
-      gap: 4px;
+      gap: 6px;
       list-style: none;
       cursor: pointer;
-      border: 1px solid var(--line);
-      border-radius: 4px;
-      background: var(--surface);
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--ui);
     }
     .tv-menu > summary::-webkit-details-marker { display: none; }
-    .tv-menu > summary::after { content: "▾"; color: var(--muted); font-size: 9px; }
+    .tv-menu > summary::after { content: "▾"; color: var(--secondary); font-size: 9px; }
     .tv-menu-list {
       position: absolute;
-      top: calc(100% + 4px);
+      top: calc(100% + 6px);
       right: 0;
       z-index: 40;
-      min-width: 128px;
-      padding: 4px;
+      min-width: 148px;
+      padding: 6px;
       display: grid;
       gap: 2px;
-      border: 1px solid var(--line);
-      border-radius: 4px;
-      background: var(--surface);
-      box-shadow: var(--shadow);
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+      background: var(--frame);
+      box-shadow: var(--chrome-shadow);
     }
     .tv-menu-list .tv-button { width: 100%; text-align: left; }
     .tv-file-button, .tv-button, .tv-select, .tv-field {
-      min-height: 34px;
-      border: 1px solid var(--line);
-      border-radius: 4px;
-      background: var(--surface);
+      min-height: 30px;
+      border: 1px solid var(--rule);
+      border-radius: 7px;
+      background: var(--frame);
+      color: var(--ui);
     }
     .tv-file-button {
       display: inline-flex;
@@ -147,10 +208,9 @@
       gap: 8px;
       padding: 0 10px;
       cursor: pointer;
-      border-style: dashed;
     }
     .tv-file-button:hover, .tv-file-button:focus-within,
-    .tv-button:hover { border-color: var(--focus); background: var(--surface-2); }
+    .tv-button:hover { border-color: var(--ui); background: rgba(255, 255, 255, .45); }
     .tv-file-button input { display: none; }
     .tv-file-stamp {
       display: grid;
@@ -160,7 +220,7 @@
       border: 1px solid currentColor;
       border-radius: 3px;
       color: var(--focus);
-      font: 700 9px/1 "SFMono-Regular", "Cascadia Mono", monospace;
+      font: 500 9px/1 var(--ui-font);
     }
     .tv-button {
       padding: 0 11px;
@@ -169,21 +229,42 @@
       font-weight: 650;
     }
     .tv-button:active { transform: translateY(1px); }
-    .tv-button:focus-visible, .tv-select:focus-visible, .tv-field:focus-visible, .tv-file-button:focus-within {
-      outline: 2px solid var(--focus);
+    .tv-button:focus-visible, .tv-select:focus-visible, .tv-field:focus-visible, .tv-file-button:focus-within,
+    .tv-brand:focus-visible {
+      outline: 2px solid var(--ui);
       outline-offset: 2px;
     }
     .tv-button:disabled, .tv-field:disabled { opacity: .55; cursor: default; }
-    .tv-button--primary { border-color: var(--focus); background: var(--focus); color: #fff; }
-    .tv-button--primary:hover { background: #155d91; color: #fff; }
+    .tv-button--primary { border-color: var(--export); background: var(--export); color: var(--export-ink); }
+    .tv-button--primary:hover { background: #2c261e; color: #fff; }
+    .tv-button--export,
+    .tv-topbar .tv-menu > summary.tv-button--export {
+      height: 30px;
+      padding: 0 14px;
+      border-radius: 8px;
+      background: var(--export);
+      color: var(--export-ink);
+      font-weight: 600;
+    }
+    .tv-topbar .tv-menu > summary.tv-button--export::after { color: var(--export-ink); }
+    .tv-button--export:hover,
+    .tv-topbar .tv-menu > summary.tv-button--export:hover {
+      background: #2c261e;
+      color: #fff;
+    }
+    [data-theme="dark"] .tv-button--primary:hover,
+    [data-theme="dark"] .tv-button--export:hover,
+    [data-theme="dark"] .tv-topbar .tv-menu > summary.tv-button--export:hover {
+      background: #2e3c46;
+    }
     .tv-button--danger { color: var(--danger); }
     .tv-toolbar .tv-select { min-width: 92px; padding: 0 8px; }
     .tv-control { display: grid; gap: 3px; }
-    .tv-control span, .tv-side h2, .tv-prop-label {
-      color: var(--muted);
-      font-size: 10px;
-      font-weight: 650;
-      letter-spacing: .02em;
+    .tv-control span, .tv-prop-label {
+      color: var(--secondary);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0;
     }
     .tv-workspace {
       display: grid;
@@ -197,66 +278,86 @@
       min-width: 0;
       min-height: 0;
       overflow: auto;
-      background: var(--surface);
-      border-right: 1px solid var(--line);
+      background: var(--frame);
+      border-right: 1px solid var(--rule);
       position: relative;
+      color: var(--ui);
     }
-    .tv-side--props { border-right: 0; border-left: 1px solid var(--line); }
+    .tv-side--props { border-right: 0; border-left: 1px solid var(--rule); }
     .tv-side-head {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      border-bottom: 1px solid var(--line);
+      border-bottom: 0;
+      padding: 16px 14px 0 18px;
     }
     .tv-side-head h2 { border-bottom: 0; flex: 1; }
     .tv-splitter {
-      background: var(--line);
+      background: var(--rule);
       cursor: col-resize;
       position: relative;
       z-index: 10;
     }
-    .tv-splitter:hover, .tv-splitter.is-active { background: var(--focus); }
+    .tv-splitter:hover, .tv-splitter.is-active { background: var(--secondary); }
     .tv-canvas-col {
       position: relative;
       min-width: 0;
       min-height: 0;
       display: grid;
-      grid-template-rows: minmax(0, 1fr) auto;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      background: var(--desk);
     }
     .tv-zoombar {
       display: flex;
       align-items: center;
-      gap: 6px;
-      padding: 4px 8px;
-      border-top: 1px solid var(--line);
-      background: var(--surface);
+      gap: 12px;
+      padding: 12px 16px 0;
+      border: 0;
+      background: transparent;
+    }
+    .tv-statusline {
+      display: flex;
+      align-items: center;
+      min-height: 36px;
+      padding: 0 16px 8px;
     }
     .tv-zoombar-label {
       min-width: 44px;
       text-align: center;
-      font: 650 11px/1 "SFMono-Regular", "Cascadia Mono", monospace;
-      color: var(--muted);
+      font: 500 14px/1 var(--ui-font);
+      font-variant-numeric: tabular-nums;
+      color: var(--secondary);
     }
     .tv-tools {
-      display: flex;
+      display: inline-flex;
       align-items: center;
-      gap: 4px;
-      margin-right: 8px;
-      padding-right: 8px;
-      border-right: 1px solid var(--line);
+      gap: 2px;
+      margin: 0;
+      padding: 3px;
+      border: 0;
+      border-radius: 10px;
+      background: #ddd4c4;
     }
     .tv-tools button, .tv-annotate summary, .tv-tools select {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
       min-height: 28px;
-      padding: 0 8px;
-      border: 1px solid var(--line);
-      border-radius: 4px;
-      background: var(--surface);
+      padding: 0 10px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--secondary);
       cursor: pointer;
     }
+    .tv-tools svg { width: 15px; height: 15px; display: block; flex: none; }
+    .tv-tools kbd { border: 0; background: transparent; color: inherit; opacity: .62; font-size: 11px; padding: 0; }
     .tv-tools button.is-on, .tv-annotate.is-on > summary {
-      background: var(--focus);
-      border-color: var(--focus);
-      color: #fff;
+      background: #fff;
+      border-color: transparent;
+      color: var(--ui);
+      font-weight: 650;
+      box-shadow: 0 1px 2px rgba(40, 32, 20, .16);
     }
     .tv-annotate { position: relative; }
     .tv-annotate summary { list-style: none; }
@@ -264,14 +365,16 @@
     .tv-annotate-menu {
       position: absolute;
       left: 0;
-      bottom: calc(100% + 6px);
+      top: calc(100% + 6px);
       z-index: 30;
       display: grid;
       gap: 4px;
-      min-width: 88px;
+      min-width: 120px;
       padding: 6px;
-      background: var(--surface);
-      border: 1px solid var(--line);
+      background: var(--frame);
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+      box-shadow: var(--chrome-shadow);
     }
     .tv-annotate-menu button { text-align: left; }
     .tv-inspector {
@@ -281,9 +384,11 @@
       max-height: 300px;
       overflow: auto;
       padding: 8px 10px;
-      background: var(--surface);
-      border: 1px solid var(--line);
-      color: var(--ink);
+      background: var(--frame);
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+      box-shadow: var(--chrome-shadow);
+      color: var(--ui);
       pointer-events: auto;
     }
     .tv-inspector-row.is-nearest {
@@ -345,7 +450,7 @@
       padding: 0 3px;
       background: var(--surface);
       color: var(--danger);
-      font: 650 10px/14px "SFMono-Regular", "Cascadia Mono", monospace;
+      font: 500 12px/14px var(--ui-font);
     }
     .tv-object-box {
       position: absolute;
@@ -379,9 +484,10 @@
       grid-template-columns: repeat(4, 64px);
       gap: 8px;
       padding: 10px;
-      background: var(--surface);
-      border: 1px solid var(--line);
-      box-shadow: var(--shadow);
+      background: var(--frame);
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+      box-shadow: var(--chrome-shadow);
     }
     .tv-layout-choice {
       display: grid;
@@ -418,7 +524,7 @@
       padding: 2px 6px;
       background: var(--ink);
       color: var(--surface);
-      font: 650 11px/1.3 "SFMono-Regular", "Cascadia Mono", monospace;
+      font: 500 12px/1.3 var(--ui-font);
       pointer-events: none;
     }
     .tv-legend-hit {
@@ -477,26 +583,27 @@
     .tv-rename-stage { max-height: 48vh; overflow: auto; padding: 12px; }
     .tv-side h2 {
       margin: 0;
-      padding: 10px 12px 8px;
-      border-bottom: 1px solid var(--line);
-      font: 700 11px/1 "SFMono-Regular", "Cascadia Mono", monospace;
-      letter-spacing: .06em;
-      text-transform: uppercase;
+      padding: 0;
+      border: 0;
+      color: var(--ui);
+      font: 500 22px/1.15 var(--ui-font);
+      letter-spacing: 0;
+      text-transform: none;
     }
-    .tv-side-body { padding: 10px 12px 16px; }
+    .tv-side-body { padding: 12px 18px 16px; }
     .tv-dataset {
-      margin-bottom: 12px;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--surface-2);
+      margin-bottom: 16px;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
     }
     .tv-dataset-head {
       display: grid;
       grid-template-columns: auto minmax(0, 1fr) auto auto auto;
       gap: 6px;
       align-items: center;
-      padding: 7px 8px;
-      border-bottom: 1px solid var(--line);
+      padding: 7px 0;
+      border-bottom: 0;
       cursor: pointer;
     }
     .tv-dataset-toggle {
@@ -646,23 +753,23 @@
     .tv-canvas-scroll {
       min-width: 0;
       overflow: auto;
-      background:
-        linear-gradient(var(--paper), var(--paper)),
-        repeating-linear-gradient(0deg, transparent, transparent 15px, var(--grid) 16px),
-        repeating-linear-gradient(90deg, transparent, transparent 15px, var(--grid) 16px);
-      background-color: #e7eaeb;
-      padding: 20px;
+      background: transparent;
+      padding: 8px 28px 12px;
     }
-    [data-theme="dark"] .tv-canvas-scroll { background-color: #101416; }
+    [data-theme="dark"] .tv-canvas-scroll { background: transparent; }
+    [data-theme="dark"] .tv-tools { background: #242a2e; }
+    [data-theme="dark"] .tv-tools button.is-on,
+    [data-theme="dark"] .tv-annotate.is-on > summary { background: #1b2023; color: var(--ui); }
     .tv-canvas-zoom { position: relative; }
     .tv-canvas-paper {
       position: relative;
       isolation: isolate;
       margin: 0 auto;
       background: var(--surface);
-      box-shadow: var(--shadow);
-      outline: 1px solid var(--line);
+      box-shadow: var(--paper-shadow);
+      outline: 1px solid rgba(48, 38, 26, .16);
     }
+    [data-theme="dark"] .tv-canvas-paper { outline: 1px solid var(--line); }
     .tv-workspace.is-left-collapsed #tvLeftPanel .tv-side-body,
     .tv-workspace.is-right-collapsed #tvRightPanel .tv-side-body,
     .tv-workspace.is-left-collapsed #tvLeftPanel h2,
@@ -690,21 +797,49 @@
       z-index: 1000;
     }
     .tv-selection-overlay .tv-plot-resize { pointer-events: auto; }
+    .tv-marquee {
+      position: absolute;
+      z-index: 1001;
+      border: 1px dashed #638dbb;
+      background: rgba(99, 141, 187, 0.12);
+      pointer-events: none;
+    }
+    .tv-align-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .tv-dock-ghost {
+      position: fixed;
+      z-index: 80;
+      width: 112px;
+      height: 72px;
+      margin: -36px 0 0 -56px;
+      opacity: 0.75;
+      pointer-events: none;
+      border: 1px solid #638dbb;
+      border-radius: 12px;
+      overflow: hidden;
+    }
     .tv-side-tabs { display: flex; gap: 4px; flex: 1; }
     .tv-side-tabs button {
       border: 0;
       background: transparent;
-      color: var(--muted);
-      font: inherit;
-      padding: 4px 8px;
-      border-radius: 4px;
+      color: var(--secondary);
+      font: 500 20px/1.15 var(--ui-font);
+      padding: 0 10px 0 0;
+      border-radius: 0;
       cursor: pointer;
     }
-    .tv-side-tabs button[aria-selected="true"] { color: var(--ink); background: var(--surface-2); }
+    .tv-side-tabs button[aria-selected="true"] {
+      color: var(--ui);
+      background: transparent;
+      box-shadow: none;
+    }
     .tv-layer-count { margin: 0 0 8px; color: var(--muted); }
     .tv-layer-row {
       display: grid;
-      grid-template-columns: 28px 28px 1fr;
+      grid-template-columns: 16px 28px 28px 1fr;
       align-items: center;
       gap: 2px;
       width: 100%;
@@ -728,10 +863,45 @@
       padding: 2px;
       font: inherit;
     }
-    .tv-layer-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tv-layer-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+    .tv-layer-grip { cursor: grab; color: var(--faint); font-size: 12px; letter-spacing: -1px; }
+    .tv-layer-row.is-drop-before { box-shadow: inset 0 2px 0 var(--focus); }
+    .tv-layer-row.is-drop-after { box-shadow: inset 0 -2px 0 var(--focus); }
+    .tv-layer-row.is-hidden .tv-layer-name { opacity: .45; }
+    .tv-layer-ends { margin: 2px 0 6px; color: var(--faint); font-size: 11px; }
     .tv-layer-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .tv-split { display: inline-flex; align-items: stretch; }
+    .tv-split > .tv-button { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+    .tv-split > .tv-menu > summary {
+      border-radius: 0 7px 7px 0;
+      border: 0;
+      min-width: 22px;
+      padding: 0 8px;
+      background: transparent;
+      color: var(--ui);
+    }
+    .tv-split > .tv-menu > summary::after { color: var(--secondary); }
+    .tv-split .tv-menu-list { min-width: 196px; }
+    .tv-menu-list .tv-button {
+      border: 0;
+      background: transparent;
+      font-weight: 400;
+    }
+    .tv-menu-list .tv-button:hover { border-color: transparent; background: rgba(255, 255, 255, .55); }
+    .tv-zoombar .tv-button {
+      border: 0;
+      background: transparent;
+      color: var(--secondary);
+      font-weight: 500;
+    }
+    .tv-zoombar .tv-button:hover { border-color: transparent; background: rgba(255, 255, 255, .45); }
+    .tv-menu-note { margin: 4px 6px; color: var(--muted); font-size: 11px; }
+    .tv-template-row { display: grid; gap: 4px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+    .tv-template-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+    .tv-check-list { display: grid; gap: 4px; margin: 8px 0 12px; }
+    .tv-legend-hit.is-selected { outline: 2px solid var(--focus); outline-offset: 1px; }
     .tv-object-kicker { margin: 0 0 8px; color: var(--muted); }
-    .tv-plot svg { display: block; width: 100%; height: 100%; }
+    .tv-plot svg { display: block; width: 100%; height: 100%; font-family: Aptos, "Helvetica Neue", "Noto Sans SC", sans-serif; }
     .tv-plot-resize {
       position: absolute;
       right: 0;
@@ -882,9 +1052,10 @@
       grid-template-columns: repeat(3, 92px);
       gap: 8px;
       padding: 10px;
-      background: var(--surface);
-      border: 1px solid var(--line);
-      box-shadow: var(--shadow);
+      background: var(--frame);
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+      box-shadow: var(--chrome-shadow);
     }
     .tv-snap-choice { display: grid; gap: 4px; }
     .tv-snap-choice span { font-size: 10px; color: var(--muted); }
@@ -934,25 +1105,25 @@
       padding: 0;
       width: min(96vw, 1280px);
       max-height: 92vh;
-      background: var(--surface);
-      color: var(--ink);
-      box-shadow: var(--shadow);
+      background: var(--frame);
+      color: var(--ui);
+      box-shadow: var(--chrome-shadow);
     }
     .tv-preview::backdrop,
-    .tv-about::backdrop { background: rgba(18, 22, 24, .45); }
+    .tv-about::backdrop { background: rgba(28, 27, 25, .35); }
     .tv-preview-bar {
       display: flex;
       justify-content: space-between;
       gap: 12px;
       align-items: center;
       padding: 10px 12px;
-      border-bottom: 1px solid var(--line);
+      border-bottom: 1px solid var(--rule);
     }
     .tv-preview-stage {
       overflow: auto;
       max-height: calc(92vh - 52px);
       padding: 16px;
-      background: #e7eaeb;
+      background: var(--desk);
     }
     .tv-preview-stage svg {
       display: block;
@@ -960,7 +1131,8 @@
       max-width: 100%;
       height: auto;
       background: var(--surface);
-      box-shadow: var(--shadow);
+      box-shadow: var(--paper-shadow);
+      font-family: Aptos, "Helvetica Neue", "Noto Sans SC", sans-serif;
     }
     .tv-icon-button {
       width: 28px;
@@ -982,12 +1154,12 @@
       max-height: min(78vh, 640px);
       margin: auto;
       overflow: hidden;
-      border: 1px solid var(--line);
+      border: 1px solid var(--rule);
       border-radius: var(--radius);
       padding: 0;
-      background: var(--surface);
-      color: var(--ink);
-      box-shadow: var(--shadow);
+      background: var(--frame);
+      color: var(--ui);
+      box-shadow: var(--chrome-shadow);
     }
     .tv-about[open] {
       display: flex;
@@ -1000,25 +1172,23 @@
     }
     .tv-about-name {
       margin: 0;
-      font-size: 18px;
-      letter-spacing: -.03em;
-      font-weight: 720;
+      font-family: var(--ui-font);
+      font-size: 22px;
+      font-weight: 500;
+      letter-spacing: 0;
     }
-    .tv-about-tagline { margin: 4px 0 0; color: var(--muted); }
+    .tv-about-tagline { margin: 4px 0 0; color: var(--secondary); }
     .tv-about-meta {
       display: grid;
       grid-template-columns: 1fr auto;
       gap: 8px 16px;
       margin: 14px 0;
       padding: 10px 0;
-      border-top: 1px solid var(--line);
-      border-bottom: 1px solid var(--line);
+      border-top: 1px solid var(--rule);
+      border-bottom: 1px solid var(--rule);
     }
-    .tv-about-meta dt { color: var(--muted); }
-    .tv-about-meta dd {
-      margin: 0;
-      font-family: "SFMono-Regular", "Cascadia Mono", "Noto Sans Mono", monospace;
-    }
+    .tv-about-meta dt { color: var(--secondary); }
+    .tv-about-meta dd { margin: 0; font-family: var(--ui-font); }
     .tv-update-status {
       margin: 0 0 12px;
       padding: 10px 12px;
@@ -1031,10 +1201,7 @@
     .tv-update-status[data-status="available"] { border-color: var(--focus); }
     .tv-update-status[data-status="error"] { border-color: #c66d61; }
     .tv-update-heading { margin: 0 0 6px; font-size: 13px; }
-    .tv-update-version {
-      margin: 0;
-      font-family: "SFMono-Regular", "Cascadia Mono", "Noto Sans Mono", monospace;
-    }
+    .tv-update-version { margin: 0; font-family: var(--ui-font); }
     .tv-update-notes {
       max-height: 180px;
       overflow: auto;
@@ -1056,9 +1223,11 @@
       padding: 0;
       border: 0;
       background: transparent;
-      color: var(--focus);
+      color: var(--ui);
       font-size: 12px;
       font-weight: 650;
+      text-decoration: underline;
+      text-underline-offset: 3px;
       cursor: pointer;
     }
     .tv-about-spin {
@@ -1079,44 +1248,187 @@
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { transition-duration: 1ms !important; animation-duration: 1ms !important; }
     }
+    .tv-modebar {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 12px 0;
+      padding: 12px 16px;
+      background: #fafafa;
+      border: 1px solid #e2e2e2;
+      border-radius: 14px;
+      color: #262626;
+    }
+    .tv-crumbs { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; }
+    .tv-crumbs button {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 0;
+      background: transparent;
+      padding: 0;
+      color: #262626;
+      cursor: pointer;
+    }
+    .tv-crumb-icon { display: block; flex: none; }
+    .tv-crumbs .is-muted { color: #737373; }
+    .tv-mode-hint { margin: 0; color: #737373; font-size: 12px; line-height: 1.45; }
+    .tv-mode-switch { display: inline-flex; padding: 3px; border-radius: 999px; background: #efefef; }
+    .tv-mode-switch button {
+      border: 0;
+      background: transparent;
+      border-radius: 999px;
+      padding: 4px 12px;
+      color: #737373;
+      cursor: pointer;
+    }
+    .tv-mode-switch button[aria-pressed="true"] { background: #fff; color: #262626; }
+    .tv-dock {
+      margin: 8px 12px 12px;
+      padding: 12px 16px 14px;
+      background: #fafafa;
+      border: 1px solid #e2e2e2;
+      border-radius: 16px;
+      color: #262626;
+    }
+    .tv-dock-head, .tv-dock-row { display: flex; align-items: center; }
+    .tv-dock-head { justify-content: space-between; gap: 12px; }
+    .tv-dock-title { font-size: 14px; }
+    .tv-dock-count, .tv-dock-name { color: #737373; }
+    .tv-dock-count { font-size: 13px; }
+    .tv-dock-tools { display: flex; align-items: center; gap: 8px; }
+    .tv-dock-row { gap: 12px; overflow-x: auto; align-items: flex-end; padding-top: 10px; }
+    .tv-dock-card {
+      flex: none;
+      width: 112px;
+      border: 0;
+      background: transparent;
+      padding: 0;
+      text-align: center;
+      color: #262626;
+      cursor: pointer;
+    }
+    .tv-dock.is-expanded .tv-dock-card { width: 156px; }
+    .tv-dock-thumb {
+      height: 72px;
+      border-radius: 12px;
+      border: 1px solid transparent;
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+    }
+    .tv-dock.is-expanded .tv-dock-thumb { height: 104px; }
+    .tv-dock-card.is-selected .tv-dock-thumb { border-color: #638dbb; }
+    .tv-dock-card.is-on { outline: 1px dashed #638dbb; outline-offset: 2px; }
+    .tv-dock-name { display: block; margin-top: 6px; font-size: 12px; color: #262626; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tv-dock-split { width: 1px; align-self: stretch; background: #e2e2e2; margin: 0 2px 22px; flex: none; }
+    .tv-dock-plus .tv-dock-thumb { background: #fff; border-color: #e2e2e2; color: #737373; font-size: 28px; line-height: 1; }
+    .tv-dock-thumb svg { width: 100%; height: 100%; display: block; }
+    .tv-dock-menu { position: relative; }
+    .tv-dock-popover {
+      position: absolute;
+      right: 0;
+      bottom: 28px;
+      z-index: 30;
+      min-width: 140px;
+      padding: 6px;
+      background: #fafafa;
+      border: 1px solid #e2e2e2;
+      border-radius: 10px;
+    }
+    .tv-dock-popover button, .tv-context button {
+      display: block;
+      width: 100%;
+      text-align: left;
+      border: 0;
+      background: transparent;
+      border-radius: 6px;
+      padding: 6px 8px;
+      cursor: pointer;
+    }
+    .tv-dock-popover button:hover, .tv-context button:hover, .tv-dock-card:hover .tv-dock-thumb { filter: saturate(1.05); }
+    .tv-dock-popover button:hover, .tv-context button:hover { background: #eef3f8; }
+    .tv-context {
+      position: fixed;
+      z-index: 40;
+      min-width: 168px;
+      padding: 6px;
+      background: #fafafa;
+      border: 1px solid #e2e2e2;
+      border-radius: 10px;
+    }
+    .tv-canvas-paper.is-drop { outline: 2px dashed #638dbb; }
+    .tv-series-preview {
+      margin: 8px 12px 0;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+    .tv-series-preview p { margin: 0 0 6px; }
+    .tv-series-preview svg { width: 100%; height: 36px; display: block; }
+    @media (max-width: 980px) {
+      .tv-brand { margin-right: 8px; font-size: 18px; }
+      .tv-modebar, .tv-dock { margin-left: 8px; margin-right: 8px; }
+      .tv-tools span { display: none; }
+    }
   </style>
 </head>
 <body>
   <div class="tv-app" id="tvApp" data-theme="light">
     <header class="tv-topbar">
-      <div class="tv-brand">
-        <p class="tv-kicker" id="tvKicker">VISUALIZER</p>
-      </div>
-      <div class="tv-dirty" id="tvDirty">未命名工程.json  · 已保存</div>
-      <p class="tv-status" id="tvStatus" role="status">导入 CSV 开始，或打开已有工程。</p>
-      <div class="tv-toolbar" role="toolbar" aria-label="工程操作">
-        <label class="tv-file-button">
-          <span>导入</span>
-          <input id="tvCsvInput" type="file" accept=".csv,text/csv" multiple>
-        </label>
+      <div class="tv-bar tv-bar-left" role="toolbar" aria-label="文件">
+        <button type="button" class="tv-brand" id="tvAboutOpen" data-role="open-about">Visualizer</button>
         <button type="button" class="tv-button" id="tvNewProject">新建</button>
         <button type="button" class="tv-button" id="tvOpenProject">打开</button>
         <details class="tv-menu">
-          <summary>保存</summary>
+          <summary class="tv-button">保存</summary>
           <div class="tv-menu-list">
             <button type="button" class="tv-button" id="tvSaveProject">保存</button>
             <button type="button" class="tv-button" id="tvSaveProjectAs">另存为</button>
           </div>
         </details>
-        <button type="button" class="tv-button tv-button--primary" id="tvNewPlot">+ 图</button>
+        <label class="tv-file-button">
+          <span>导入</span>
+          <input id="tvCsvInput" type="file" accept=".csv,text/csv" multiple>
+        </label>
+      </div>
+      <div class="tv-doc">
+        <span class="tv-doc-name" id="tvDocName">未命名工程</span>
+        <span class="tv-dirty" id="tvDirty">已保存</span>
+      </div>
+      <div class="tv-bar tv-bar-right" role="toolbar" aria-label="图与输出">
+        <div class="tv-split">
+          <button type="button" class="tv-button" id="tvNewPlot">添加图</button>
+          <details class="tv-menu" id="tvNewPlotMenu">
+            <summary class="tv-button" aria-label="选择图表模板"></summary>
+            <div class="tv-menu-list" id="tvNewPlotList"></div>
+          </details>
+        </div>
+        <input id="tvTemplateImport" type="file" accept=".tvtemplate.json,.json,application/json" hidden>
         <button type="button" class="tv-button" id="tvLayout">布局</button>
         <button type="button" class="tv-button" id="tvPreview">预览</button>
         <details class="tv-menu">
-          <summary>导出</summary>
+          <summary class="tv-button tv-button--export">导出</summary>
           <div class="tv-menu-list">
-            <button type="button" class="tv-button" id="tvExportPng">导出 PNG</button>
-            <button type="button" class="tv-button" id="tvExportSvg">导出 SVG</button>
+            <button type="button" class="tv-button" id="tvExportPng">导出画布 PNG</button>
+            <button type="button" class="tv-button" id="tvExportSvg">导出画布 SVG</button>
+            <button type="button" class="tv-button" id="tvExportPlotPng">导出当前图窗 PNG</button>
+            <button type="button" class="tv-button" id="tvExportPlotSvg">导出当前图窗 SVG</button>
           </div>
         </details>
-        <button type="button" class="tv-button" id="tvAboutOpen" data-role="open-about">关于</button>
         <input id="tvProjectInput" type="file" accept=".tvproj.json,.tvproj,.json,application/json" hidden>
       </div>
     </header>
+    <div class="tv-modebar" id="tvModebar">
+      <div class="tv-crumbs" id="tvCrumbs"></div>
+      <div class="tv-mode-switch" role="group" aria-label="工作模式">
+        <button type="button" id="tvModeCanvas" aria-pressed="true">排版模式</button>
+        <button type="button" id="tvModePlot" aria-pressed="false">绘图模式</button>
+      </div>
+      <p class="tv-mode-hint">双击画布中的图进入独立绘图模式，返回上一级则继续排版。Dock 可直接切换图窗。</p>
+    </div>
     <div class="tv-workspace" id="tvWorkspace">
       <aside class="tv-side" id="tvLeftPanel" aria-label="数据">
         <div class="tv-side-head">
@@ -1127,18 +1439,12 @@
       </aside>
       <div class="tv-splitter" id="tvSplitLeft" role="separator" aria-orientation="vertical" aria-label="调整数据栏宽度"></div>
       <section class="tv-canvas-col">
-        <div class="tv-canvas-scroll" id="tvCanvasScroll" aria-label="画布" tabindex="0">
-          <div class="tv-canvas-zoom" id="tvCanvasZoom">
-            <div class="tv-canvas-paper" id="tvCanvasPaper"></div>
-            <div class="tv-guides" id="tvGuides"></div>
-          </div>
-        </div>
-        <div id="tvInspector" class="tv-inspector" hidden></div>
         <div class="tv-zoombar" aria-label="画布缩放">
           <div class="tv-tools" role="toolbar" aria-label="查看与标注">
-            <button type="button" data-tool="pointer" aria-pressed="true">选择</button>
-            <button type="button" data-tool="range-select" aria-pressed="false">框选</button>
-            <button type="button" data-tool="cursor" aria-pressed="false">读数</button>
+            <button type="button" data-tool="pointer" aria-pressed="true" title="选择（V）"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2.5v10.2l2.4-2.2 1.7 3.3 1.6-.8-1.7-3.2H10L3 2.5z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg><span>选择</span><kbd>V</kbd></button>
+            <button type="button" data-tool="range-select" aria-pressed="false" title="框选（M）"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2.2 1.6"/></svg><span>框选</span><kbd>M</kbd></button>
+            <button type="button" data-tool="cursor" aria-pressed="false" title="读数（R）"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8v3.2M8 11v3.2M1.8 8h3.2M11 8h3.2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="8" r="2.2" fill="none" stroke="currentColor" stroke-width="1.4"/></svg><span>读数</span><kbd>R</kbd></button>
+            <button type="button" data-tool="pan" aria-pressed="false" title="平移（H）"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.2v11.6M2.2 8h11.6M8 2.2 6.2 4M8 2.2 9.8 4M8 13.8 6.2 12M8 13.8 9.8 12M2.2 8 4 6.2M2.2 8 4 9.8M13.8 8 12 6.2M13.8 8 12 9.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg><span>平移</span><kbd>H</kbd></button>
             <select id="tvCursorMode" aria-label="读数方式" hidden>
               <option value="nearest">最近点</option>
               <option value="interpolate">插值</option>
@@ -1158,6 +1464,16 @@
           <button type="button" class="tv-button tv-button--tiny" id="tvZoomFit">适应窗口</button>
           <button type="button" class="tv-button tv-button--tiny" id="tvZoom100">100%</button>
         </div>
+        <div class="tv-canvas-scroll" id="tvCanvasScroll" aria-label="画布" tabindex="0">
+          <div class="tv-canvas-zoom" id="tvCanvasZoom">
+            <div class="tv-canvas-paper" id="tvCanvasPaper"></div>
+            <div class="tv-guides" id="tvGuides"></div>
+          </div>
+        </div>
+        <div id="tvInspector" class="tv-inspector" hidden></div>
+        <div class="tv-statusline">
+          <p class="tv-status" id="tvStatus" role="status">导入 CSV 开始，或打开已有工程。</p>
+        </div>
       </section>
       <div class="tv-splitter" id="tvSplitRight" role="separator" aria-orientation="vertical" aria-label="调整属性栏宽度"></div>
       <aside class="tv-side tv-side--props" id="tvRightPanel" aria-label="属性">
@@ -1172,7 +1488,9 @@
         <div class="tv-side-body" id="tvLayerPanel" hidden></div>
       </aside>
     </div>
+    <footer class="tv-dock" id="tvDock" aria-label="图窗 Dock"></footer>
   </div>
+  <div class="tv-context" id="tvContext" hidden></div>
   <dialog class="tv-preview" id="tvPreviewDialog" aria-label="画布预览">
     <div class="tv-preview-bar">
       <strong>画布预览</strong>
@@ -1186,6 +1504,34 @@
       <button type="button" class="tv-button" id="tvRenameClose">取消</button>
     </div>
     <div class="tv-rename-stage" id="tvRenameStage"></div>
+  </dialog>
+  <dialog class="tv-about" id="tvTemplateSaveDialog" aria-label="保存图表模板">
+    <div class="tv-preview-bar">
+      <strong>保存图表模板</strong>
+      <button type="button" class="tv-button" id="tvTemplateSaveCancel">取消</button>
+    </div>
+    <div class="tv-about-body">
+      <label class="tv-prop-label" for="tvTemplateName">模板名称</label>
+      <input class="tv-field" id="tvTemplateName" value="论文单图">
+      <p class="tv-hint">保存的是绘图格式，不包含数据、当前坐标范围、标注和局部视图。</p>
+      <div class="tv-check-list">
+        <label><input type="checkbox" id="tvTplFigure" checked> 图表尺寸与背景</label>
+        <label><input type="checkbox" id="tvTplText" checked> 标题样式</label>
+        <label><input type="checkbox" id="tvTplX" checked> X Axis 样式</label>
+        <label><input type="checkbox" id="tvTplY" checked> Y Axis 样式</label>
+        <label><input type="checkbox" id="tvTplEdge" checked> 上 / 右边框</label>
+        <label><input type="checkbox" id="tvTplLegend" checked> 图例</label>
+        <label><input type="checkbox" id="tvTplSeries" checked> Series 默认样式</label>
+      </div>
+      <button type="button" class="tv-button tv-button--primary" id="tvTemplateSaveConfirm">保存模板</button>
+    </div>
+  </dialog>
+  <dialog class="tv-about" id="tvTemplateManagerDialog" aria-label="管理图表模板">
+    <div class="tv-preview-bar">
+      <strong>图表模板</strong>
+      <button type="button" class="tv-button" id="tvTemplateManagerClose">关闭</button>
+    </div>
+    <div class="tv-about-body" id="tvTemplateManagerBody"></div>
   </dialog>
   <dialog class="tv-about" id="tvAboutDialog" aria-labelledby="tvAboutTitle">
     <div class="tv-preview-bar">
@@ -1238,8 +1584,16 @@
     var renameStage = document.getElementById("tvRenameStage");
     var lastCanvasSvg = "";
     var project = core.createProject();
-    core.ensureDefaultPlot(project);
+    core.ensureWorkspace(project);
+    core.syncCanvasToPlots(project);
     var selectedPlotId = project.plots[0].id;
+    var workspaceFocus = null;
+    var selectedInstanceIds = [];
+    var thumbCache = {};
+    var panDrag = null;
+    var dockDrag = null;
+    var instanceMarquee = null;
+    var intrinsicLayout = false;
     var selectedRefIndex = 0;
     var lastSelectedSeriesId = {};
     var checkedSeries = new Set();
@@ -1257,6 +1611,10 @@
     var splitterDrag = null;
     var interactionMode = "pointer";
     var selectedObject = null;
+    var templateLibrary = { defaultTemplateId: "", templates: [] };
+    var templateStoreError = "";
+    var pendingEditFocus = "";
+    var layerDragId = "";
     var cursorHover = null;
     var readoutCursor = null;
     var cursorReadMode = "nearest";
@@ -1362,8 +1720,10 @@
       dirty = value;
       dirtyEl.hidden = false;
       dirtyEl.classList.toggle("is-dirty", !!dirty);
-      dirtyEl.textContent = projectFileLabel() + (dirty ? "  · 未保存" : "  · 已保存");
-      document.title = (dirty ? "• " : "") + project.projectName + " · Visualizer";
+      dirtyEl.textContent = dirty ? "未保存" : "已保存";
+      var nameEl = document.getElementById("tvDocName");
+      if (nameEl) nameEl.textContent = (project && project.projectName) || "未命名工程";
+      document.title = (dirty ? "• " : "") + projectFileLabel() + " · Visualizer";
     }
 
     function syncInspectorFocus(kind, focusKey, childKey) {
@@ -1399,8 +1759,9 @@
 
     function applyCanvasZoom(keepPoint) {
       var zoom = canvasZoom();
-      var width = project.canvas.width;
-      var height = project.canvas.height;
+      var metrics = stageMetrics();
+      var width = metrics.width;
+      var height = metrics.height;
       canvasZoomEl.style.width = (width * zoom) + "px";
       canvasZoomEl.style.height = (height * zoom) + "px";
       paper.style.width = width + "px";
@@ -1530,6 +1891,26 @@
       clearDataSelection();
       readoutCursor = null;
       return true;
+    }
+
+    function setSelectedObject(raw) {
+      selectedObject = raw ? core.normalizeSelectedObject(raw) : null;
+    }
+
+    function focusPendingEdit() {
+      if (!pendingEditFocus) return;
+      var key = pendingEditFocus;
+      pendingEditFocus = "";
+      var input = propsPanel.querySelector('[data-edit-focus="' + key.replace(/"/g, "") + '"]');
+      if (!input) return;
+      setRightTab("props");
+      var node = input;
+      while (node && node !== propsPanel) {
+        if (node.tagName === "DETAILS") node.open = true;
+        node = node.parentElement;
+      }
+      input.focus();
+      if (input.select) input.select();
     }
 
     function confirmDiscard() {
@@ -1864,12 +2245,24 @@
         "aria-label": core.plotEditorName(plot),
         xmlns: svgNamespace
       });
+      svg.__legendEntries = (legend.placed || []).map(function (entry) {
+        return {
+          x: entry.x,
+          y: entry.y,
+          width: entry.width || 48,
+          height: entry.height || 16,
+          seriesId: entry.item && entry.item.seriesId
+        };
+      });
       svg.__legendBox = legendBox;
       svg.__legendOverflow = legend.overflow || 0;
       svg.__plotArea = layout.plotArea;
       appendSvg(svg, "rect", { x: 0, y: 0, width: width, height: height, fill: plot.background || colors.surface });
       var titleAnchor = { "text-anchor": layout.titleAnchor || "start" };
-      if (titleText) applyText(svg, layout.titlePos.x, layout.titlePos.y, plot.textStyles.title, colors.ink, titleAnchor, titleText);
+      if (titleText) {
+        var titleNode = applyText(svg, layout.titlePos.x, layout.titlePos.y, plot.textStyles.title, colors.ink, titleAnchor, titleText);
+        if (interactive) titleNode.setAttribute("data-edit", "title");
+      }
       if (plot.subtitle) {
         applyText(svg, layout.subtitlePos.x, layout.subtitlePos.y, { fontFamily: plot.textStyles.title.fontFamily, fontSize: 11, fontColor: colors.muted, fontWeight: "400" }, colors.muted, titleAnchor, plot.subtitle);
       }
@@ -1890,7 +2283,8 @@
         yTickSize: yTickSize
       });
       if (xTitle) {
-        applyText(svg, layout.xAxisTitlePos.x, layout.xAxisTitlePos.y, plot.textStyles.xAxisTitle, colors.ink, { "text-anchor": "middle" }, xTitle);
+        var xTitleNode = applyText(svg, layout.xAxisTitlePos.x, layout.xAxisTitlePos.y, plot.textStyles.xAxisTitle, colors.ink, { "text-anchor": "middle" }, xTitle);
+        if (interactive) xTitleNode.setAttribute("data-edit", "x-title");
       }
       if (yTitle) {
         var yTitleNode = applyText(svg, layout.yAxisTitlePos.x, layout.yAxisTitlePos.y, plot.textStyles.yAxisTitle, colors.ink, {
@@ -1898,6 +2292,7 @@
           transform: "rotate(-90 " + layout.yAxisTitlePos.x + " " + layout.yAxisTitlePos.y + ")"
         }, yTitle);
         yTitleNode.setAttribute("letter-spacing", ".01em");
+        if (interactive) yTitleNode.setAttribute("data-edit", "y-title");
       }
       var clipId = "plot-clip-" + String(plot.id).replace(/[^A-Za-z0-9_-]/g, "") + (interactive ? "-e" : "-f");
       var defs = createSvg("defs");
@@ -1922,7 +2317,7 @@
         appendSvg(seriesGroup, "path", pathAttrs);
       });
       svg.appendChild(seriesGroup);
-      drawDetailSourceBoxes(svg, plot, xScale, yScale);
+      drawDetailSourceBoxes(svg, plot, xScale, yScale, !!interactive);
       svg.__inspection = drawPlotInspection(svg, plot, {
         width: width,
         height: height,
@@ -2056,7 +2451,7 @@
       return path;
     }
 
-    function drawDetailSourceBoxes(svg, plot, xScale, yScale) {
+    function drawDetailSourceBoxes(svg, plot, xScale, yScale, interactive) {
       (project.plots || []).forEach(function (detail) {
         var source = detail.detailSource;
         if (!source || source.sourceFigureId !== plot.id || source.showSourceBox === false || detail.visible === false) return;
@@ -2079,10 +2474,22 @@
         var dash = core.strokeDasharray(style.lineType);
         if (dash) attrs["stroke-dasharray"] = dash;
         appendSvg(svg, "rect", attrs);
+        if (!interactive) return;
+        appendSvg(svg, "rect", {
+          x: attrs.x,
+          y: attrs.y,
+          width: attrs.width,
+          height: attrs.height,
+          fill: "transparent",
+          stroke: "transparent",
+          "stroke-width": Math.max(8, Number(style.lineWidth) || 1),
+          "data-object": "source-box",
+          "data-object-id": detail.id
+        });
       });
     }
 
-    function appendDetailConnectors(svg, originOf, onlyPlot) {
+    function appendDetailConnectors(svg, originOf, onlyPlot, interactive) {
       (project.plots || []).forEach(function (detail) {
         if (onlyPlot && detail.id !== onlyPlot.id) return;
         if (detail.visible === false) return;
@@ -2094,13 +2501,15 @@
         var frame = sourceSvg && sourceSvg.__inspection && sourceSvg.__inspection.frame;
         if (!frame) return;
         var range = spec.sourceRange;
+        var sourceView = viewBox(source);
+        var detailView = viewBox(detail);
         var box = {
-          x1: source.layout.x + frame.dataToPixelX(range.xMin),
-          x2: source.layout.x + frame.dataToPixelX(range.xMax),
-          y1: source.layout.y + frame.dataToPixelY(range.yMax),
-          y2: source.layout.y + frame.dataToPixelY(range.yMin)
+          x1: sourceView.x + frame.dataToPixelX(range.xMin) * sourceView.scaleX,
+          x2: sourceView.x + frame.dataToPixelX(range.xMax) * sourceView.scaleX,
+          y1: sourceView.y + frame.dataToPixelY(range.yMax) * sourceView.scaleY,
+          y2: sourceView.y + frame.dataToPixelY(range.yMin) * sourceView.scaleY
         };
-        var figure = { x: detail.layout.x, y: detail.layout.y, width: detail.layout.width, height: detail.layout.height };
+        var figure = { x: detailView.x, y: detailView.y, width: detailView.width, height: detailView.height };
         var style = spec.connectorStyle || {};
         var dash = core.strokeDasharray(style.lineType);
         core.detailConnectorLines(box, figure).forEach(function (line) {
@@ -2110,7 +2519,17 @@
             "stroke-width": style.lineWidth || 1
           };
           if (dash) attrs["stroke-dasharray"] = dash;
-          appendSvg(svg, "line", attrs);
+          var drawn = appendSvg(svg, "line", attrs);
+          if (interactive) drawn.style.pointerEvents = "none";
+          if (!interactive) return;
+          var hit = appendSvg(svg, "line", {
+            x1: line.x1, y1: line.y1, x2: line.x2, y2: line.y2,
+            stroke: "transparent",
+            "stroke-width": Math.max(10, (Number(style.lineWidth) || 1) + 8),
+            "data-object": "connector",
+            "data-object-id": detail.id
+          });
+          hit.style.pointerEvents = "stroke";
         });
       });
     }
@@ -2128,18 +2547,23 @@
       });
       appendSvg(svg, "rect", { width: width, height: height, fill: colors.surface });
       var nodes = {};
-      core.plotsInLayerOrder(project).forEach(function (plot) {
-        if (plot.visible === false) return;
+      var previousMode = project.ui && project.ui.workspaceMode;
+      if (project.ui) project.ui.workspaceMode = "canvas";
+      stagePlots().forEach(function (plot) {
+        var view = viewBox(plot);
         var nested = buildPlotSvg(plot, plot.layout.width, plot.layout.height, false);
-        nested.setAttribute("x", plot.layout.x);
-        nested.setAttribute("y", plot.layout.y);
-        nodes[plot.id] = nested;
+        var holder = createSvg("g", {
+          transform: "translate(" + view.x + " " + view.y + ") scale(" + view.scaleX + " " + view.scaleY + ")"
+        });
+        holder.appendChild(nested);
+        holder.__inspection = nested.__inspection;
+        nodes[plot.id] = holder;
       });
-      core.plotsInLayerOrder(project).forEach(function (plot) {
-        if (plot.visible === false) return;
+      stagePlots().forEach(function (plot) {
         if (plot.type === "detail") appendDetailConnectors(svg, function (item) { return nodes[item.id]; }, plot);
         if (nodes[plot.id]) svg.appendChild(nodes[plot.id]);
       });
+      if (project.ui) project.ui.workspaceMode = previousMode;
       lastCanvasSvg = new XMLSerializer().serializeToString(svg);
       return svg;
     }
@@ -2381,29 +2805,62 @@
       var select = document.createElement("select");
       select.className = "tv-select";
       select.setAttribute("aria-label", "目标图");
-      if (!project.plots.length) {
-        var none = document.createElement("option");
-        none.value = "";
-        none.textContent = "请先新建图";
-        select.appendChild(none);
-      } else {
-        project.plots.forEach(function (plot) {
-          var option = document.createElement("option");
-          option.value = plot.id;
-          option.textContent = core.plotEditorName(plot);
-          select.appendChild(option);
-        });
-        select.value = selectedPlotId && project.plots.some(function (plot) { return plot.id === selectedPlotId; })
-          ? selectedPlotId
-          : project.plots[0].id;
+      var windows = core.plotWindows(project);
+      var explicitCanvas = workspaceMode() === "canvas" && workspaceFocus && workspaceFocus.type === "canvas";
+      var placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = windows.length ? "选择图窗" : "请先新建图窗";
+      select.appendChild(placeholder);
+      windows.forEach(function (plot) {
+        var option = document.createElement("option");
+        option.value = plot.id;
+        option.textContent = core.plotEditorName(plot);
+        select.appendChild(option);
+      });
+      if (!explicitCanvas) {
+        var preferred = core.addSeriesTargetId(project, { type: "plot", plotId: selectedPlotId });
+        if (preferred) select.value = preferred;
+      }
+      var checkedIds = Array.from(checkedSeries);
+      var previewSeries = checkedIds.length ? core.findSeries(project, checkedIds[checkedIds.length - 1]) : null;
+      if (previewSeries) {
+        var preview = document.createElement("div");
+        preview.className = "tv-series-preview";
+        var finiteY = (previewSeries.y || []).filter(function (value) { return Number.isFinite(Number(value)); });
+        var minY = finiteY.length ? Math.min.apply(null, finiteY) : null;
+        var maxY = finiteY.length ? Math.max.apply(null, finiteY) : null;
+        var summary = document.createElement("p");
+        summary.textContent = core.seriesDisplayName(previewSeries)
+          + " · " + (previewSeries.unit || "无单位")
+          + " · " + (previewSeries.x || []).length + " 点"
+          + (minY == null ? "" : " · " + minY + " – " + maxY);
+        var spark = document.createElementNS(svgNamespace, "svg");
+        spark.setAttribute("viewBox", "0 0 120 36");
+        var step = Math.max(1, Math.floor(finiteY.length / 48));
+        var sample = [];
+        for (var sampleIndex = 0; sampleIndex < finiteY.length; sampleIndex += step) sample.push(finiteY[sampleIndex]);
+        if (sample.length > 1 && maxY !== minY) {
+          var path = document.createElementNS(svgNamespace, "path");
+          path.setAttribute("fill", "none");
+          path.setAttribute("stroke", "#35597a");
+          path.setAttribute("stroke-width", "1.4");
+          path.setAttribute("d", sample.map(function (value, index) {
+            var x = index / (sample.length - 1) * 120;
+            var y = 32 - ((value - minY) / (maxY - minY)) * 28;
+            return (index ? "L" : "M") + x.toFixed(1) + " " + y.toFixed(1);
+          }).join(" "));
+          spark.appendChild(path);
+        }
+        preview.append(summary, spark);
+        dataPanel.appendChild(preview);
       }
       var add = document.createElement("button");
       add.type = "button";
       add.className = "tv-button tv-button--primary";
-      add.textContent = "添加到当前图";
+      add.textContent = "加入图窗";
       add.addEventListener("click", function () {
         var plot = project.plots.find(function (item) { return item.id === select.value; });
-        if (!plot) return setStatus("请先新建图，再加入曲线。", "error");
+        if (!plot) return setStatus("请先选择要加入的图窗。", "error");
         var ids = Array.from(checkedSeries);
         if (!ids.length) return setStatus("请先勾选要加入的曲线。", "error");
         var before = ids.length;
@@ -2469,7 +2926,9 @@
     function figurePoint(box, event) {
       var rect = box.getBoundingClientRect();
       var zoom = canvasZoom() || 1;
-      return { x: (event.clientX - rect.left) / zoom, y: (event.clientY - rect.top) / zoom };
+      var scaleX = Number(box.dataset.scaleX) || 1;
+      var scaleY = Number(box.dataset.scaleY) || 1;
+      return { x: (event.clientX - rect.left) / zoom / scaleX, y: (event.clientY - rect.top) / zoom / scaleY };
     }
 
     function annotationPixels(ann, frame, area) {
@@ -3125,17 +3584,16 @@
     }
 
     function deleteSelectedObject() {
-      var plot = selectedPlot();
-      if (!plot || !selectedObject || selectedObject.plotId !== plot.id) return false;
-      var objectId = selectedObject.id;
-      var objectType = selectedObject.type;
-      commitEdit(objectType === "inset" ? "Delete inset" : "Delete annotation", function () {
-        if (objectType === "inset") plot.insets = plot.insets.filter(function (item) { return item.id !== objectId; });
-        else plot.annotations = plot.annotations.filter(function (item) { return item.id !== objectId; });
+      var plan = core.selectedObjectAction(project, selectedObject);
+      if (plan.action === "none") return false;
+      if (plan.type === "plot" || plan.type === "detail") return false;
+      commitEdit(plan.action === "hide" ? "Hide " + plan.type : "Delete " + plan.type, function () {
+        core.applySelectedObjectDelete(project, selectedObject);
       });
-      selectedObject = null;
+      setSelectedObject(null);
       renderCanvas();
       renderProps();
+      renderLayers();
       return true;
     }
 
@@ -3187,66 +3645,127 @@
         paintSelectionOverlay();
         renderLayers();
       }
+      function openPlotFromCanvas(event) {
+        if (workspaceMode() !== "canvas" || plot.type === "detail") return false;
+        var textHit = event.target.closest && event.target.closest("[data-edit], .tv-ann-edit, .tv-legend-hit, .tv-range-actions, .tv-plot-tools");
+        if (textHit) return false;
+        event.preventDefault();
+        drag = null;
+        enterPlotMode(plot.id);
+        return true;
+      }
+      box.addEventListener("dblclick", function (event) {
+        if (event.button != null && event.button !== 0) return;
+        if (interactionMode === "pan") return;
+        openPlotFromCanvas(event);
+      });
       box.addEventListener("pointerdown", function (event) {
         if (event.button != null && event.button !== 0) return;
+        if (interactionMode === "pan") return;
+        if (workspaceMode() === "canvas" && interactionMode === "range-select") return;
+        if (event.detail === 2 && openPlotFromCanvas(event)) return;
         if (event.target === handle || (event.target.closest && event.target.closest(".tv-legend-hit, .tv-range-actions, .tv-ann-edit, .tv-plot-tools"))) return;
         var point = figurePoint(box, event);
         var svg = box.querySelector("svg");
         var info = svg && svg.__inspection;
-        var hit = hitInspection(info, point.x, point.y);
-        selectBox();
-        if (plot.locked) {
-          selectedObject = null;
+        var editNode = event.target.closest && event.target.closest("[data-edit]");
+        if (event.detail === 2 && editNode && editNode.getAttribute("data-edit")) {
+          pendingEditFocus = editNode.getAttribute("data-edit");
+          setSelectedObject({ type: plot.type === "detail" ? "detail" : "plot", figureId: plot.id, objectId: plot.id });
+          selectBox();
+          drag = null;
           renderProps();
           return;
         }
+        var hit = hitInspection(info, point.x, point.y);
+        selectBox();
         if (hit && hit.kind === "inset-handle") return startInsetGesture(box, plot, hit.id, "inset-resize", point, event);
         if (hit && hit.kind === "inset") return startInsetGesture(box, plot, hit.id, "inset-move", point, event);
         if (hit && hit.kind === "annotation") {
           var ann = (plot.annotations || []).find(function (item) { return item.id === hit.id; });
-          selectedObject = { type: "annotation", id: hit.id, plotId: plot.id };
+          setSelectedObject({ type: "annotation", figureId: plot.id, objectId: hit.id });
+          updateOverlay(box, plot);
           renderProps();
           if (event.detail === 2 && ann && (ann.type === "text" || ann.type === "point" || ann.type === "free")) {
             beginTextEdit(box, plot, ann);
             return;
           }
+          if (plot.locked) return;
           return startAnnotationGesture(box, plot, ann, point, info, event);
+        }
+        var sourceHit = event.target.closest && event.target.closest("[data-object='source-box']");
+        if (sourceHit && interactionMode === "pointer") {
+          var detailId = sourceHit.getAttribute("data-object-id");
+          setSelectedObject({ type: "source-box", figureId: detailId, objectId: detailId });
+          renderProps();
+          paintSelectionOverlay();
+          renderLayers();
+          return;
         }
         if (hit && hit.kind === "plot" && interactionMode !== "pointer") {
           return startToolGesture(box, plot, point, info, event);
         }
         if (interactionMode !== "pointer") return;
-        selectedObject = null;
+        setSelectedObject({ type: plot.type === "detail" ? "detail" : "plot", figureId: plot.id, objectId: plot.id });
+        var view = viewBox(plot);
+        if (view.instance && workspaceMode() === "canvas" && plot.type !== "detail") {
+          if (event.shiftKey) {
+            var nextIds = selectedInstanceIds.slice();
+            var at = nextIds.indexOf(view.instance.id);
+            if (at >= 0) nextIds.splice(at, 1);
+            else nextIds.push(view.instance.id);
+            selectInstances(nextIds);
+            return;
+          }
+          selectedInstanceIds = [view.instance.id];
+          workspaceFocus = { type: "instance", id: view.instance.id, plotId: plot.id };
+        } else if (workspaceMode() === "canvas") {
+          workspaceFocus = { type: "plot", plotId: plot.id };
+        }
+        if ((view.instance && view.instance.locked) || plot.locked) {
+          renderProps();
+          paintSelectionOverlay();
+          renderLayers();
+          return;
+        }
         drag = {
           mode: "move",
           plot: plot,
           box: box,
+          instance: workspaceMode() === "canvas" ? view.instance : null,
           before: core.captureEditorState(project),
           startX: event.clientX,
           startY: event.clientY,
-          origX: plot.layout.x,
-          origY: plot.layout.y
+          origX: view.x,
+          origY: view.y
         };
         box.setPointerCapture(event.pointerId);
+        paintSelectionOverlay();
         renderProps();
       });
       if (handle) handle.addEventListener("pointerdown", function (event) {
         event.stopPropagation();
+        selectBox();
+        setSelectedObject({ type: plot.type === "detail" ? "detail" : "plot", figureId: plot.id, objectId: plot.id });
         if (plot.locked) {
-          selectBox();
           renderProps();
           return;
         }
-        selectBox();
+        var resizeView = viewBox(plot);
+        if ((resizeView.instance && resizeView.instance.locked) || plot.locked) {
+          renderProps();
+          return;
+        }
         drag = {
           mode: "resize",
           plot: plot,
           box: box,
+          instance: workspaceMode() === "canvas" ? resizeView.instance : null,
           before: core.captureEditorState(project),
           startX: event.clientX,
           startY: event.clientY,
-          origW: plot.layout.width,
-          origH: plot.layout.height
+          origW: resizeView.width,
+          origH: resizeView.height
         };
         box.setPointerCapture(event.pointerId);
       });
@@ -3277,11 +3796,38 @@
         if (drag.mode === "inset-move" || drag.mode === "inset-resize") return moveInset(plot, point);
         if (drag.mode === "ann-move") return moveAnnotation(point);
         var delta = core.screenToWorld(event.clientX - drag.startX, event.clientY - drag.startY, canvasZoom());
-        if (drag.mode === "move") {
+        if (drag.instance && (drag.mode === "move" || drag.mode === "resize")) {
+          var proxy = {
+            id: plot.id,
+            layout: {
+              x: Math.round(drag.origX + (drag.mode === "move" ? delta.x : 0)),
+              y: Math.round(drag.origY + (drag.mode === "move" ? delta.y : 0)),
+              width: drag.mode === "resize" ? Math.max(80, Math.round(drag.origW + delta.x)) : drag.instance.width,
+              height: drag.mode === "resize" ? Math.max(60, Math.round(drag.origH + delta.y)) : drag.instance.height
+            }
+          };
+          if (drag.mode === "move") proxy.layout.x = Math.round(drag.origX + delta.x);
+          if (drag.mode === "move") proxy.layout.y = Math.round(drag.origY + delta.y);
+          var mates = (activeCanvas().instances || []).filter(function (item) { return item.id !== drag.instance.id; }).map(function (item) {
+            return { id: item.plotId, layout: { x: item.x, y: item.y, width: item.width, height: item.height } };
+          });
+          if (drag.mode === "move") {
+            var snapped = core.snapPlotMove(proxy, mates, activeCanvas() || project.canvas, canvasZoom());
+            drag.instance.x = proxy.layout.x;
+            drag.instance.y = proxy.layout.y;
+            showGuides(snapped.guides);
+          } else {
+            drag.instance.width = proxy.layout.width;
+            drag.instance.height = proxy.layout.height;
+          }
+          applyPlotFrame(box, plot);
+          var svg = box.querySelector("svg");
+          if (svg) svg.style.transform = "scale(" + (box.dataset.scaleX || 1) + "," + (box.dataset.scaleY || 1) + ")";
+        } else if (drag.mode === "move") {
           plot.layout.x = Math.round(drag.origX + delta.x);
           plot.layout.y = Math.round(drag.origY + delta.y);
-          var snapped = core.snapPlotMove(plot, others(), project.canvas, canvasZoom());
-          showGuides(snapped.guides);
+          var moved = core.snapPlotMove(plot, others(), project.canvas, canvasZoom());
+          showGuides(moved.guides);
           box.style.left = plot.layout.x + "px";
           box.style.top = plot.layout.y + "px";
         } else if (drag.mode === "resize") {
@@ -3299,6 +3845,13 @@
       box.addEventListener("pointerup", function (event) {
         if (event.target.closest && event.target.closest(".tv-range-actions")) return;
         if (!drag || drag.box !== box) return;
+        if ((drag.mode === "move" || drag.mode === "resize") && drag.startX != null) {
+          var dist = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
+          if (dist < 3) {
+            drag = null;
+            return;
+          }
+        }
         finishPlotGesture(box, plot);
       });
     }
@@ -3520,21 +4073,50 @@
     function attachLegendHit(box, plot, svg) {
       var legendBox = svg.__legendBox;
       var plotArea = svg.__plotArea;
-      if (!legendBox || !legendBox.height) return;
+      if (!legendBox || !legendBox.height || !plot.legend || plot.legend.visible === false) return;
       var position = core.resolveLegendPosition(plot.legend);
-      if (position !== "free") return;
       var pad = legendBox.pad || 0;
       var hit = document.createElement("div");
-      hit.className = "tv-legend-hit is-free";
+      var legendSelected = selectedObject && selectedObject.type === "legend" && selectedObject.figureId === plot.id;
+      hit.className = "tv-legend-hit" + (position === "free" ? " is-free" : "") + (legendSelected ? " is-selected" : "");
+      hit.dataset.object = "legend";
       hit.style.left = legendBox.x + "px";
       hit.style.top = legendBox.y + "px";
       hit.style.width = Math.max(24, legendBox.width + pad * 2) + "px";
       hit.style.height = Math.max(16, legendBox.height + pad * 2) + "px";
-      hit.title = "拖动图例";
+      hit.title = position === "free" && !plot.locked ? "拖动图例" : "图例";
+      if (position !== "free") hit.style.cursor = "pointer";
       hit.addEventListener("pointerdown", function (event) {
         event.stopPropagation();
         event.preventDefault();
-        selectedPlotId = plot.id;
+        var switched = activatePlot(plot.id);
+        if (switched) renderData();
+        setSelectedObject({ type: "legend", figureId: plot.id, objectId: "legend" });
+        if (event.detail === 2) {
+          var rect = hit.getBoundingClientRect();
+          var scaleX = rect.width ? hit.offsetWidth / rect.width : 1;
+          var scaleY = rect.height ? hit.offsetHeight / rect.height : 1;
+          var localX = (event.clientX - rect.left) * scaleX;
+          var localY = (event.clientY - rect.top) * scaleY;
+          var entries = svg.__legendEntries || [];
+          var found = null;
+          entries.forEach(function (entry) {
+            if (found || !entry.seriesId) return;
+            if (localX >= entry.x && localY >= entry.y && localX <= entry.x + entry.width && localY <= entry.y + entry.height) found = entry;
+          });
+          if (found) {
+            pendingEditFocus = "series:" + found.seriesId;
+            setSelectedObject({ type: plot.type === "detail" ? "detail" : "plot", figureId: plot.id, objectId: plot.id });
+            renderProps();
+            paintSelectionOverlay();
+            renderLayers();
+            return;
+          }
+        }
+        renderProps();
+        paintSelectionOverlay();
+        renderLayers();
+        if (plot.locked || position !== "free") return;
         drag = {
           mode: "legend",
           plot: plot,
@@ -3579,13 +4161,15 @@
 
     function paintPlot(box, plot) {
       var handle = box.querySelector(".tv-plot-resize");
+      var view = viewBox(plot);
       var svg = buildPlotSvg(plot, plot.layout.width, plot.layout.height, true);
+      svg.style.transformOrigin = "0 0";
+      svg.style.transform = "scale(" + view.scaleX + "," + view.scaleY + ")";
       Array.from(box.children).forEach(function (child) {
         if (child !== handle && !child.classList.contains("tv-plot-tools")) child.remove();
       });
       box.insertBefore(svg, handle);
-      box.style.width = plot.layout.width + "px";
-      box.style.height = plot.layout.height + "px";
+      applyPlotFrame(box, plot);
       attachLegendHit(box, plot, svg);
       updateOverlay(box, plot);
       if (pendingText && pendingText.plotId === plot.id) {
@@ -3597,10 +4181,11 @@
 
     function makePlotBox(plot) {
       var box = document.createElement("div");
-      box.className = "tv-plot" + (plot.id === selectedPlotId ? " is-selected" : "");
+      var placed = workspaceMode() === "canvas" && plot.type !== "detail" ? core.findInstance(activeCanvas(), plot.id) : null;
+      var on = placed ? selectedInstanceIds.indexOf(placed.id) >= 0 : plot.id === selectedPlotId;
+      box.className = "tv-plot" + (on ? " is-selected" : "");
       box.dataset.plotId = plot.id;
-      box.style.left = plot.layout.x + "px";
-      box.style.top = plot.layout.y + "px";
+      applyPlotFrame(box, plot);
       bindPlotPointer(box, plot, null);
       paintPlot(box, plot);
       return box;
@@ -3623,7 +4208,8 @@
         if (!detail.detailSource || detail.detailSource.showConnectorLines === false) return;
         var box = paper.querySelector('.tv-plot[data-plot-id="' + detail.id + '"]');
         if (!box) return;
-        var layer = createSvg("svg", { width: project.canvas.width, height: project.canvas.height });
+        var linkSize = stageMetrics();
+        var layer = createSvg("svg", { width: linkSize.width, height: linkSize.height });
         layer.setAttribute("class", "tv-detail-links");
         layer.style.position = "absolute";
         layer.style.left = "0";
@@ -3634,7 +4220,19 @@
         appendDetailConnectors(layer, function (plot) {
           var host = paper.querySelector('.tv-plot[data-plot-id="' + plot.id + '"]');
           return host ? host.querySelector("svg") : null;
-        }, detail);
+        }, detail, true);
+        layer.addEventListener("pointerdown", function (event) {
+          var node = event.target && event.target.closest ? event.target.closest("[data-object='connector']") : null;
+          if (!node) return;
+          event.stopPropagation();
+          event.preventDefault();
+          var detailId = node.getAttribute("data-object-id");
+          activatePlot(detailId);
+          setSelectedObject({ type: "connector", figureId: detailId, objectId: detailId });
+          renderProps();
+          paintSelectionOverlay();
+          renderLayers();
+        });
         paper.insertBefore(layer, box);
       });
     }
@@ -3643,66 +4241,1054 @@
       var overlay = paper.querySelector(".tv-selection-overlay");
       var plot = selectedPlot();
       if (!overlay || !plot) return;
-      overlay.style.left = plot.layout.x + "px";
-      overlay.style.top = plot.layout.y + "px";
-      overlay.style.width = plot.layout.width + "px";
-      overlay.style.height = plot.layout.height + "px";
+      var frame = viewBox(plot);
+      overlay.style.left = frame.x + "px";
+      overlay.style.top = frame.y + "px";
+      overlay.style.width = frame.width + "px";
+      overlay.style.height = frame.height + "px";
     }
 
     function paintSelectionOverlay() {
       paper.querySelectorAll(".tv-selection-overlay").forEach(function (node) { node.remove(); });
+      paper.querySelectorAll(".tv-legend-hit").forEach(function (node) {
+        var host = node.parentElement;
+        var on = selectedObject && selectedObject.type === "legend" && host && host.dataset.plotId === selectedObject.figureId;
+        node.classList.toggle("is-selected", !!on);
+      });
+      if (workspaceMode() === "canvas") {
+        var canvasNow = activeCanvas();
+        selectedInstanceIds.forEach(function (id) {
+          var inst = canvasNow && (canvasNow.instances || []).find(function (item) { return item.id === id; });
+          if (!inst) return;
+          var host = core.findPlot(project, inst.plotId);
+          var overlay = document.createElement("div");
+          overlay.className = "tv-selection-overlay";
+          overlay.style.left = inst.x + "px";
+          overlay.style.top = inst.y + "px";
+          overlay.style.width = inst.width + "px";
+          overlay.style.height = inst.height + "px";
+          if (selectedInstanceIds.length === 1 && host && !host.locked && !inst.locked) overlay.appendChild(resizeHandle(host, inst));
+          paper.appendChild(overlay);
+        });
+        return;
+      }
       var plot = selectedPlot();
       if (!plot) return;
+      if (workspaceMode() === "canvas" && plot.type !== "detail" && !core.findInstance(activeCanvas(), plot.id)) return;
+      var focus = core.getPropertyFocus(selectedObject);
+      if (selectedObject && focus !== "plot" && focus !== "detail") return;
       var overlay = document.createElement("div");
       overlay.className = "tv-selection-overlay";
-      overlay.style.left = plot.layout.x + "px";
-      overlay.style.top = plot.layout.y + "px";
-      overlay.style.width = plot.layout.width + "px";
-      overlay.style.height = plot.layout.height + "px";
-      if (!plot.locked) {
-        var handle = document.createElement("button");
-        handle.type = "button";
-        handle.className = "tv-plot-resize";
-        handle.setAttribute("aria-label", "调整「" + core.plotEditorName(plot) + "」大小");
-        handle.addEventListener("pointerdown", function (event) {
-          event.stopPropagation();
-          event.preventDefault();
-          var box = paper.querySelector('.tv-plot[data-plot-id="' + plot.id + '"]');
-          if (!box) return;
-          drag = {
-            mode: "resize",
-            plot: plot,
-            box: box,
-            before: core.captureEditorState(project),
-            startX: event.clientX,
-            startY: event.clientY,
-            origW: plot.layout.width,
-            origH: plot.layout.height
-          };
-          box.setPointerCapture(event.pointerId);
-        });
-        overlay.appendChild(handle);
-      }
+      var frame = viewBox(plot);
+      overlay.style.left = frame.x + "px";
+      overlay.style.top = frame.y + "px";
+      overlay.style.width = frame.width + "px";
+      overlay.style.height = frame.height + "px";
+      var resizeView = viewBox(plot);
+      if (!plot.locked && !(resizeView.instance && resizeView.instance.locked)) overlay.appendChild(resizeHandle(plot, resizeView.instance));
       paper.appendChild(overlay);
     }
 
+    function resizeHandle(plot, instance) {
+      var handle = document.createElement("button");
+      handle.type = "button";
+      handle.className = "tv-plot-resize";
+      handle.setAttribute("aria-label", "调整「" + core.plotEditorName(plot) + "」大小");
+      handle.addEventListener("pointerdown", function (event) {
+        event.stopPropagation();
+        event.preventDefault();
+        var box = paper.querySelector('.tv-plot[data-plot-id="' + plot.id + '"]');
+        if (!box) return;
+        var frame = viewBox(plot);
+        drag = {
+          mode: "resize",
+          plot: plot,
+          box: box,
+          instance: workspaceMode() === "canvas" ? (instance || frame.instance) : null,
+          before: core.captureEditorState(project),
+          startX: event.clientX,
+          startY: event.clientY,
+          origW: frame.width,
+          origH: frame.height
+        };
+        box.setPointerCapture(event.pointerId);
+      });
+      return handle;
+    }
+
+    function workspaceMode() {
+      return project.ui && project.ui.workspaceMode === "plot" ? "plot" : "canvas";
+    }
+
+    function activeCanvas() {
+      var list = project.canvases || [];
+      var id = project.ui && project.ui.activeCanvasId;
+      return core.findCanvas(project, id) || list[0] || null;
+    }
+
+    function rememberWorkspace() {
+      if (!project.ui) project.ui = core.normalizeUi(null);
+      var canvas = activeCanvas();
+      project.ui.workspaceMode = workspaceMode();
+      project.ui.activeCanvasId = canvas ? canvas.id : "";
+      project.ui.activePlotId = selectedPlotId || "";
+      project.ui.dockExpanded = !!project.ui.dockExpanded;
+    }
+
+    function viewBox(plot) {
+      var layout = (plot && plot.layout) || { x: 0, y: 0, width: 240, height: 180 };
+      if (!plot || intrinsicLayout) {
+        return { x: layout.x, y: layout.y, width: layout.width, height: layout.height, scaleX: 1, scaleY: 1, instance: null };
+      }
+      if (workspaceMode() === "canvas" && plot.type !== "detail") {
+        var inst = core.findInstance(activeCanvas(), plot.id);
+        if (inst) {
+          return {
+            x: inst.x,
+            y: inst.y,
+            width: inst.width,
+            height: inst.height,
+            scaleX: layout.width ? inst.width / layout.width : 1,
+            scaleY: layout.height ? inst.height / layout.height : 1,
+            instance: inst
+          };
+        }
+      }
+      if (workspaceMode() === "canvas" && plot.type === "detail") {
+        var parent = core.sourcePlotOf(project, plot);
+        var parentInst = parent ? core.findInstance(activeCanvas(), parent.id) : null;
+        if (parent && parentInst) {
+          var scaleX = parent.layout.width ? parentInst.width / parent.layout.width : 1;
+          var scaleY = parent.layout.height ? parentInst.height / parent.layout.height : 1;
+          return {
+            x: parentInst.x + (layout.x - parent.layout.x) * scaleX,
+            y: parentInst.y + (layout.y - parent.layout.y) * scaleY,
+            width: layout.width * scaleX,
+            height: layout.height * scaleY,
+            scaleX: scaleX,
+            scaleY: scaleY,
+            instance: null
+          };
+        }
+      }
+      if (workspaceMode() === "plot") {
+        var stage = plotStageBox();
+        return {
+          x: layout.x - stage.x,
+          y: layout.y - stage.y,
+          width: layout.width,
+          height: layout.height,
+          scaleX: 1,
+          scaleY: 1,
+          instance: null
+        };
+      }
+      return { x: layout.x, y: layout.y, width: layout.width, height: layout.height, scaleX: 1, scaleY: 1, instance: null };
+    }
+
+    function plotStageBox() {
+      var plot = selectedPlot();
+      if (plot && plot.type === "detail") plot = core.sourcePlotOf(project, plot) || plot;
+      var members = plot ? [plot].concat(core.detailChildren(project, plot.id).filter(function (item) { return item.visible !== false; })) : [];
+      if (!members.length) return { x: 0, y: 0, width: project.canvas.width, height: project.canvas.height };
+      var minX = Infinity;
+      var minY = Infinity;
+      var maxX = -Infinity;
+      var maxY = -Infinity;
+      members.forEach(function (item) {
+        minX = Math.min(minX, item.layout.x);
+        minY = Math.min(minY, item.layout.y);
+        maxX = Math.max(maxX, item.layout.x + item.layout.width);
+        maxY = Math.max(maxY, item.layout.y + item.layout.height);
+      });
+      return {
+        x: minX,
+        y: minY,
+        width: Math.max(1, Math.ceil(maxX - minX)),
+        height: Math.max(1, Math.ceil(maxY - minY))
+      };
+    }
+
+    function stageMetrics() {
+      if (workspaceMode() === "plot") {
+        var stage = plotStageBox();
+        return { width: stage.width, height: stage.height };
+      }
+      return { width: project.canvas.width, height: project.canvas.height };
+    }
+
+    function selectedInstances() {
+      var canvas = activeCanvas();
+      if (!canvas) return [];
+      return selectedInstanceIds.map(function (id) {
+        return (canvas.instances || []).find(function (item) { return item.id === id; });
+      }).filter(Boolean);
+    }
+
+    function selectInstances(ids) {
+      var canvas = activeCanvas();
+      var valid = (ids || []).filter(function (id) {
+        return canvas && (canvas.instances || []).some(function (item) { return item.id === id; });
+      });
+      selectedInstanceIds = valid;
+      if (valid.length === 1) {
+        var inst = canvas.instances.find(function (item) { return item.id === valid[0]; });
+        selectedPlotId = inst.plotId;
+        workspaceFocus = { type: "instance", id: inst.id, plotId: inst.plotId };
+        setSelectedObject({ type: "plot", figureId: inst.plotId, objectId: inst.plotId });
+      } else if (valid.length > 1) {
+        workspaceFocus = { type: "instances", ids: valid.slice() };
+        setSelectedObject(null);
+      } else if (canvas) {
+        workspaceFocus = { type: "canvas", id: canvas.id };
+        setSelectedObject(null);
+      }
+      renderCanvas();
+      renderProps();
+      renderLayers();
+    }
+
+    function alignSelectedInstances(command) {
+      var items = selectedInstances();
+      if (items.length < 2) return;
+      if ((command === "hspace" || command === "vspace") && items.length < 3) {
+        setStatus("等间距至少需要三个图窗。", "");
+        return;
+      }
+      commitEdit("Align instances", function () {
+        var minX = Math.min.apply(null, items.map(function (item) { return item.x; }));
+        var minY = Math.min.apply(null, items.map(function (item) { return item.y; }));
+        var maxR = Math.max.apply(null, items.map(function (item) { return item.x + item.width; }));
+        var maxB = Math.max.apply(null, items.map(function (item) { return item.y + item.height; }));
+        if (command === "left") items.forEach(function (item) { item.x = minX; });
+        if (command === "right") items.forEach(function (item) { item.x = Math.round(maxR - item.width); });
+        if (command === "hcenter") items.forEach(function (item) { item.x = Math.round((minX + maxR) / 2 - item.width / 2); });
+        if (command === "top") items.forEach(function (item) { item.y = minY; });
+        if (command === "bottom") items.forEach(function (item) { item.y = Math.round(maxB - item.height); });
+        if (command === "vcenter") items.forEach(function (item) { item.y = Math.round((minY + maxB) / 2 - item.height / 2); });
+        if (command === "hspace" || command === "vspace") {
+          var horizontal = command === "hspace";
+          var sorted = items.slice().sort(function (a, b) { return horizontal ? a.x - b.x : a.y - b.y; });
+          var start = horizontal ? sorted[0].x : sorted[0].y;
+          var end = horizontal ? sorted[sorted.length - 1].x + sorted[sorted.length - 1].width : sorted[sorted.length - 1].y + sorted[sorted.length - 1].height;
+          var span = sorted.reduce(function (sum, item) { return sum + (horizontal ? item.width : item.height); }, 0);
+          var gap = (end - start - span) / (sorted.length - 1);
+          var cursor = start;
+          sorted.forEach(function (item) {
+            if (horizontal) item.x = Math.round(cursor);
+            else item.y = Math.round(cursor);
+            cursor += (horizontal ? item.width : item.height) + gap;
+          });
+        }
+      });
+      renderCanvas();
+      renderProps();
+    }
+
+    function paintMarquee(x, y, w, h) {
+      var node = paper.querySelector(".tv-marquee");
+      if (!node) {
+        node = document.createElement("div");
+        node.className = "tv-marquee";
+        paper.appendChild(node);
+      }
+      node.style.left = x + "px";
+      node.style.top = y + "px";
+      node.style.width = w + "px";
+      node.style.height = h + "px";
+    }
+
+    function finishInstanceMarquee(event) {
+      if (!instanceMarquee || instanceMarquee.pointerId !== event.pointerId) return;
+      var rect = paper.getBoundingClientRect();
+      var zoom = canvasZoom() || 1;
+      var x = (event.clientX - rect.left) / zoom;
+      var y = (event.clientY - rect.top) / zoom;
+      var box = {
+        x: Math.min(instanceMarquee.x, x),
+        y: Math.min(instanceMarquee.y, y),
+        w: Math.abs(x - instanceMarquee.x),
+        h: Math.abs(y - instanceMarquee.y)
+      };
+      var shift = instanceMarquee.shift;
+      instanceMarquee = null;
+      var drawn = paper.querySelector(".tv-marquee");
+      if (drawn) drawn.remove();
+      var canvas = activeCanvas();
+      var items = canvas ? (canvas.instances || []).filter(function (item) { return item.visible !== false; }) : [];
+      var picked = [];
+      if (box.w < 4 && box.h < 4) {
+        var hits = items.filter(function (item) {
+          return x >= item.x && x <= item.x + item.width && y >= item.y && y <= item.y + item.height;
+        }).sort(function (a, b) { return (b.zOrder || 0) - (a.zOrder || 0); });
+        if (hits[0]) picked = [hits[0].id];
+      } else {
+        picked = items.filter(function (item) {
+          return item.x < box.x + box.w && item.x + item.width > box.x && item.y < box.y + box.h && item.y + item.height > box.y;
+        }).map(function (item) { return item.id; });
+      }
+      var next = shift ? selectedInstanceIds.slice() : [];
+      if (shift && box.w < 4 && box.h < 4 && picked.length) {
+        var at = next.indexOf(picked[0]);
+        if (at >= 0) next.splice(at, 1);
+        else next.push(picked[0]);
+      } else {
+        picked.forEach(function (id) { if (next.indexOf(id) < 0) next.push(id); });
+      }
+      selectInstances(next);
+    }
+
+    function stagePlots() {
+      if (workspaceMode() === "plot") {
+        var plot = selectedPlot();
+        if (plot && plot.type === "detail") plot = core.sourcePlotOf(project, plot) || plot;
+        if (!plot) return [];
+        var ids = {};
+        ids[plot.id] = true;
+        core.detailChildren(project, plot.id).forEach(function (child) { ids[child.id] = true; });
+        return core.plotsInLayerOrder(project).filter(function (item) { return ids[item.id] && item.visible !== false; });
+      }
+      var canvas = activeCanvas();
+      if (!canvas) return [];
+      var placed = {};
+      (canvas.instances || []).forEach(function (item) {
+        if (item.visible !== false) placed[item.plotId] = true;
+      });
+      return core.plotsInLayerOrder(project).filter(function (plot) {
+        if (plot.visible === false) return false;
+        if (plot.type === "detail") {
+          var parent = core.sourcePlotOf(project, plot);
+          return !!(parent && placed[parent.id]);
+        }
+        return !!placed[plot.id];
+      });
+    }
+
+    function applyPlotFrame(box, plot) {
+      var view = viewBox(plot);
+      box.style.left = view.x + "px";
+      box.style.top = view.y + "px";
+      box.style.width = view.width + "px";
+      box.style.height = view.height + "px";
+      box.dataset.scaleX = String(view.scaleX || 1);
+      box.dataset.scaleY = String(view.scaleY || 1);
+      if (plot.type === "detail" && workspaceMode() === "canvas") {
+        var parent = core.sourcePlotOf(project, plot);
+        var inst = parent && core.findInstance(activeCanvas(), parent.id);
+        box.style.zIndex = String(((inst && inst.zOrder) || 1) * 10 + (plot.zOrder || 1));
+      } else if (view.instance) box.style.zIndex = String(view.instance.zOrder || 1);
+      else box.style.zIndex = String(plot.zOrder || 1);
+      return view;
+    }
+
+    function enterCanvasMode(canvasId) {
+      if (!project.ui) project.ui = core.normalizeUi(null);
+      project.ui.workspaceMode = "canvas";
+      if (canvasId) project.ui.activeCanvasId = canvasId;
+      var canvas = activeCanvas();
+      if (canvas) core.mirrorCanvas(project, canvas.id);
+      selectedInstanceIds = [];
+      workspaceFocus = canvas ? { type: "canvas", id: canvas.id } : null;
+      setSelectedObject(null);
+      rememberWorkspace();
+      renderAll();
+    }
+
+    function enterPlotMode(plotId) {
+      var plot = core.findPlot(project, plotId) || selectedPlot();
+      if (plot && plot.type === "detail") plot = core.sourcePlotOf(project, plot) || plot;
+      if (!plot) return;
+      if (!project.ui) project.ui = core.normalizeUi(null);
+      project.ui.workspaceMode = "plot";
+      selectedPlotId = plot.id;
+      selectedInstanceIds = [];
+      workspaceFocus = { type: "plot", id: plot.id, plotId: plot.id };
+      setSelectedObject({ type: "plot", figureId: plot.id, objectId: plot.id });
+      rememberWorkspace();
+      renderAll();
+      canvasScroll.scrollLeft = 0;
+      canvasScroll.scrollTop = 0;
+    }
+
+    function closeContextMenu() {
+      var menu = document.getElementById("tvContext");
+      if (!menu) return;
+      menu.hidden = true;
+      menu.replaceChildren();
+    }
+
+    function openContextMenu(x, y, actions) {
+      var menu = document.getElementById("tvContext");
+      menu.replaceChildren();
+      actions.forEach(function (action) {
+        var button = document.createElement("button");
+        button.type = "button";
+        button.textContent = action.label;
+        button.addEventListener("click", function () {
+          closeContextMenu();
+          action.run();
+        });
+        menu.appendChild(button);
+      });
+      menu.hidden = false;
+      menu.style.left = Math.max(8, x) + "px";
+      menu.style.top = Math.max(8, y) + "px";
+    }
+
+    function exportPlotTarget() {
+      var plot = selectedPlot();
+      if (plot && plot.type === "detail") plot = core.sourcePlotOf(project, plot) || plot;
+      return plot && plot.type !== "detail" ? plot : (core.plotWindows(project)[0] || null);
+    }
+
+    function buildPlotFamilySvg(plot) {
+      var host = plot && plot.type === "detail" ? (core.sourcePlotOf(project, plot) || plot) : plot;
+      if (!host) return null;
+      var members = [host].concat(core.detailChildren(project, host.id).filter(function (item) { return item.visible !== false; }));
+      var minX = Infinity;
+      var minY = Infinity;
+      var maxX = -Infinity;
+      var maxY = -Infinity;
+      members.forEach(function (item) {
+        minX = Math.min(minX, item.layout.x);
+        minY = Math.min(minY, item.layout.y);
+        maxX = Math.max(maxX, item.layout.x + item.layout.width);
+        maxY = Math.max(maxY, item.layout.y + item.layout.height);
+      });
+      var width = Math.max(1, Math.ceil(maxX - minX));
+      var height = Math.max(1, Math.ceil(maxY - minY));
+      var svg = createSvg("svg", {
+        xmlns: svgNamespace,
+        width: width,
+        height: height,
+        viewBox: "0 0 " + width + " " + height
+      });
+      appendSvg(svg, "rect", { width: width, height: height, fill: theme().surface });
+      var group = createSvg("g", { transform: "translate(" + (-minX) + " " + (-minY) + ")" });
+      intrinsicLayout = true;
+      var nodes = {};
+      members.forEach(function (item) {
+        var nested = buildPlotSvg(item, item.layout.width, item.layout.height, false);
+        nested.setAttribute("x", item.layout.x);
+        nested.setAttribute("y", item.layout.y);
+        nodes[item.id] = nested;
+      });
+      members.forEach(function (item) {
+        if (item.type === "detail") appendDetailConnectors(group, function (entry) { return nodes[entry.id]; }, item);
+        if (nodes[item.id]) group.appendChild(nodes[item.id]);
+      });
+      intrinsicLayout = false;
+      svg.appendChild(group);
+      return svg;
+    }
+
+    function saveSvgElement(svg, filename, okText) {
+      var blob = new Blob([svgFileText(svg)], { type: "image/svg+xml;charset=utf-8" });
+      saveBlobWithPicker(blob, filename, [{
+        description: "SVG Image",
+        accept: { "image/svg+xml": [".svg"] }
+      }]).then(function (handle) {
+        if (handle === null) return;
+        setStatus(okText, "ok");
+      }).catch(function (error) {
+        setStatus("SVG 导出失败：" + (error && error.message ? error.message : String(error)), "error");
+      });
+    }
+
+    function savePngElement(svg, filename, okText) {
+      var text = svgFileText(svg);
+      var width = Number(svg.getAttribute("width")) || project.canvas.width;
+      var height = Number(svg.getAttribute("height")) || project.canvas.height;
+      var image = new Image();
+      var url = URL.createObjectURL(new Blob([text], { type: "image/svg+xml;charset=utf-8" }));
+      image.onload = function () {
+        var canvas = document.createElement("canvas");
+        canvas.width = width * 2;
+        canvas.height = height * 2;
+        var ctx = canvas.getContext("2d");
+        ctx.fillStyle = theme().surface;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(function (blob) {
+          URL.revokeObjectURL(url);
+          if (!blob) return setStatus("PNG 导出失败。", "error");
+          saveBlobWithPicker(blob, filename, [{
+            description: "PNG Image",
+            accept: { "image/png": [".png"] }
+          }]).then(function (handle) {
+            if (handle === null) return;
+            setStatus(okText, "ok");
+          }).catch(function (error) {
+            setStatus("PNG 导出失败：" + (error && error.message ? error.message : String(error)), "error");
+          });
+        }, "image/png");
+      };
+      image.onerror = function () {
+        URL.revokeObjectURL(url);
+        setStatus("PNG 导出失败。", "error");
+      };
+      image.src = url;
+    }
+
+    function exportCurrentPlot(kind) {
+      var plot = exportPlotTarget();
+      if (!plot) return setStatus("请先选择要导出的图窗。", "error");
+      var svg = buildPlotFamilySvg(plot);
+      var name = sanitizeFilename(core.plotEditorName(plot)) + (kind === "png" ? ".png" : ".svg");
+      if (kind === "png") savePngElement(svg, name, "已导出图窗 PNG，不含整张画布。");
+      else saveSvgElement(svg, name, "已导出图窗 SVG，不含整张画布。");
+    }
+
+    function locatePlotOnCanvas(plotId) {
+      var canvas = (project.canvases || []).find(function (item) {
+        return (item.instances || []).some(function (inst) { return inst.plotId === plotId; });
+      });
+      if (!canvas) return setStatus("这个图窗还没有放进任何画布。", "error");
+      enterCanvasMode(canvas.id);
+      var inst = core.findInstance(canvas, plotId);
+      if (inst) selectInstances([inst.id]);
+      else renderAll();
+    }
+
+    function askName(current, label) {
+      var next = window.prompt(label, current || "");
+      if (next == null) return null;
+      next = String(next).trim();
+      if (!next) {
+        setStatus("名称不能为空。", "error");
+        return null;
+      }
+      return next;
+    }
+
+    function dockCard(label, color, selected, thumb) {
+      var button = document.createElement("button");
+      button.type = "button";
+      button.className = "tv-dock-card" + (selected ? " is-selected" : "");
+      var face = document.createElement("span");
+      face.className = "tv-dock-thumb";
+      face.style.background = color;
+      if (thumb) face.appendChild(thumb);
+      var name = document.createElement("span");
+      name.className = "tv-dock-name";
+      name.textContent = label;
+      button.append(face, name);
+      return button;
+    }
+
+    function plotThumb(plot) {
+      var series = core.resolvePlotSeries(project, plot).filter(function (item) {
+        return item.visible !== false && item.series && item.series.x && item.series.x.length > 1;
+      });
+      var key = [plot.id, plot.accentColor, series.map(thumbSignature).join(",")].join("|");
+      if (thumbCache[plot.id] && thumbCache[plot.id].key === key) return thumbCache[plot.id].node.cloneNode(true);
+      var svg = series.length ? curveThumb(series) : null;
+      if (!svg) {
+        svg = buildPlotSvg(plot, plot.layout.width, plot.layout.height, false);
+        var bg = svg.querySelector("rect");
+        if (bg) bg.setAttribute("fill", "transparent");
+        svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+        svg.removeAttribute("aria-label");
+      }
+      svg.setAttribute("width", "100%");
+      svg.setAttribute("height", "100%");
+      svg.setAttribute("aria-hidden", "true");
+      svg.style.pointerEvents = "none";
+      thumbCache[plot.id] = { key: key, node: svg };
+      return svg.cloneNode(true);
+    }
+
+    function thumbSignature(item) {
+      var y = item.series.y || [];
+      var step = Math.max(1, Math.floor(y.length / 16));
+      var acc = 0;
+      for (var i = 0; i < y.length; i += step) acc += Number(y[i]) || 0;
+      return [item.series.id, item.color, y.length, y[0], y[y.length - 1], Math.round(acc)].join(":");
+    }
+
+    function curveThumb(series) {
+      var minX = Infinity;
+      var maxX = -Infinity;
+      var minY = Infinity;
+      var maxY = -Infinity;
+      series.forEach(function (item) {
+        var xs = item.series.x;
+        var ys = item.series.y;
+        var step = Math.max(1, Math.floor(xs.length / 64));
+        for (var i = 0; i < xs.length; i += step) noteThumbPoint(xs[i], ys[i]);
+        noteThumbPoint(xs[xs.length - 1], ys[ys.length - 1]);
+      });
+      function noteThumbPoint(rawX, rawY) {
+        var x = Number(rawX);
+        var y = Number(rawY);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+      if (!Number.isFinite(minX)) return null;
+      var dx = (maxX - minX) || 1;
+      var dy = (maxY - minY) || 1;
+      var svg = createSvg("svg", { viewBox: "0 0 64 40", preserveAspectRatio: "none", "aria-hidden": "true" });
+      series.forEach(function (item) {
+        var xs = item.series.x;
+        var ys = item.series.y;
+        var step = Math.max(1, Math.floor(xs.length / 64));
+        var d = "";
+        function add(index) {
+          var x = Number(xs[index]);
+          var y = Number(ys[index]);
+          if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+          var px = (4 + ((x - minX) / dx) * 56).toFixed(1);
+          var py = (36 - ((y - minY) / dy) * 32).toFixed(1);
+          d += (d ? "L" : "M") + px + " " + py;
+        }
+        for (var i = 0; i < xs.length; i += step) add(i);
+        add(xs.length - 1);
+        if (!d) return;
+        appendSvg(svg, "path", {
+          d: d,
+          fill: "none",
+          stroke: item.color || "#35597a",
+          "stroke-width": "1.8",
+          "stroke-linejoin": "round",
+          "stroke-linecap": "round"
+        });
+      });
+      return svg;
+    }
+
+    function crumbIcon(kind) {
+      var svg = createSvg("svg", { viewBox: "0 0 16 16", width: 16, height: 16, "aria-hidden": "true" });
+      svg.classList.add("tv-crumb-icon");
+      if (kind === "plot") {
+        appendSvg(svg, "path", {
+          d: "M2.5 11.5c2-3.2 3.2-3.2 4.4-1.2 1.2 2 2.2 2 3.4-.2 1-1.8 1.8-1.8 3.2.2",
+          fill: "none", stroke: "currentColor", "stroke-width": "1.4", "stroke-linecap": "round"
+        });
+      } else {
+        [[2, 2], [9, 2], [2, 9], [9, 9]].forEach(function (xy) {
+          appendSvg(svg, "rect", { x: xy[0], y: xy[1], width: 5, height: 5, rx: 1, fill: "none", stroke: "currentColor", "stroke-width": "1.3" });
+        });
+      }
+      return svg;
+    }
+
+    function renderModebar() {
+      var crumbs = document.getElementById("tvCrumbs");
+      if (!crumbs) return;
+      crumbs.replaceChildren();
+      var canvas = activeCanvas();
+      var canvasButton = document.createElement("button");
+      canvasButton.type = "button";
+      canvasButton.append(crumbIcon("canvas"), document.createTextNode(canvas ? canvas.name : "没有画布"));
+      canvasButton.addEventListener("click", function () { if (canvas) enterCanvasMode(canvas.id); });
+      crumbs.appendChild(canvasButton);
+      if (workspaceMode() === "plot") {
+        var sep = document.createElement("span");
+        sep.className = "is-muted";
+        sep.textContent = ">";
+        var plot = selectedPlot();
+        var plotButton = document.createElement("button");
+        plotButton.type = "button";
+        plotButton.append(crumbIcon("plot"), document.createTextNode(plot ? core.plotEditorName(plot) : "图窗"));
+        crumbs.append(sep, plotButton);
+      }
+      document.getElementById("tvModeCanvas").setAttribute("aria-pressed", workspaceMode() === "canvas" ? "true" : "false");
+      document.getElementById("tvModePlot").setAttribute("aria-pressed", workspaceMode() === "plot" ? "true" : "false");
+    }
+
+    function renderDock() {
+      var dock = document.getElementById("tvDock");
+      if (!dock) return;
+      rememberWorkspace();
+      dock.classList.toggle("is-expanded", !!project.ui.dockExpanded);
+      dock.replaceChildren();
+      var head = document.createElement("div");
+      head.className = "tv-dock-head";
+      var title = document.createElement("div");
+      title.className = "tv-dock-title";
+      title.textContent = "Visualizer · 图窗 Dock";
+      var tools = document.createElement("div");
+      tools.className = "tv-dock-tools";
+      var count = document.createElement("div");
+      count.className = "tv-dock-count";
+      var canvases = project.canvases || [];
+      var windows = core.plotWindows(project);
+      count.textContent = canvases.length + " 个画布 · " + windows.length + " 个图窗";
+      var toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "tv-button tv-button--tiny";
+      toggle.textContent = project.ui.dockExpanded ? "紧凑" : "展开";
+      toggle.addEventListener("click", function () {
+        project.ui.dockExpanded = !project.ui.dockExpanded;
+        renderDock();
+      });
+      tools.append(count, toggle);
+      head.append(title, tools);
+      var row = document.createElement("div");
+      row.className = "tv-dock-row";
+      canvases.forEach(function (canvas) {
+        var card = dockCard(canvas.name, canvas.accentColor || core.CANVAS_DOCK_COLOR, workspaceMode() === "canvas" && activeCanvas() && activeCanvas().id === canvas.id);
+        card.querySelector(".tv-dock-thumb").innerHTML = "<svg viewBox='0 0 64 40' aria-hidden='true'><rect x='14' y='8' width='14' height='10' rx='2' fill='none' stroke='#35597a' stroke-width='1.6'/><rect x='32' y='8' width='14' height='10' rx='2' fill='none' stroke='#35597a' stroke-width='1.6'/><rect x='14' y='22' width='14' height='10' rx='2' fill='none' stroke='#35597a' stroke-width='1.6'/><rect x='32' y='22' width='14' height='10' rx='2' fill='none' stroke='#35597a' stroke-width='1.6'/></svg>";
+        card.addEventListener("click", function () { enterCanvasMode(canvas.id); });
+        card.addEventListener("contextmenu", function (event) {
+          event.preventDefault();
+          openContextMenu(event.clientX, event.clientY, [
+            { label: "打开", run: function () { enterCanvasMode(canvas.id); } },
+            { label: "重命名", run: function () {
+              var name = askName(canvas.name, "画布名称");
+              if (!name) return;
+              commitEdit("Rename canvas", function () { core.renameWorkspaceItem(project, "canvas", canvas.id, name); });
+              renderDock();
+            } },
+            { label: "复制", run: function () {
+              var copy = null;
+              commitEdit("Duplicate canvas", function () { copy = core.duplicateCanvas(project, canvas.id); });
+              enterCanvasMode(copy.id);
+            } },
+            { label: "导出 PNG", run: function () { enterCanvasMode(canvas.id); exportPng(); } },
+            { label: "导出 SVG", run: function () { enterCanvasMode(canvas.id); exportSvg(); } },
+            { label: "删除", run: function () {
+              if (!window.confirm("删除画布「" + canvas.name + "」？图窗资产会保留。")) return;
+              commitEdit("Delete canvas", function () { core.deleteCanvas(project, canvas.id); });
+              if (!project.canvases.length) core.createCanvas(project, { name: "画布 1" });
+              enterCanvasMode(project.canvases[0] && project.canvases[0].id);
+            } }
+          ]);
+        });
+        row.appendChild(card);
+      });
+      var split = document.createElement("div");
+      split.className = "tv-dock-split";
+      row.appendChild(split);
+      windows.forEach(function (plot) {
+        var card = dockCard(core.plotEditorName(plot), plot.accentColor || core.PLOT_ACCENT_COLORS[0], workspaceMode() === "plot" && plot.id === selectedPlotId, plotThumb(plot));
+        card.dataset.plotId = plot.id;
+        card.addEventListener("pointerdown", function (event) {
+          if (event.button !== 0) return;
+          dockDrag = { plotId: plot.id, x: event.clientX, y: event.clientY, moved: false, pointerId: event.pointerId };
+          card.setPointerCapture(event.pointerId);
+        });
+        card.addEventListener("pointermove", function (event) {
+          if (!dockDrag || dockDrag.pointerId !== event.pointerId) return;
+          if (Math.hypot(event.clientX - dockDrag.x, event.clientY - dockDrag.y) < 6) return;
+          dockDrag.moved = true;
+          showDockGhost(plot, event.clientX, event.clientY);
+          var under = document.elementFromPoint(event.clientX, event.clientY);
+          paper.classList.toggle("is-drop", !!(under && canvasScroll.contains(under)));
+        });
+        card.addEventListener("pointerup", function (event) {
+          if (!dockDrag || dockDrag.pointerId !== event.pointerId) return;
+          var moved = dockDrag.moved;
+          dockDrag = null;
+          hideDockGhost();
+          paper.classList.remove("is-drop");
+          if (!moved) return;
+          var under = document.elementFromPoint(event.clientX, event.clientY);
+          if (!under || !canvasScroll.contains(under)) return;
+          card.dataset.suppressClick = "1";
+          setTimeout(function () { delete card.dataset.suppressClick; }, 0);
+          if (workspaceMode() !== "canvas") enterCanvasMode(activeCanvas() && activeCanvas().id);
+          placeDraggedPlot(plot.id, event.clientX, event.clientY);
+        });
+        card.addEventListener("click", function () {
+          if (card.dataset.suppressClick) {
+            delete card.dataset.suppressClick;
+            return;
+          }
+          enterPlotMode(plot.id);
+        });
+        card.addEventListener("contextmenu", function (event) {
+          event.preventDefault();
+          openContextMenu(event.clientX, event.clientY, [
+            { label: "打开 / 编辑", run: function () { enterPlotMode(plot.id); } },
+            { label: "重命名", run: function () {
+              var name = askName(core.plotEditorName(plot), "图窗名称");
+              if (!name) return;
+              commitEdit("Rename plot", function () { core.renameWorkspaceItem(project, "plot", plot.id, name); });
+              renderAll();
+            } },
+            { label: "复制", run: function () {
+              var copy = null;
+              commitEdit("Duplicate plot", function () { copy = core.duplicatePlotWindow(project, plot.id); });
+              enterPlotMode(copy.id);
+            } },
+            { label: "独立导出 PNG", run: function () { selectedPlotId = plot.id; exportCurrentPlot("png"); } },
+            { label: "独立导出 SVG", run: function () { selectedPlotId = plot.id; exportCurrentPlot("svg"); } },
+            { label: "在画布中定位", run: function () { locatePlotOnCanvas(plot.id); } },
+            { label: "删除", run: function () { deletePlot(plot.id); } }
+          ]);
+        });
+        row.appendChild(card);
+      });
+      var plus = dockCard("新建", "#ffffff", false);
+      plus.classList.add("tv-dock-plus");
+      plus.querySelector(".tv-dock-thumb").textContent = "+";
+      plus.addEventListener("click", function (event) {
+        event.stopPropagation();
+        var pop = document.createElement("div");
+        pop.className = "tv-dock-popover";
+        [["新建图窗", function () { createFigure(defaultFigureTemplate()); }], ["新建画布", function () {
+          var canvas = null;
+          commitEdit("New canvas", function () { canvas = core.createCanvas(project, {}); });
+          enterCanvasMode(canvas.id);
+        }]].forEach(function (pair) {
+          var button = document.createElement("button");
+          button.type = "button";
+          button.textContent = pair[0];
+          button.addEventListener("click", function (click) {
+            click.stopPropagation();
+            pop.remove();
+            pair[1]();
+          });
+          pop.appendChild(button);
+        });
+        plus.appendChild(pop);
+      });
+      row.appendChild(plus);
+      dock.append(head, row);
+    }
+
+    function renderCanvasFocus() {
+      var canvas = activeCanvas();
+      propsPanel.replaceChildren();
+      if (!canvas) return;
+      var target = "canvas:" + canvas.id;
+      if (inspectorTarget !== target) {
+        inspectorTarget = target;
+        inspectorOpen.normal.workspaceCanvas = true;
+      }
+      var sec = section("画布", true, "workspaceCanvas");
+      var name = fieldControl("名称", canvas.name);
+      var preset = selectControl("预设", "custom", [["custom", "自定义"]].concat(Object.keys(core.CANVAS_PRESETS).map(function (key) {
+        return [key, core.CANVAS_PRESETS[key].label || key];
+      })));
+      var width = fieldControl("宽度", canvas.width);
+      var height = fieldControl("高度", canvas.height);
+      width.input.type = "number";
+      height.input.type = "number";
+      function commitSize(nextW, nextH) {
+        var w = Number(nextW);
+        var h = Number(nextH);
+        if (!Number.isFinite(w) || !Number.isFinite(h)) return setStatus("画布尺寸需要有限数字。", "error");
+        core.mirrorCanvas(project, canvas.id);
+        core.setCanvasSize(project, w, h);
+        setDirty(true);
+        renderAll();
+      }
+      name.input.addEventListener("change", function () {
+        if (!name.input.value.trim()) return setStatus("名称不能为空。", "error");
+        commitEdit("Rename canvas", function () { canvas.name = name.input.value.trim(); });
+        renderDock();
+      });
+      preset.input.addEventListener("change", function () {
+        var spec = core.CANVAS_PRESETS[preset.input.value];
+        if (spec) commitSize(spec.width, spec.height);
+      });
+      width.input.addEventListener("change", function () { preset.input.value = "custom"; commitSize(width.input.value, height.input.value); });
+      height.input.addEventListener("change", function () { preset.input.value = "custom"; commitSize(width.input.value, height.input.value); });
+      var note = document.createElement("p");
+      note.className = "tv-hint";
+      note.textContent = "这里改的是画布排版尺寸。图窗自己的尺寸在绘图模式里改，放进画布后的实例尺寸互不影响。";
+      sec.body.append(name.wrap, preset.wrap, width.wrap, height.wrap, note);
+      propsPanel.appendChild(sec.wrap);
+    }
+
+    function renderInstanceFocus() {
+      var items = selectedInstances();
+      propsPanel.replaceChildren();
+      if (!items.length) return renderCanvasFocus();
+      var target = "instance:" + items.map(function (item) { return item.id; }).join(",");
+      if (inspectorTarget !== target) {
+        inspectorTarget = target;
+        inspectorOpen.normal.workspaceInstance = true;
+      }
+      var sec = section(items.length > 1 ? "已选 " + items.length + " 个图窗" : "图窗实例", true, "workspaceInstance");
+      var name = document.createElement("p");
+      name.className = "tv-hint";
+      if (items.length === 1) {
+        var plot = core.findPlot(project, items[0].plotId);
+        name.textContent = plot ? ("来源图窗：" + core.plotEditorName(plot)) : "来源图窗已不存在";
+      } else name.textContent = "不一致的字段显示「混合值」。只改你动过的那一项。";
+      function geometryField(label, key, min) {
+        var values = items.map(function (item) { return item[key]; });
+        var same = values.every(function (value) { return value === values[0]; });
+        var field = fieldControl(label, same ? values[0] : "");
+        field.input.type = "number";
+        if (!same) {
+          field.input.value = "";
+          field.input.placeholder = "混合值";
+        }
+        field.input.addEventListener("change", function () {
+          var next = Number(field.input.value);
+          if (!Number.isFinite(next)) {
+            field.input.value = same ? String(values[0]) : "";
+            if (!same) field.input.placeholder = "混合值";
+            setStatus("请输入有限数字。", "error");
+            return;
+          }
+          commitEdit("Instance geometry", function () {
+            items.forEach(function (item) {
+              item[key] = min == null ? Math.round(next) : Math.max(min, Math.round(next));
+            });
+          });
+          renderCanvas();
+          renderInstanceFocus();
+        });
+        return field.wrap;
+      }
+      sec.body.append(name, geometryField("X", "x"), geometryField("Y", "y"), geometryField("宽度", "width", 80), geometryField("高度", "height", 60));
+      if (items.length > 1) {
+        var grid = document.createElement("div");
+        grid.className = "tv-align-grid";
+        [["左对齐", "left"], ["水平居中", "hcenter"], ["右对齐", "right"], ["顶对齐", "top"], ["垂直居中", "vcenter"], ["底对齐", "bottom"], ["水平等距", "hspace"], ["垂直等距", "vspace"]].forEach(function (pair) {
+          var button = document.createElement("button");
+          button.type = "button";
+          button.className = "tv-button tv-button--tiny";
+          button.textContent = pair[0];
+          button.addEventListener("click", function () { alignSelectedInstances(pair[1]); });
+          grid.appendChild(button);
+        });
+        sec.body.appendChild(grid);
+      } else {
+        var open = document.createElement("button");
+        open.type = "button";
+        open.className = "tv-button";
+        open.textContent = "进入源图窗";
+        open.addEventListener("click", function () {
+          var source = core.findPlot(project, items[0].plotId);
+          if (source) enterPlotMode(source.id);
+        });
+        sec.body.appendChild(open);
+      }
+      propsPanel.appendChild(sec.wrap);
+    }
+
+    function renderInstanceLayers() {
+      layerPanel.replaceChildren();
+      var canvas = activeCanvas();
+      var items = canvas ? core.instancesInOrder(canvas).slice().reverse() : [];
+      var count = document.createElement("p");
+      count.className = "tv-layer-count";
+      count.textContent = "画布对象  ·  " + items.length;
+      layerPanel.appendChild(count);
+      items.forEach(function (inst) {
+        var plot = core.findPlot(project, inst.plotId);
+        var row = document.createElement("div");
+        var selected = selectedInstanceIds.indexOf(inst.id) >= 0;
+        row.className = "tv-layer-row" + (inst.visible === false ? " is-hidden" : "") + (selected ? " is-selected" : "");
+        var name = document.createElement("button");
+        name.type = "button";
+        name.className = "tv-layer-name";
+        name.textContent = plot ? core.plotEditorName(plot) : inst.plotId;
+        name.addEventListener("click", function (event) {
+          if (event.shiftKey) {
+            var next = selectedInstanceIds.slice();
+            var at = next.indexOf(inst.id);
+            if (at >= 0) next.splice(at, 1);
+            else next.push(inst.id);
+            selectInstances(next);
+            return;
+          }
+          selectInstances([inst.id]);
+        });
+        var eye = document.createElement("button");
+        eye.type = "button";
+        eye.textContent = inst.visible === false ? "○" : "●";
+        eye.addEventListener("click", function () {
+          commitEdit("Instance visibility", function () { inst.visible = inst.visible === false; });
+          renderAll();
+        });
+        var lock = document.createElement("button");
+        lock.type = "button";
+        lock.textContent = inst.locked ? "锁" : "开";
+        lock.addEventListener("click", function () {
+          commitEdit("Instance lock", function () { inst.locked = !inst.locked; });
+          renderAll();
+        });
+        ["up", "down", "top", "bottom"].forEach(function (command) {
+          var button = document.createElement("button");
+          button.type = "button";
+          button.textContent = { up: "上", down: "下", top: "顶", bottom: "底" }[command];
+          button.addEventListener("click", function () {
+            commitEdit("Instance order", function () { core.moveInstanceLayer(canvas, inst.id, command); });
+            renderAll();
+          });
+          row.appendChild(button);
+        });
+        row.prepend(lock);
+        row.prepend(eye);
+        row.prepend(name);
+        layerPanel.appendChild(row);
+      });
+    }
+
+    function showDockGhost(plot, x, y) {
+      var ghost = document.getElementById("tvDockGhost");
+      if (!ghost) {
+        ghost = document.createElement("div");
+        ghost.id = "tvDockGhost";
+        ghost.className = "tv-dock-ghost";
+        document.body.appendChild(ghost);
+      }
+      if (ghost.dataset.plotId !== plot.id) {
+        ghost.dataset.plotId = plot.id;
+        ghost.style.background = plot.accentColor || "#F3D9C5";
+        ghost.replaceChildren(plotThumb(plot));
+      }
+      ghost.style.left = x + "px";
+      ghost.style.top = y + "px";
+      ghost.hidden = false;
+    }
+
+    function hideDockGhost() {
+      var ghost = document.getElementById("tvDockGhost");
+      if (ghost) ghost.hidden = true;
+    }
+
+    function placeDraggedPlot(plotId, clientX, clientY) {
+      var canvas = activeCanvas();
+      if (!canvas) return;
+      var plot = core.findPlot(project, plotId);
+      if (!plot || plot.type === "detail") return;
+      if (core.findInstance(canvas, plot.id)) {
+        setStatus("「" + core.plotEditorName(plot) + "」已经在「" + canvas.name + "」上。", "");
+        return;
+      }
+      var rect = paper.getBoundingClientRect();
+      var zoom = canvasZoom() || 1;
+      var x = Math.round((clientX - rect.left) / zoom);
+      var y = Math.round((clientY - rect.top) / zoom);
+      var created = null;
+      commitEdit("Place plot", function () {
+        created = core.createInstance(project, canvas.id, plot.id, { x: x, y: y, width: plot.layout.width, height: plot.layout.height });
+      });
+      selectedInstanceIds = created ? [created.id] : [];
+      workspaceFocus = created ? { type: "instance", id: created.id, plotId: plot.id } : workspaceFocus;
+      project.ui.workspaceMode = "canvas";
+      setStatus("已把「" + core.plotEditorName(plot) + "」放进「" + canvas.name + "」。", "ok");
+      renderAll();
+    }
+
     function renderCanvas() {
+      var canvas = activeCanvas();
+      if (canvas) core.mirrorCanvas(project, canvas.id);
       applyCanvasZoom();
       paper.replaceChildren();
-      if (!project.plots.length) {
+      var visible = stagePlots();
+      if (!visible.length) {
         var empty = document.createElement("div");
         empty.className = "tv-canvas-empty";
-        empty.innerHTML = project.datasets.length
-          ? "<div><strong>画布是空的</strong><p>点击「新建图」，然后从左侧勾选曲线加入指定图。</p></div>"
-          : "<div><strong>等待实验数据</strong><p>导入 CSV，或打开 <code>.tvproj.json</code> 工程继续编辑。</p></div>";
+        empty.innerHTML = workspaceMode() === "canvas"
+          ? "<div><strong>这块画布还没有图窗</strong><p>从下方 Dock 把图窗拖进来，或新建图窗后再放置。</p></div>"
+          : "<div><strong>没有正在编辑的图窗</strong><p>从 Dock 点一个图窗进入绘图模式。</p></div>";
         paper.appendChild(empty);
         return;
       }
-      core.plotsInLayerOrder(project).forEach(function (plot) {
-        if (plot.visible === false) return;
-        var box = makePlotBox(plot);
-        box.style.zIndex = String(plot.zOrder || 1);
-        paper.appendChild(box);
+      visible.forEach(function (plot) {
+        paper.appendChild(makePlotBox(plot));
       });
       paintDetailLinks();
       paintSelectionOverlay();
@@ -4048,6 +5634,7 @@
       titleInput.className = "tv-field";
       titleInput.value = core.resolvedAxisTitle(axis);
       titleInput.setAttribute("aria-label", axisName + " 轴标题");
+      titleInput.dataset.editFocus = axisName === "X" ? "x-title" : "y-title";
       var restore = document.createElement("button");
       restore.type = "button";
       restore.className = "tv-button tv-button--tiny";
@@ -4360,7 +5947,9 @@
       back.className = "tv-button";
       back.textContent = "返回图属性";
       back.addEventListener("click", function () {
-        selectedObject = null;
+        var host = selectedPlot();
+        if (host) setSelectedObject({ type: host.type === "detail" ? "detail" : "plot", figureId: host.id, objectId: host.id });
+        else setSelectedObject(null);
         renderProps();
         renderCanvas();
       });
@@ -4370,6 +5959,7 @@
     function renderInsetProps(plot, inset) {
       propsPanel.appendChild(backToPlotButton());
       var title = fieldControl("标题", inset.title);
+      title.input.dataset.editFocus = "title";
       title.input.addEventListener("change", function () {
         commitEdit("Inset title", function () { inset.title = title.input.value; });
         renderCanvas();
@@ -4479,12 +6069,17 @@
 
     function renderAnnotationProps(plot, ann) {
       propsPanel.appendChild(backToPlotButton());
+      var kicker = document.createElement("p");
+      kicker.className = "tv-object-kicker";
+      kicker.textContent = "当前标注";
+      propsPanel.appendChild(kicker);
       var name = fieldControl("名称", ann.name || annotationSummary(ann));
       name.input.addEventListener("change", function () {
         commitEdit("Annotation", function () { ann.name = name.input.value; });
         renderProps();
       });
       var text = fieldControl(ann.type === "text" || ann.type === "free" || ann.type === "point" ? "文字" : "标签", ann.text || "", ann.type === "point" || ann.type === "free" ? "textarea" : "input");
+      text.input.dataset.editFocus = "annotation-text";
       text.input.addEventListener("change", function () {
         commitEdit("Annotation", function () { ann.text = text.input.value; });
         renderCanvas();
@@ -4599,12 +6194,7 @@
         });
         propsPanel.appendChild(fill.wrap);
       }
-      var listCap = document.createElement("span");
-      listCap.className = "tv-prop-label";
-      listCap.textContent = "本图标注";
-      propsPanel.appendChild(listCap);
-      appendAnnotationList(propsPanel, plot);
-      appendCanvasSettings(propsPanel);
+      focusPendingEdit();
     }
 
     function plotSvg(plot) {
@@ -4638,6 +6228,13 @@
       figureGroups(plot).forEach(function (group) {
         var key = plot.id + "\0" + group.datasetId;
         var expanded = !!expandedFigureGroups[key];
+        if (pendingEditFocus.indexOf("series:") === 0 && group.refs.some(function (ref) { return pendingEditFocus === "series:" + ref.seriesId; })) {
+          expanded = true;
+          expandedFigureGroups[key] = true;
+          var wantedSeries = pendingEditFocus.slice("series:".length);
+          plot.seriesRefs.forEach(function (ref) { ref.selected = ref.seriesId === wantedSeries; });
+          selectedRefIndex = Math.max(0, plot.seriesRefs.findIndex(function (ref) { return ref.seriesId === wantedSeries; }));
+        }
         var dataset = group.dataset;
         var total = dataset ? dataset.series.length : group.refs.length;
         var wrap = document.createElement("div");
@@ -4763,6 +6360,7 @@
             wrap.appendChild(row);
             if (series && ref.selected && selectedRefIndex === plot.seriesRefs.indexOf(ref)) {
               var display = fieldControl("显示名称", displayName);
+              display.input.dataset.editFocus = "series:" + ref.seriesId;
               display.input.addEventListener("change", function () {
                 series.displayName = display.input.value;
                 series.label = series.displayName;
@@ -5055,8 +6653,76 @@
       return { range: sec.wrap, link: linkSec.wrap };
     }
 
+    function renderStrokeFocus(detail, kind) {
+      propsPanel.replaceChildren();
+      var kicker = document.createElement("p");
+      kicker.className = "tv-object-kicker";
+      kicker.textContent = kind === "connector" ? "引导线" : "来源框";
+      propsPanel.appendChild(kicker);
+      var source = detail && detail.detailSource;
+      if (!source) {
+        var missing = document.createElement("p");
+        missing.className = "tv-hint";
+        missing.textContent = "找不到对应的局部视图。";
+        propsPanel.appendChild(missing);
+        return;
+      }
+      var showKey = kind === "connector" ? "showConnectorLines" : "showSourceBox";
+      var styleKey = kind === "connector" ? "connectorStyle" : "boxStyle";
+      var show = document.createElement("label");
+      var showBox = document.createElement("input");
+      showBox.type = "checkbox";
+      showBox.checked = source[showKey] !== false;
+      show.append(showBox, document.createTextNode(kind === "connector" ? " 显示引导线" : " 显示来源框"));
+      showBox.addEventListener("change", function () {
+        commitEdit(kind, function () { detail.detailSource[showKey] = showBox.checked; });
+        renderCanvas();
+      });
+      var style = source[styleKey] || {};
+      var color = colorControl("颜色", style.color || "#1d4e89", function (hex) {
+        commitEdit(kind, function () { detail.detailSource[styleKey].color = hex; });
+        renderCanvas();
+      });
+      var width = fieldControl("线宽", style.lineWidth || 1);
+      width.input.type = "number";
+      width.input.step = "0.1";
+      width.input.addEventListener("change", function () {
+        commitEdit(kind, function () { detail.detailSource[styleKey].lineWidth = Number(width.input.value) || 1; });
+        renderCanvas();
+      });
+      var type = lineTypeControl("线型", style.lineType || (kind === "connector" ? "dashed" : "solid"), function (id) {
+        commitEdit(kind, function () { detail.detailSource[styleKey].lineType = id; });
+        renderCanvas();
+      });
+      propsPanel.append(show, color.wrap, width.wrap, type.wrap);
+    }
+
+    function appendTemplateControls(parent, plot) {
+      var hint = document.createElement("p");
+      hint.className = "tv-hint";
+      hint.textContent = plot.templateMeta && plot.templateMeta.templateName
+        ? ("模板  " + plot.templateMeta.templateName)
+        : "模板  未使用";
+      var row = document.createElement("div");
+      row.className = "tv-inline";
+      var save = document.createElement("button");
+      save.type = "button";
+      save.className = "tv-button tv-button--tiny";
+      save.textContent = "保存为模板";
+      save.addEventListener("click", openSaveTemplateDialog);
+      var apply = document.createElement("button");
+      apply.type = "button";
+      apply.className = "tv-button tv-button--tiny";
+      apply.textContent = "应用模板";
+      apply.addEventListener("click", openTemplateManager);
+      row.append(save, apply);
+      parent.append(hint, row);
+    }
+
     function renderProps() {
       propsPanel.replaceChildren();
+      if (workspaceMode() === "canvas" && selectedInstanceIds.length) return renderInstanceFocus();
+      if (workspaceMode() === "canvas" && workspaceFocus && (workspaceFocus.type === "canvas" || workspaceFocus.type === "instances")) return renderCanvasFocus();
       var plot = selectedPlot();
       if (!plot) {
         var hint = document.createElement("p");
@@ -5066,16 +6732,25 @@
         appendCanvasSettings(propsPanel);
         return;
       }
-      if (selectedObject && selectedObject.plotId === plot.id) {
-        if (selectedObject.type === "inset") {
-          var selectedInset = (plot.insets || []).find(function (item) { return item.id === selectedObject.id; });
-          if (selectedInset) return renderInsetProps(plot, selectedInset);
-        }
-        if (selectedObject.type === "annotation") {
-          var selectedAnn = (plot.annotations || []).find(function (item) { return item.id === selectedObject.id; });
-          if (selectedAnn) return renderAnnotationProps(plot, selectedAnn);
-        }
-        selectedObject = null;
+      selectedObject = core.normalizeSelectedObject(selectedObject);
+      var focus = core.getPropertyFocus(selectedObject);
+      if (selectedObject && (focus === "source-box" || focus === "connector")) {
+        var strokeHost = core.resolveSelectedObject(project, selectedObject);
+        if (strokeHost) return renderStrokeFocus(strokeHost.plot, focus);
+        setSelectedObject(null);
+        focus = "plot";
+      }
+      if (selectedObject && selectedObject.figureId === plot.id && selectedObject.type === "inset") {
+        var selectedInset = (plot.insets || []).find(function (item) { return item.id === selectedObject.objectId; });
+        if (selectedInset) return renderInsetProps(plot, selectedInset);
+        setSelectedObject(null);
+        focus = "plot";
+      }
+      if (selectedObject && selectedObject.figureId === plot.id && selectedObject.type === "annotation") {
+        var selectedAnn = (plot.annotations || []).find(function (item) { return item.id === selectedObject.objectId; });
+        if (selectedAnn) return renderAnnotationProps(plot, selectedAnn);
+        setSelectedObject(null);
+        focus = "plot";
       }
       if (!plot.legend) plot.legend = core.normalizeLegend(plot.legend, plot.legendVisible);
       if (!plot.textStyles) plot.textStyles = core.normalizePlotTextStyles(plot.textStyles);
@@ -5083,7 +6758,8 @@
       var selectedCount = selectedIds.length;
 
       inspectorKind = plot.type === "detail" ? "detail" : "normal";
-      syncInspectorFocus(inspectorKind, inspectorKind === "detail" ? "viewport" : "chart", inspectorKind === "detail" ? null : "chart.title");
+      var focusKey = focus === "detail" ? "viewport" : (focus === "plot" ? "chart" : focus);
+      syncInspectorFocus(inspectorKind, focusKey, focus === "plot" ? "chart.title" : null);
       var dataSec = section("系列", false, "series.list");
       var batch = document.createElement("button");
       batch.type = "button";
@@ -5339,6 +7015,7 @@
       showTitleBox.checked = plot.showTitle !== false;
       showTitleLabel.append(showTitleBox, document.createTextNode(" 显示标题"));
       var title = fieldControl("标题内容", plot.showTitle === false ? (plot.title || "") : (plot.title || ""));
+      title.input.dataset.editFocus = "title";
       var subtitle = fieldControl("副标题", plot.subtitle);
       var note = fieldControl("备注", plot.note, "textarea");
       var size = document.createElement("div");
@@ -5375,6 +7052,8 @@
         plot.name = figureName.input.value.trim() || core.plotEditorName(plot);
         setDirty(true);
         renderData();
+        renderDock();
+        renderModebar();
         renderProps();
       });
       showTitleBox.addEventListener("change", function () {
@@ -5405,8 +7084,8 @@
       });
       var xy = document.createElement("div");
       xy.className = "tv-inline";
-      var xPos = fieldControl("画布 X", plot.layout.x);
-      var yPos = fieldControl("画布 Y", plot.layout.y);
+      var xPos = fieldControl("图窗原点 X", plot.layout.x);
+      var yPos = fieldControl("图窗原点 Y", plot.layout.y);
       xPos.input.id = "tvFigX";
       yPos.input.id = "tvFigY";
       xPos.input.type = "number";
@@ -5421,6 +7100,9 @@
       xPos.input.addEventListener("change", commitPos);
       yPos.input.addEventListener("change", commitPos);
       xy.append(xPos.wrap, yPos.wrap);
+      var originNote = document.createElement("p");
+      originNote.className = "tv-hint";
+      originNote.textContent = "原点属于图窗本身。画布里的位置和大小在排版模式的实例属性里改，两边互不影响。";
       size.append(width.wrap, height.wrap);
       var titleAlign = selectControl("标题对齐", plot.textStyles.title.align || "left", [
         ["left", "左"],
@@ -5437,7 +7119,7 @@
       var titleStyleCap = document.createElement("span");
       titleStyleCap.className = "tv-prop-label";
       titleStyleCap.textContent = "图标题文字";
-      chart.body.append(figureName.wrap, size, lock, bgColor.wrap, xy);
+      chart.body.append(figureName.wrap, size, lock, bgColor.wrap, xy, originNote);
       titleSec.body.append(
         showTitleLabel, title.wrap, titleAlign.wrap, subtitle.wrap, note.wrap, titleStyleCap,
         bindTextStyle(plot.textStyles.title, function () { setDirty(true); renderCanvas(); })
@@ -5469,6 +7151,7 @@
           locate.textContent = "定位到主图";
           locate.addEventListener("click", function () {
             activatePlot(sourcePlot.id);
+            setSelectedObject({ type: "plot", figureId: sourcePlot.id, objectId: sourcePlot.id });
             renderData();
             paintSelectionOverlay();
             renderLayers();
@@ -5485,6 +7168,7 @@
         var frameSec = section("背景与尺寸", false, "chart.frame");
         while (chart.body.firstChild) frameSec.body.appendChild(chart.body.firstChild);
         chart.body.append(titleSec.wrap, frameSec.wrap);
+        appendTemplateControls(chart.body, plot);
         var seriesSec = section("数据系列", false, "series");
         seriesSec.body.append(dataSec.wrap, styleSec.wrap);
         var localSec = section("局部视图", false, "local");
@@ -5502,6 +7186,7 @@
           jump.textContent = core.plotEditorName(child);
           jump.addEventListener("click", function () {
             activatePlot(child.id);
+            setSelectedObject({ type: "detail", figureId: child.id, objectId: child.id });
             renderData();
             paintSelectionOverlay();
             renderLayers();
@@ -5511,8 +7196,15 @@
         });
         blocks = [chart.wrap, xAxisSec.wrap, yAxisSec.wrap, legendSec.wrap, seriesSec.wrap, localSec.wrap, annSec.wrap, exportSec.wrap, del];
       }
+      if (focus === "legend") blocks = [legendSec.wrap];
       propsPanel.append.apply(propsPanel, blocks);
-      appendCanvasSettings(propsPanel);
+      if (focus === "legend") {
+        var legendKicker = document.createElement("p");
+        legendKicker.className = "tv-object-kicker";
+        legendKicker.textContent = "图例";
+        propsPanel.insertBefore(legendKicker, propsPanel.firstChild);
+      } else appendCanvasSettings(propsPanel);
+      focusPendingEdit();
     }
 
     function renderAll() {
@@ -5523,17 +7215,24 @@
       renderCanvas();
       renderProps();
       renderLayers();
+      renderDock();
+      renderModebar();
       setDirty(dirty);
     }
 
     function deletePlot(id) {
       var plot = project.plots.find(function (item) { return item.id === id; });
-      var children = core.detailChildren(project, id);
-      if (plot && plot.type !== "detail" && children.length) {
-        var ok = window.confirm("该图包含 " + children.length + " 个局部视图，删除主图将同时删除这些局部视图。");
-        if (!ok) return;
+      if (plot && plot.type !== "detail") {
+        var usage = core.plotWindowUsage(project, id);
+        var children = core.detailChildren(project, id);
+        var message = "删除图窗「" + core.plotEditorName(plot) + "」？";
+        if (usage.length) message += "它还被这些画布使用：" + usage.join("、") + "。相关实例会一起去掉。";
+        if (children.length) message += "包含 " + children.length + " 个局部视图。";
+        if (!window.confirm(message)) return;
+        commitEdit("Delete plot", function () { core.deletePlotWindow(project, id, true); });
+      } else {
+        commitEdit("Delete plot", function () { core.removePlot(project, id); });
       }
-      core.removePlot(project, id);
       if (!project.plots.some(function (item) { return item.id === selectedPlotId; })) {
         selectedPlotId = project.plots[0] ? project.plots[0].id : null;
       }
@@ -5544,16 +7243,41 @@
 
     function renderLayers() {
       if (!layerPanel) return;
+      if (workspaceMode() === "canvas") return renderInstanceLayers();
       layerPanel.replaceChildren();
       var plots = project.plots || [];
       var count = document.createElement("p");
       count.className = "tv-layer-count";
-      count.textContent = "图层（" + plots.length + " 图）";
+      count.textContent = "图层  ·  " + plots.length + " 个对象";
       layerPanel.appendChild(count);
+      var top = document.createElement("p");
+      top.className = "tv-layer-ends";
+      top.textContent = "最上层";
+      layerPanel.appendChild(top);
       var ordered = core.plotsInLayerOrder(project).slice().reverse();
+      var host = selectedPlot();
+      if (host && host.type === "detail") host = core.sourcePlotOf(project, host) || host;
+      if (host) {
+        var family = {};
+        family[host.id] = true;
+        core.detailChildren(project, host.id).forEach(function (child) { family[child.id] = true; });
+        ordered = ordered.filter(function (plot) { return family[plot.id]; });
+      }
+      function layerOwnerId() {
+        if (!selectedObject) return selectedPlotId;
+        if (selectedObject.type === "source-box" || selectedObject.type === "connector") return selectedObject.objectId;
+        return selectedObject.figureId || selectedPlotId;
+      }
+      var ownerId = layerOwnerId();
       ordered.forEach(function (plot) {
         var row = document.createElement("div");
-        row.className = "tv-layer-row" + (plot.type === "detail" ? " is-child" : "") + (plot.id === selectedPlotId ? " is-selected" : "");
+        var selectedLayer = plot.id === ownerId && (!selectedObject || selectedObject.type === "plot" || selectedObject.type === "detail" || selectedObject.figureId === plot.id || selectedObject.objectId === plot.id);
+        row.className = "tv-layer-row" + (plot.visible === false ? " is-hidden" : "") + (selectedLayer ? " is-selected" : "");
+        var grip = document.createElement("span");
+        grip.className = "tv-layer-grip";
+        grip.textContent = "≡";
+        grip.title = "拖动排序";
+        grip.draggable = true;
         var eye = document.createElement("button");
         eye.type = "button";
         eye.textContent = plot.visible === false ? "○" : "●";
@@ -5570,26 +7294,68 @@
         name.textContent = core.plotEditorName(plot);
         name.addEventListener("click", function () {
           var switched = activatePlot(plot.id);
+          setSelectedObject({ type: plot.type === "detail" ? "detail" : "plot", figureId: plot.id, objectId: plot.id });
           if (switched) renderData();
           paintSelectionOverlay();
           renderLayers();
           renderProps();
         });
         eye.addEventListener("click", function () {
-          plot.visible = plot.visible === false;
-          setDirty(true);
+          commitEdit("Layer visibility", function () { plot.visible = plot.visible === false; });
           renderCanvas();
           renderLayers();
         });
         lock.addEventListener("click", function () {
-          plot.locked = !plot.locked;
-          setDirty(true);
+          commitEdit("Layer lock", function () { plot.locked = !plot.locked; });
           renderCanvas();
           renderLayers();
         });
-        row.append(eye, lock, name);
+        grip.addEventListener("dragstart", function (event) {
+          layerDragId = plot.id;
+          event.dataTransfer.setData("text/plain", plot.id);
+          event.dataTransfer.effectAllowed = "move";
+          event.stopPropagation();
+        });
+        grip.addEventListener("dragend", function () {
+          layerDragId = "";
+          layerPanel.querySelectorAll(".is-drop-before, .is-drop-after").forEach(function (node) {
+            node.classList.remove("is-drop-before", "is-drop-after");
+          });
+        });
+        row.addEventListener("dragover", function (event) {
+          if (!layerDragId) return;
+          event.preventDefault();
+          var rect = row.getBoundingClientRect();
+          var before = event.clientY < rect.top + rect.height / 2;
+          row.classList.toggle("is-drop-before", before);
+          row.classList.toggle("is-drop-after", !before);
+          row.dataset.drop = before ? "before" : "after";
+        });
+        row.addEventListener("drop", function (event) {
+          if (!layerDragId) return;
+          event.preventDefault();
+          var ids = core.plotsInLayerOrder(project).slice().reverse().map(function (item) { return item.id; });
+          var from = ids.indexOf(layerDragId);
+          if (from < 0) return;
+          var moved = ids.splice(from, 1)[0];
+          var dest = ids.indexOf(plot.id);
+          if (dest < 0) dest = ids.length;
+          if (row.dataset.drop === "after") dest += 1;
+          ids.splice(dest, 0, moved);
+          var dragging = layerDragId;
+          layerDragId = "";
+          commitEdit("Layer order", function () { core.reorderPlotLayers(project, ids); });
+          if (dragging) setSelectedObject(selectedObject);
+          renderCanvas();
+          renderLayers();
+        });
+        row.append(grip, eye, lock, name);
         layerPanel.appendChild(row);
       });
+      var bottom = document.createElement("p");
+      bottom.className = "tv-layer-ends";
+      bottom.textContent = "最下层";
+      layerPanel.appendChild(bottom);
       var actions = document.createElement("div");
       actions.className = "tv-layer-actions";
       [["up", "上移"], ["down", "下移"], ["top", "置顶"], ["bottom", "置底"]].forEach(function (pair) {
@@ -5600,8 +7366,7 @@
         button.disabled = !selectedPlotId;
         button.addEventListener("click", function () {
           if (!selectedPlotId) return;
-          core.movePlotLayer(project, selectedPlotId, pair[0]);
-          setDirty(true);
+          commitEdit("Layer order", function () { core.movePlotLayer(project, selectedPlotId, pair[0]); });
           renderCanvas();
           renderLayers();
         });
@@ -5659,7 +7424,15 @@
         if (fromFile) project.projectName = fromFile;
       }
       projectFileHandle = handle || null;
-      selectedPlotId = next.plots[0] ? next.plots[0].id : null;
+      selectedPlotId = (next.ui && next.ui.activePlotId && next.plots.some(function (item) { return item.id === next.ui.activePlotId; }))
+        ? next.ui.activePlotId
+        : (next.plots[0] ? next.plots[0].id : null);
+      if (!next.canvases || !next.canvases.length) core.migrateLegacyWorkspace(next, null);
+      var openedCanvas = core.findCanvas(next, next.ui && next.ui.activeCanvasId) || (next.canvases || [])[0];
+      if (openedCanvas) core.mirrorCanvas(next, openedCanvas.id);
+      selectedInstanceIds = [];
+      thumbCache = {};
+      workspaceFocus = openedCanvas ? { type: "canvas", id: openedCanvas.id } : null;
       selectedRefIndex = 0;
       lastSelectedSeriesId = {};
       checkedSeries = new Set();
@@ -5680,9 +7453,10 @@
     function newProject() {
       if (!confirmDiscard()) return;
       var next = core.createProject();
-      var plot = core.ensureDefaultPlot(next);
-      applyProject(next, "已新建工程，并创建 Figure 1。");
-      selectedPlotId = plot.id;
+      core.ensureWorkspace(next);
+      core.syncCanvasToPlots(next);
+      applyProject(next, "已新建工程，并创建画布 1 和图窗 1。");
+      selectedPlotId = next.plots[0].id;
       renderAll();
     }
 
@@ -6009,14 +7783,34 @@
       });
     }
 
+    function mirrorLayoutToInstance(plot) {
+      if (!plot || plot.type === "detail") return;
+      var canvas = activeCanvas();
+      if (!canvas) return;
+      var inst = core.findInstance(canvas, plot.id) || core.createInstance(project, canvas.id, plot.id, {
+        x: plot.layout.x,
+        y: plot.layout.y,
+        width: plot.layout.width,
+        height: plot.layout.height
+      });
+      core.setInstanceGeometry(inst, {
+        x: plot.layout.x,
+        y: plot.layout.y,
+        width: plot.layout.width,
+        height: plot.layout.height
+      });
+    }
+
     function applyChosenLayout(templateId, primaryPlotId) {
-      var plots = project.plots.slice();
-      if (!plots.length) return setStatus("请先新建图。", "error");
+      var plots = core.plotWindows(project);
+      if (!plots.length) return setStatus("请先添加图。", "error");
       var primary = primaryPlotId || selectedPlotId || (plots[0] && plots[0].id);
-      core.applyLayoutTemplate(plots, templateId, core.canvasLayoutArea(project.canvas), { primaryPlotId: primary });
-      core.syncCanvasToPlots(project);
+      commitEdit("Apply layout", function () {
+        core.applyLayoutTemplate(plots, templateId, core.canvasLayoutArea(project.canvas), { primaryPlotId: primary });
+        plots.forEach(mirrorLayoutToInstance);
+        core.syncCanvasToPlots(project);
+      });
       closeLayoutMenu();
-      setDirty(true);
       renderAll();
       var primaryPlot = plots.find(function (item) { return item.id === primary; });
       setStatus(templateId === "onePlusTwo" && primaryPlot
@@ -6058,7 +7852,7 @@
         primaryWrap.appendChild(document.createTextNode("当前主图"));
         var primarySelect = document.createElement("select");
         primarySelect.className = "tv-select";
-        project.plots.forEach(function (plot) {
+        core.plotWindows(project).forEach(function (plot) {
           var option = document.createElement("option");
           option.value = plot.id;
           option.textContent = core.plotEditorName(plot);
@@ -6101,6 +7895,7 @@
               if (!plot) return setStatus("请先选中一张图。", "error");
               commitEdit("Snap layout", function () {
                 core.placePlotInSlot(plot, id, index, project.canvas);
+                mirrorLayoutToInstance(plot);
               });
               closeLayoutMenu();
               renderAll();
@@ -6115,6 +7910,8 @@
         });
       }
       document.body.appendChild(layoutMenu);
+      var menuLeft = Math.min(rect.left, window.innerWidth - layoutMenu.offsetWidth - 8);
+      layoutMenu.style.left = Math.max(8, menuLeft) + "px";
     }
 
     function bindSplitter(el, side) {
@@ -6170,13 +7967,253 @@
         if (!menu.contains(event.target)) menu.open = false;
       });
     });
-    document.getElementById("tvNewPlot").addEventListener("click", function () {
-      var plot = core.createPlot(project, { title: "Figure " + (project.plots.length + 1) });
+    function readTemplateLibrary() {
+      templateStoreError = "";
+      try {
+        if (!window.localStorage) throw new Error("unavailable");
+        var text = localStorage.getItem(core.TEMPLATE_STORAGE_KEY);
+        templateLibrary = core.normalizeTemplateLibrary(text ? JSON.parse(text) : null);
+      } catch (error) {
+        templateLibrary = core.normalizeTemplateLibrary(null);
+        templateStoreError = "图表模板暂时不可用，绘图和工程仍可使用。";
+      }
+    }
+
+    function writeTemplateLibrary() {
+      try {
+        if (!window.localStorage) throw new Error("unavailable");
+        localStorage.setItem(core.TEMPLATE_STORAGE_KEY, JSON.stringify(core.normalizeTemplateLibrary(templateLibrary)));
+        templateLibrary = core.normalizeTemplateLibrary(templateLibrary);
+        templateStoreError = "";
+        return true;
+      } catch (error) {
+        templateStoreError = "图表模板无法保存，绘图和工程仍可使用。";
+        setStatus(templateStoreError, "error");
+        return false;
+      }
+    }
+
+    function defaultFigureTemplate() {
+      if (templateStoreError || !templateLibrary.defaultTemplateId) return null;
+      return templateLibrary.templates.find(function (item) { return item.id === templateLibrary.defaultTemplateId; }) || null;
+    }
+
+    function createFigure(template) {
+      var before = core.captureEditorState(project);
+      var plot = core.createPlot(project, {
+        name: "图窗 " + (core.plotWindows(project).length + 1),
+        title: "Figure " + (project.plots.length + 1)
+      });
+      if (template && !template.system) core.applyFigureTemplate(plot, template);
+      pushHistory("New figure", before, core.captureEditorState(project));
+      if (!project.ui) project.ui = core.normalizeUi(null);
+      project.ui.workspaceMode = "plot";
       activatePlot(plot.id);
-      core.syncCanvasToPlots(project);
+      selectedInstanceIds = [];
+      workspaceFocus = { type: "plot", id: plot.id, plotId: plot.id };
+      setSelectedObject({ type: "plot", figureId: plot.id, objectId: plot.id });
       setDirty(true);
-      setStatus("已新建「" + core.plotEditorName(plot) + "」。从左侧勾选曲线并加入此图。", "ok");
+      var label = template && template.name ? template.name : "系统默认";
+      setStatus("已新建图窗「" + core.plotEditorName(plot) + "」，样式：" + label + "。它还没放进画布，可从 Dock 拖进去。", "ok");
       renderAll();
+    }
+
+    function applyTemplateToSelected(template) {
+      var plot = selectedPlot();
+      if (!plot || plot.type === "detail") {
+        setStatus("模板只能应用到普通主图。", "error");
+        return;
+      }
+      commitEdit("Apply template", function () { core.applyFigureTemplate(plot, template); });
+      setSelectedObject({ type: "plot", figureId: plot.id, objectId: plot.id });
+      renderAll();
+      setStatus("已将模板「" + template.name + "」应用到「" + core.plotEditorName(plot) + "」。", "ok");
+    }
+
+    function openSaveTemplateDialog() {
+      var plot = selectedPlot();
+      if (!plot || plot.type === "detail") {
+        setStatus("局部视图不能保存为图表模板。", "error");
+        return;
+      }
+      document.getElementById("tvTemplateName").value = (plot.templateMeta && plot.templateMeta.templateName) || (plot.name || "论文单图");
+      var dialog = document.getElementById("tvTemplateSaveDialog");
+      if (typeof dialog.showModal === "function") dialog.showModal();
+    }
+
+    function confirmSaveTemplate() {
+      var plot = selectedPlot();
+      if (!plot || plot.type === "detail") return;
+      var name = document.getElementById("tvTemplateName").value.trim() || "未命名模板";
+      var template = core.extractFigureTemplate(plot, {
+        name: name,
+        include: {
+          figure: document.getElementById("tvTplFigure").checked,
+          text: document.getElementById("tvTplText").checked,
+          xAxis: document.getElementById("tvTplX").checked,
+          yAxis: document.getElementById("tvTplY").checked,
+          edges: document.getElementById("tvTplEdge").checked,
+          legend: document.getElementById("tvTplLegend").checked,
+          series: document.getElementById("tvTplSeries").checked
+        }
+      });
+      if (!template) return setStatus("无法从这张图提取模板。", "error");
+      templateLibrary.templates.push(template);
+      templateLibrary = core.normalizeTemplateLibrary(templateLibrary);
+      if (!writeTemplateLibrary()) return;
+      var dialog = document.getElementById("tvTemplateSaveDialog");
+      if (typeof dialog.close === "function") dialog.close();
+      setStatus("已保存模板「" + template.name + "」。", "ok");
+      renderProps();
+    }
+
+    function exportTemplateFile(template) {
+      var text = core.serializeFigureTemplate(template);
+      var blob = new Blob([text], { type: "application/json" });
+      downloadBlob(blob, sanitizeFilename(template.name || "figure") + ".tvtemplate.json");
+    }
+
+    function importTemplateText(text) {
+      var parsed = core.parseFigureTemplate(text);
+      if (!parsed.ok) return setStatus(parsed.error || "模板无效。", "error");
+      if (templateLibrary.templates.some(function (item) { return item.id === parsed.template.id; })) {
+        parsed.template.id = core.makeId("tpl");
+      }
+      templateLibrary.templates.push(parsed.template);
+      templateLibrary = core.normalizeTemplateLibrary(templateLibrary);
+      if (!writeTemplateLibrary()) return;
+      setStatus("已导入模板「" + parsed.template.name + "」。", "ok");
+      var dialog = document.getElementById("tvTemplateManagerDialog");
+      if (dialog.open) openTemplateManager();
+    }
+
+    function openTemplateManager() {
+      var body = document.getElementById("tvTemplateManagerBody");
+      body.replaceChildren();
+      if (templateStoreError) {
+        var err = document.createElement("p");
+        err.className = "tv-hint";
+        err.textContent = templateStoreError;
+        body.appendChild(err);
+      }
+      if (!templateLibrary.templates.length) {
+        var empty = document.createElement("p");
+        empty.className = "tv-hint";
+        empty.textContent = "还没有图表模板。先把当前主图保存为模板。";
+        body.appendChild(empty);
+      }
+      templateLibrary.templates.forEach(function (tpl) {
+        var row = document.createElement("div");
+        row.className = "tv-template-row";
+        var title = document.createElement("strong");
+        title.textContent = (templateLibrary.defaultTemplateId === tpl.id ? "★ " : "") + tpl.name;
+        var actions = document.createElement("div");
+        actions.className = "tv-template-actions";
+        function act(label, fn) {
+          var button = document.createElement("button");
+          button.type = "button";
+          button.className = "tv-button tv-button--tiny";
+          button.textContent = label;
+          button.addEventListener("click", fn);
+          actions.appendChild(button);
+        }
+        act("应用", function () { applyTemplateToSelected(tpl); });
+        act("设为默认", function () {
+          templateLibrary.defaultTemplateId = tpl.id;
+          writeTemplateLibrary();
+          openTemplateManager();
+        });
+        act("重命名", function () {
+          var name = window.prompt("模板名称", tpl.name);
+          if (!name || !String(name).trim()) return;
+          tpl.name = String(name).trim();
+          tpl.updatedAt = new Date().toISOString();
+          templateLibrary = core.normalizeTemplateLibrary(templateLibrary);
+          writeTemplateLibrary();
+          openTemplateManager();
+        });
+        act("复制", function () {
+          var copy = core.duplicateFigureTemplate(tpl);
+          if (!copy) return;
+          templateLibrary.templates.push(copy);
+          templateLibrary = core.normalizeTemplateLibrary(templateLibrary);
+          writeTemplateLibrary();
+          openTemplateManager();
+        });
+        act("删除", function () {
+          if (!window.confirm("删除模板「" + tpl.name + "」？已经用过它的图不会改变。")) return;
+          templateLibrary.templates = templateLibrary.templates.filter(function (item) { return item.id !== tpl.id; });
+          if (templateLibrary.defaultTemplateId === tpl.id) templateLibrary.defaultTemplateId = "";
+          writeTemplateLibrary();
+          openTemplateManager();
+        });
+        act("导出", function () { exportTemplateFile(tpl); });
+        row.append(title, actions);
+        body.appendChild(row);
+      });
+      var sys = document.createElement("p");
+      sys.className = "tv-hint";
+      sys.textContent = "系统默认始终可用，不能删除。没有设为默认的模板时，添加图使用系统默认。";
+      body.appendChild(sys);
+      var dialog = document.getElementById("tvTemplateManagerDialog");
+      if (typeof dialog.showModal === "function" && !dialog.open) dialog.showModal();
+    }
+
+    function fillNewPlotMenu() {
+      var list = document.getElementById("tvNewPlotList");
+      list.replaceChildren();
+      function item(label, run) {
+        var button = document.createElement("button");
+        button.type = "button";
+        button.className = "tv-button";
+        button.textContent = label;
+        button.addEventListener("click", run);
+        list.appendChild(button);
+      }
+      item("系统默认", function () { createFigure(null); });
+      if (templateLibrary.templates.length) {
+        var cap = document.createElement("p");
+        cap.className = "tv-menu-note";
+        cap.textContent = "我的模板";
+        list.appendChild(cap);
+        templateLibrary.templates.forEach(function (tpl) {
+          var mark = templateLibrary.defaultTemplateId === tpl.id ? "★ " : "";
+          item(mark + tpl.name, function () { createFigure(tpl); });
+        });
+      }
+      item("保存当前图为模板…", openSaveTemplateDialog);
+      item("管理模板…", openTemplateManager);
+      item("导入模板…", function () { document.getElementById("tvTemplateImport").click(); });
+      if (templateStoreError) {
+        var note = document.createElement("p");
+        note.className = "tv-menu-note";
+        note.textContent = templateStoreError;
+        list.appendChild(note);
+      }
+    }
+
+    document.getElementById("tvNewPlot").addEventListener("click", function () {
+      createFigure(defaultFigureTemplate());
+    });
+    document.getElementById("tvNewPlotMenu").addEventListener("toggle", function () {
+      if (document.getElementById("tvNewPlotMenu").open) fillNewPlotMenu();
+    });
+    document.getElementById("tvTemplateSaveCancel").addEventListener("click", function () {
+      var dialog = document.getElementById("tvTemplateSaveDialog");
+      if (typeof dialog.close === "function") dialog.close();
+    });
+    document.getElementById("tvTemplateSaveConfirm").addEventListener("click", confirmSaveTemplate);
+    document.getElementById("tvTemplateManagerClose").addEventListener("click", function () {
+      var dialog = document.getElementById("tvTemplateManagerDialog");
+      if (typeof dialog.close === "function") dialog.close();
+    });
+    document.getElementById("tvTemplateImport").addEventListener("change", function (event) {
+      var file = event.target.files && event.target.files[0];
+      event.target.value = "";
+      if (!file) return;
+      file.text().then(importTemplateText).catch(function () {
+        setStatus("无法读取模板文件。", "error");
+      });
     });
     document.getElementById("tvLayout").addEventListener("click", function (event) {
       event.stopPropagation();
@@ -6229,6 +8266,68 @@
       else previewDialog.removeAttribute("open");
     });
     document.getElementById("tvExportPng").addEventListener("click", exportPng);
+    document.getElementById("tvExportPlotPng").addEventListener("click", function () { exportCurrentPlot("png"); });
+    document.getElementById("tvExportPlotSvg").addEventListener("click", function () { exportCurrentPlot("svg"); });
+    document.getElementById("tvModeCanvas").addEventListener("click", function () {
+      var canvas = activeCanvas();
+      if (canvas) enterCanvasMode(canvas.id);
+    });
+    document.getElementById("tvModePlot").addEventListener("click", function () { enterPlotMode(selectedPlotId); });
+    canvasScroll.addEventListener("pointerdown", function (event) {
+      if (interactionMode !== "pan" || event.button !== 0) return;
+      panDrag = { id: event.pointerId, x: event.clientX, y: event.clientY, left: canvasScroll.scrollLeft, top: canvasScroll.scrollTop };
+      canvasScroll.setPointerCapture(event.pointerId);
+    });
+    canvasScroll.addEventListener("pointermove", function (event) {
+      if (!panDrag || panDrag.id !== event.pointerId) return;
+      canvasScroll.scrollLeft = panDrag.left - (event.clientX - panDrag.x);
+      canvasScroll.scrollTop = panDrag.top - (event.clientY - panDrag.y);
+    });
+    canvasScroll.addEventListener("pointerup", function () { panDrag = null; });
+    canvasScroll.addEventListener("pointerdown", function (event) {
+      if (workspaceMode() !== "canvas" || interactionMode !== "range-select" || (event.button != null && event.button !== 0)) return;
+      if (event.target.closest && event.target.closest(".tv-plot-resize")) return;
+      var rect = paper.getBoundingClientRect();
+      var zoom = canvasZoom() || 1;
+      instanceMarquee = {
+        x: (event.clientX - rect.left) / zoom,
+        y: (event.clientY - rect.top) / zoom,
+        pointerId: event.pointerId,
+        shift: !!event.shiftKey
+      };
+      paintMarquee(instanceMarquee.x, instanceMarquee.y, 0, 0);
+      canvasScroll.setPointerCapture(event.pointerId);
+    });
+    canvasScroll.addEventListener("pointermove", function (event) {
+      if (!instanceMarquee || instanceMarquee.pointerId !== event.pointerId) return;
+      var rect = paper.getBoundingClientRect();
+      var zoom = canvasZoom() || 1;
+      var x = (event.clientX - rect.left) / zoom;
+      var y = (event.clientY - rect.top) / zoom;
+      paintMarquee(Math.min(instanceMarquee.x, x), Math.min(instanceMarquee.y, y), Math.abs(x - instanceMarquee.x), Math.abs(y - instanceMarquee.y));
+    });
+    canvasScroll.addEventListener("pointerup", finishInstanceMarquee);
+    canvasScroll.addEventListener("pointercancel", finishInstanceMarquee);
+    canvasScroll.addEventListener("dragover", function (event) {
+      var types = event.dataTransfer ? Array.from(event.dataTransfer.types || []) : [];
+      if (types.indexOf("text/plain") < 0) return;
+      event.preventDefault();
+      paper.classList.add("is-drop");
+    });
+    canvasScroll.addEventListener("dragleave", function () { paper.classList.remove("is-drop"); });
+    canvasScroll.addEventListener("drop", function (event) {
+      var payload = event.dataTransfer ? event.dataTransfer.getData("text/plain") : "";
+      paper.classList.remove("is-drop");
+      if (payload.indexOf("plot:") !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      placeDraggedPlot(payload.slice(5), event.clientX, event.clientY);
+    });
+    document.addEventListener("click", function (event) {
+      if (event.target.closest && event.target.closest(".tv-context, .tv-dock-popover")) return;
+      closeContextMenu();
+      document.querySelectorAll(".tv-dock-popover").forEach(function (node) { node.remove(); });
+    });
     document.getElementById("tvExportSvg").addEventListener("click", exportSvg);
     document.addEventListener("mousedown", function (event) {
       dataPanelActive = !!(dataPanel.contains(event.target));
@@ -6250,6 +8349,14 @@
       dataPanelActive = false;
     });
     document.addEventListener("keydown", function (event) {
+      if (!isTextEntry(document.activeElement) && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        var toolKey = event.key.toLowerCase();
+        if (toolKey === "v" || toolKey === "m" || toolKey === "r" || toolKey === "h") {
+          event.preventDefault();
+          setInteractionMode(toolKey === "v" ? "pointer" : toolKey === "m" ? "range-select" : toolKey === "r" ? "cursor" : "pan");
+          return;
+        }
+      }
       if ((event.ctrlKey || event.metaKey) && !isTextEntry(document.activeElement) && event.key.toLowerCase() === "z") {
         event.preventDefault();
         applyHistory(event.shiftKey ? "redo" : "undo");
@@ -6261,17 +8368,28 @@
         return;
       }
       if (event.key === "Escape" && !isTextEntry(document.activeElement)) {
+        var cancelGesture = !!(drag || interactionMode !== "pointer" || pendingText);
         if (drag && drag.before) core.restoreEditorState(project, drag.before);
         drag = null;
+        dockDrag = null;
+        hideDockGhost();
+        instanceMarquee = null;
+        paper.classList.remove("is-drop");
+        var marqueeNode = paper.querySelector(".tv-marquee");
+        if (marqueeNode) marqueeNode.remove();
         cursorHover = null;
         readoutCursor = null;
         pendingText = null;
         if (interactionMode !== "pointer") setInteractionMode("pointer");
-        else {
-          selectedObject = null;
+        if (cancelGesture) {
           renderCanvas();
           renderProps();
+          return;
         }
+        setSelectedObject(null);
+        renderCanvas();
+        renderProps();
+        renderLayers();
         return;
       }
       if ((event.key === "a" || event.key === "A") && (event.ctrlKey || event.metaKey)) {
@@ -6313,6 +8431,19 @@
       }
       if (event.key !== "Delete" && event.key !== "Backspace") return;
       if (isTextEntry(document.activeElement)) return;
+      if (workspaceMode() === "canvas" && selectedInstanceIds.length) {
+        event.preventDefault();
+        var canvas = activeCanvas();
+        var removing = selectedInstanceIds.slice();
+        commitEdit("Remove instance", function () {
+          removing.forEach(function (id) { core.removeInstance(project, canvas.id, id); });
+        });
+        selectedInstanceIds = [];
+        workspaceFocus = canvas ? { type: "canvas", id: canvas.id } : null;
+        setStatus(removing.length > 1 ? "已从画布移除 " + removing.length + " 个实例，图窗资产还在。" : "已从画布移除实例，图窗资产还在。", "ok");
+        renderAll();
+        return;
+      }
       if (deleteSelectedObject()) return;
       if (!selectedPlotId) return;
       event.preventDefault();
@@ -6388,6 +8519,14 @@
       renderCanvas();
     });
     setInteractionMode("pointer", true);
+    readTemplateLibrary();
+    if (templateStoreError) setStatus(templateStoreError, "error");
+    var bootCanvas = activeCanvas();
+    if (bootCanvas) {
+      core.mirrorCanvas(project, bootCanvas.id);
+      workspaceFocus = { type: "canvas", id: bootCanvas.id };
+    }
+    setSelectedObject(null);
     renderAll();
   }());
   </script>
@@ -6398,8 +8537,6 @@
     if (!core || !core.APP_INFO || typeof core.checkForUpdates !== "function") return;
     var aboutDialog = document.getElementById("tvAboutDialog");
     var aboutBody = document.getElementById("tvAboutBody");
-    var kicker = document.getElementById("tvKicker");
-    if (kicker) kicker.textContent = "VISUALIZER v" + core.APP_INFO.version;
     var updateState = core.createUpdateState();
     var checkTicket = 0;
 

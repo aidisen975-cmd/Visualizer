@@ -4,15 +4,23 @@
 
   var APP_INFO = Object.freeze({
     name: "Visualizer",
-    version: "0.4.1",
+    version: "0.6.0",
     repositoryOwner: "aidisen975-cmd",
     repositoryName: "Visualizer",
     updateChannel: "stable"
   });
   var SOFTWARE_VERSION = APP_INFO.version;
-  var PROJECT_FORMAT_VERSION = "1.0";
+  var PROJECT_FORMAT_VERSION = "1.1";
   var SCHEMA_VERSION = 2;
-  var SUPPORTED_PROJECT_FORMATS = ["1.0"];
+  var TEMPLATE_FORMAT_VERSION = 1;
+  var TEMPLATE_STORAGE_KEY = "visualizer.templates.figure.v1";
+  var SELECTED_OBJECT_TYPES = ["plot", "detail", "legend", "annotation", "source-box", "connector", "inset"];
+  var AXIS_STYLE_KEYS = [
+    "showLine", "lineColor", "lineWidth",
+    "showMajorTicks", "showMinorTicks", "showTickLabels", "tickDirection",
+    "showTitle", "formatMode", "decimals"
+  ];
+  var SUPPORTED_PROJECT_FORMATS = ["1.0", "1.1"];
   var TIME_IN_SECONDS = { ms: 0.001, s: 1, min: 60, h: 3600 };
   var TIME_LABELS = { ms: "ms", s: "s", min: "min", h: "h" };
   var MAX_MAJOR_TICKS = 500;
@@ -117,8 +125,17 @@
     "16:9": { width: 1600, height: 900, label: "16:9" },
     "4:3": { width: 1600, height: 1200, label: "4:3" },
     "a4-land": { width: 1123, height: 794, label: "A4 横向" },
-    "a4-port": { width: 794, height: 1123, label: "A4 纵向" }
+    "a4-port": { width: 794, height: 1123, label: "A4 纵向" },
+    "single-89": { width: 336, height: 454, label: "单栏 89 mm" },
+    "double-183": { width: 692, height: 454, label: "双栏 183 mm" }
   };
+  // 96 CSS px / in. Column widths are the journal measures; height is the editable default.
+  var PAPER_SIZE_PRESETS = {
+    "single-89": { width: 336, height: 227, label: "单栏 89 mm" },
+    "double-183": { width: 692, height: 302, label: "双栏 183 mm" }
+  };
+  var PLOT_ACCENT_COLORS = ["#F3D9C5", "#D5E6D9", "#E3D9F1"];
+  var CANVAS_DOCK_COLOR = "#DBE5EF";
 
   function defaultTextStyle(overrides) {
     var style = {
@@ -522,6 +539,7 @@
       savedAt: null,
       datasets: [],
       plots: [],
+      canvases: [],
       canvas: { width: 1280, height: 800, zoom: 1 },
       options: {
         displayTimeUnit: (partial && partial.displayTimeUnit) || "s",
@@ -758,6 +776,9 @@
       textStyles: normalizePlotTextStyles(partial && partial.textStyles),
       background: partial && partial.background ? String(partial.background) : "",
       groupStyles: normalizeGroupStyles(partial && partial.groupStyles),
+      defaultSeriesStyle: normalizeDefaultSeriesStyle(partial && partial.defaultSeriesStyle),
+      templateMeta: normalizeTemplateMeta(partial && partial.templateMeta),
+      accentColor: normalizeHexColor(partial && partial.accentColor) || "",
       annotations: normalizeAnnotations(partial && partial.annotations, (partial && partial.id) || ""),
       insets: normalizeInsets(partial && partial.insets, (partial && partial.id) || ""),
       fixedCursors: normalizeFixedCursors(partial && partial.fixedCursors),
@@ -770,6 +791,7 @@
     if (!plot.aspectRatio && plot.layout.height) {
       plot.aspectRatio = plot.layout.width / plot.layout.height;
     }
+    if (!plot.accentColor && plot.type !== "detail") plot.accentColor = nextPlotAccent(project);
     project.plots.push(plot);
     plot.annotations.forEach(function (item) { item.plotId = plot.id; });
     plot.insets.forEach(function (item) { item.sourcePlotId = plot.id; });
@@ -1068,18 +1090,59 @@
     return out;
   }
 
+  function normalizeDefaultSeriesStyle(raw) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    var style = {
+      colorMode: raw.colorMode === "palette" ? "palette" : (raw.colorMode === "single" ? "single" : "series")
+    };
+    var color = raw.color ? normalizeHexColor(raw.color) : null;
+    if (color) style.color = color;
+    if (LINE_TYPES.indexOf(raw.lineType) >= 0) style.lineType = raw.lineType;
+    if (raw.lineWidth != null && raw.lineWidth !== "" && Number.isFinite(Number(raw.lineWidth))) {
+      style.lineWidth = clamp(Number(raw.lineWidth), LINE_WIDTH_MIN, LINE_WIDTH_MAX);
+    }
+    if (raw.opacity != null && raw.opacity !== "" && Number.isFinite(Number(raw.opacity))) {
+      style.opacity = clamp(Number(raw.opacity), 0, 1);
+    }
+    if (raw.paletteId && (raw.paletteId === "high-contrast" || FIXED_PALETTES[raw.paletteId])) style.paletteId = String(raw.paletteId);
+    else if (style.colorMode === "palette") style.paletteId = "high-contrast";
+    return style;
+  }
+
   function resolveSeriesStyle(plot, series, ref, paletteIndex) {
     var own = normalizeSeriesStyle(ref && ref.style, (ref && ref.color) || (series && series.color));
     var overrides = (ref && ref.styleOverrides) || {};
+    var template = plot && plot.defaultSeriesStyle ? normalizeDefaultSeriesStyle(plot.defaultSeriesStyle) : null;
     var group = plot && plot.groupStyles && series ? plot.groupStyles[series.datasetId] : null;
-    if (!group) return own;
-    var next = normalizeSeriesStyle(own, own.color);
-    if (!overrides.color) {
-      if (group.colorMode === "palette") next.color = paletteColor(group.paletteId || "high-contrast", paletteIndex || 0);
-      else if (group.color) next.color = group.color;
+    if (!template) {
+      if (!group) return own;
+      var legacy = normalizeSeriesStyle(own, own.color);
+      if (!overrides.color) {
+        if (group.colorMode === "palette") legacy.color = paletteColor(group.paletteId || "high-contrast", paletteIndex || 0);
+        else if (group.color) legacy.color = group.color;
+      }
+      if (!overrides.lineType && group.lineType) legacy.lineType = group.lineType;
+      if (!overrides.lineWidth && group.lineWidth != null) legacy.lineWidth = group.lineWidth;
+      return legacy;
     }
-    if (!overrides.lineType && group.lineType) next.lineType = group.lineType;
-    if (!overrides.lineWidth && group.lineWidth != null) next.lineWidth = group.lineWidth;
+    var next = normalizeSeriesStyle(series && series.style, (series && series.color) || own.color);
+    if (template.lineType) next.lineType = template.lineType;
+    if (template.lineWidth != null) next.lineWidth = template.lineWidth;
+    if (template.opacity != null) next.opacity = template.opacity;
+    if (template.colorMode === "palette") next.color = paletteColor(template.paletteId || "high-contrast", paletteIndex || 0);
+    else if (template.colorMode === "single" && template.color) next.color = template.color;
+    if (group) {
+      if (!overrides.color) {
+        if (group.colorMode === "palette") next.color = paletteColor(group.paletteId || "high-contrast", paletteIndex || 0);
+        else if (group.color) next.color = group.color;
+      }
+      if (!overrides.lineType && group.lineType) next.lineType = group.lineType;
+      if (!overrides.lineWidth && group.lineWidth != null) next.lineWidth = group.lineWidth;
+    }
+    if (overrides.color && own.color) next.color = own.color;
+    if (overrides.lineType) next.lineType = own.lineType;
+    if (overrides.lineWidth) next.lineWidth = own.lineWidth;
+    if (overrides.opacity && own.opacity != null) next.opacity = own.opacity;
     return next;
   }
 
@@ -1338,7 +1401,11 @@
       rightPanelWidth: Number.isFinite(right) ? clamp(right, 260, 650) : DEFAULT_UI.rightPanelWidth,
       leftPanelCollapsed: !!ui.leftPanelCollapsed,
       rightPanelCollapsed: !!ui.rightPanelCollapsed,
-      canvasZoom: Number.isFinite(zoom) ? clampZoom(zoom) : 1
+      canvasZoom: Number.isFinite(zoom) ? clampZoom(zoom) : 1,
+      workspaceMode: ui.workspaceMode === "plot" ? "plot" : "canvas",
+      activeCanvasId: ui.activeCanvasId ? String(ui.activeCanvasId) : "",
+      activePlotId: ui.activePlotId ? String(ui.activePlotId) : "",
+      dockExpanded: !!ui.dockExpanded
     };
   }
 
@@ -1467,12 +1534,15 @@
       textStyles: textStyles,
       background: raw.background ? String(raw.background) : "",
       groupStyles: normalizeGroupStyles(raw.groupStyles),
+      defaultSeriesStyle: normalizeDefaultSeriesStyle(raw.defaultSeriesStyle),
+      templateMeta: normalizeTemplateMeta(raw.templateMeta),
       annotations: normalizeAnnotations(raw.annotations, raw.id),
       insets: normalizeInsets(raw.insets, raw.id),
       fixedCursors: normalizeFixedCursors(raw.fixedCursors),
       exportCursors: !!raw.exportCursors,
       lockAspect: !!raw.lockAspect,
-      aspectRatio: aspectRatio
+      aspectRatio: aspectRatio,
+      accentColor: normalizeHexColor(raw.accentColor) || ""
     };
   }
 
@@ -1512,6 +1582,7 @@
       savedAt: data.savedAt ? String(data.savedAt) : null,
       datasets: Array.isArray(data.datasets) ? data.datasets.map(normalizeDataset) : [],
       plots: dataPlots.map(normalizePlot),
+      canvases: [],
       canvas: {
         width: Number.isFinite(Number(canvas.width)) ? Math.max(400, Number(canvas.width)) : 1280,
         height: Number.isFinite(Number(canvas.height)) ? Math.max(300, Number(canvas.height)) : 800,
@@ -1543,6 +1614,7 @@
       }
     });
     if (!project.plots.length) ensureDefaultPlot(project);
+    migrateLegacyWorkspace(project, Array.isArray(data.canvases) ? data.canvases : null);
     assignLayerOrder(project);
     project.plots.forEach(function (plot) {
       if (sourcePlotOf(project, plot)) plot.seriesRefs = [];
@@ -1759,8 +1831,12 @@
         var copy = cloneJson(plot);
         if (sourcePlotOf(project, plot)) copy.seriesRefs = [];
         copy.legend = serializeLegend(plot.legend);
+        delete copy.selectedObject;
+        delete copy.layerDragState;
+        delete copy.propertyFocus;
         return copy;
       }),
+      canvases: (project.canvases || []).map(function (canvas) { return cloneJson(canvas); }),
       canvas: project.canvas,
       options: project.options,
       ui: normalizeUi(project.ui)
@@ -1911,6 +1987,17 @@
 
   function syncCanvasToPlots(project) {
     if (!project || !project.canvas) return project;
+    if (project.canvases && project.canvases.length) {
+      project.canvases.forEach(function (canvas) {
+        var box = instancesBoundingBox(canvas.instances);
+        if (!box.width) return;
+        canvas.width = Math.max(400, Math.ceil(Math.max(canvas.width || 0, box.maxX + LAYOUT_PADDING)));
+        canvas.height = Math.max(300, Math.ceil(Math.max(canvas.height || 0, box.maxY + LAYOUT_PADDING)));
+      });
+      var current = findCanvas(project, project.canvas.id) || project.canvases[0];
+      mirrorCanvas(project, current.id);
+      return project;
+    }
     if (!project.plots || !project.plots.length) return project;
     var box = plotsBoundingBox(project.plots);
     project.canvas.width = Math.max(400, Math.ceil(Math.max(project.canvas.width || 0, box.maxX + LAYOUT_PADDING)));
@@ -1995,6 +2082,13 @@
     if (!project.canvas) project.canvas = { width: 1280, height: 800, zoom: 1 };
     project.canvas.width = Math.max(400, Math.round(Number(width) || project.canvas.width));
     project.canvas.height = Math.max(300, Math.round(Number(height) || project.canvas.height));
+    var canvas = findCanvas(project, project.canvas.id);
+    if (!canvas && project.canvases && project.canvases.length === 1) canvas = project.canvases[0];
+    if (canvas) {
+      canvas.width = project.canvas.width;
+      canvas.height = project.canvas.height;
+      project.canvas.id = canvas.id;
+    }
     return project.canvas;
   }
 
@@ -2306,6 +2400,339 @@
     return ordered;
   }
 
+  function reorderPlotLayers(project, topFirstIds) {
+    var byId = {};
+    (project.plots || []).forEach(function (plot) { byId[plot.id] = plot; });
+    var seen = {};
+    var ordered = [];
+    (Array.isArray(topFirstIds) ? topFirstIds : []).slice().reverse().forEach(function (id) {
+      var key = String(id);
+      if (!byId[key] || seen[key]) return;
+      seen[key] = true;
+      ordered.push(byId[key]);
+    });
+    plotsInLayerOrder(project).forEach(function (plot) {
+      if (seen[plot.id]) return;
+      ordered.push(plot);
+    });
+    ordered.forEach(function (plot, index) { plot.zOrder = index + 1; });
+    return plotsInLayerOrder(project);
+  }
+
+  function normalizeSelectedObject(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    var type = String(raw.type || "");
+    if (SELECTED_OBJECT_TYPES.indexOf(type) < 0) return null;
+    var figureId = String(raw.figureId || raw.plotId || "");
+    var objectId = raw.objectId != null && raw.objectId !== ""
+      ? String(raw.objectId)
+      : (raw.id != null && raw.id !== "" ? String(raw.id) : figureId);
+    if (!figureId) figureId = objectId;
+    if (!figureId) return null;
+    if (!objectId) objectId = figureId;
+    return { type: type, figureId: figureId, objectId: objectId, plotId: figureId, id: objectId };
+  }
+
+  function getPropertyFocus(selected) {
+    var object = normalizeSelectedObject(selected);
+    if (!object || object.type === "plot") return "plot";
+    return object.type;
+  }
+
+  function resolveSelectedObject(project, selected) {
+    var object = normalizeSelectedObject(selected);
+    if (!object || !project) return null;
+    var plots = project.plots || [];
+    var figure = null;
+    var i;
+    for (i = 0; i < plots.length; i += 1) {
+      if (plots[i].id === object.figureId) figure = plots[i];
+    }
+    var host = figure;
+    if (object.type === "source-box" || object.type === "connector") {
+      host = null;
+      for (i = 0; i < plots.length; i += 1) {
+        if (plots[i].id === object.objectId && plots[i].type === "detail") host = plots[i];
+      }
+      if (!host && figure && figure.type === "detail") host = figure;
+    }
+    if (!host) return null;
+    return { object: object, plot: host };
+  }
+
+  function selectedObjectAction(project, selected) {
+    var resolved = resolveSelectedObject(project, selected);
+    if (!resolved) return { action: "none", changed: false };
+    var type = resolved.object.type;
+    if (type === "plot" || type === "detail" || type === "annotation" || type === "inset") {
+      return { action: "delete", type: type, plotId: resolved.plot.id, objectId: resolved.object.objectId, changed: false };
+    }
+    if (type === "legend" || type === "source-box" || type === "connector") {
+      return { action: "hide", type: type, plotId: resolved.plot.id, objectId: resolved.object.objectId, changed: false };
+    }
+    return { action: "none", changed: false };
+  }
+
+  function applySelectedObjectDelete(project, selected) {
+    var plan = selectedObjectAction(project, selected);
+    if (plan.action === "none") return plan;
+    var plot = (project.plots || []).find(function (item) { return item.id === plan.plotId; });
+    if (!plot) return { action: "none", changed: false };
+    if (plan.type === "plot" || plan.type === "detail") {
+      return { action: "delete", type: plan.type, changed: true, removed: removePlot(project, plot.id) };
+    }
+    if (plan.type === "annotation") {
+      var before = (plot.annotations || []).length;
+      plot.annotations = (plot.annotations || []).filter(function (item) { return item.id !== plan.objectId; });
+      return { action: "delete", type: "annotation", changed: plot.annotations.length !== before };
+    }
+    if (plan.type === "inset") {
+      var insetBefore = (plot.insets || []).length;
+      plot.insets = (plot.insets || []).filter(function (item) { return item.id !== plan.objectId; });
+      return { action: "delete", type: "inset", changed: plot.insets.length !== insetBefore };
+    }
+    if (plan.type === "legend") {
+      if (!plot.legend) plot.legend = normalizeLegend(null, true);
+      plot.legend.visible = false;
+      plot.legendVisible = false;
+      return { action: "hide", type: "legend", changed: true };
+    }
+    if (!plot.detailSource) return { action: "none", changed: false };
+    if (plan.type === "source-box") plot.detailSource.showSourceBox = false;
+    if (plan.type === "connector") plot.detailSource.showConnectorLines = false;
+    return { action: "hide", type: plan.type, changed: true };
+  }
+
+  function pickAxisStyle(axis) {
+    var src = normalizeAxis(axis);
+    var out = {};
+    AXIS_STYLE_KEYS.forEach(function (key) { out[key] = src[key]; });
+    return out;
+  }
+
+  function applyAxisStyle(axis, style) {
+    if (!axis || !style) return axis;
+    var patch = pickAxisStyle(style);
+    AXIS_STYLE_KEYS.forEach(function (key) { axis[key] = patch[key]; });
+    return axis;
+  }
+
+  function normalizeTemplateMeta(raw) {
+    if (!raw || typeof raw !== "object" || !raw.templateId) return null;
+    return {
+      templateId: String(raw.templateId),
+      templateName: raw.templateName == null ? "" : String(raw.templateName)
+    };
+  }
+
+  function templateTextStyles(raw) {
+    var styles = normalizePlotTextStyles(raw);
+    return {
+      title: styles.title,
+      xAxisTitle: styles.xAxisTitle,
+      yAxisTitle: styles.yAxisTitle,
+      xTick: styles.xTick,
+      yTick: styles.yTick,
+      legend: styles.legend
+    };
+  }
+
+  function sectionEnabled(meta, key) {
+    var include = meta && meta.include;
+    if (!include) return true;
+    return include[key] !== false;
+  }
+
+  function normalizeFigureTemplate(raw) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    if (Number(raw.templateFormatVersion) !== TEMPLATE_FORMAT_VERSION) return null;
+    var now = new Date().toISOString();
+    var figure = raw.figure && typeof raw.figure === "object" ? raw.figure : null;
+    var textSource = raw.textStyles && typeof raw.textStyles === "object" ? raw.textStyles : null;
+    if (figure && figure.title && textSource && !textSource.title) textSource = Object.assign({}, textSource, { title: figure.title });
+    return {
+      templateFormatVersion: TEMPLATE_FORMAT_VERSION,
+      id: raw.system ? "system-default" : String(raw.id || makeId("tpl")),
+      name: String(raw.name || "未命名模板"),
+      system: raw.system === true || raw.id === "system-default",
+      createdAt: raw.createdAt ? String(raw.createdAt) : now,
+      updatedAt: raw.updatedAt ? String(raw.updatedAt) : now,
+      figure: figure ? {
+        width: Number.isFinite(Number(figure.width)) ? Math.max(240, Number(figure.width)) : DEFAULT_FIGURE_WIDTH,
+        height: Number.isFinite(Number(figure.height)) ? Math.max(180, Number(figure.height)) : DEFAULT_FIGURE_HEIGHT,
+        background: figure.background ? String(figure.background) : "",
+        showTitle: figure.showTitle !== false
+      } : null,
+      xAxis: raw.xAxis ? pickAxisStyle(raw.xAxis) : null,
+      yAxis: raw.yAxis ? pickAxisStyle(raw.yAxis) : null,
+      topEdge: raw.topEdge ? normalizeEdge(raw.topEdge, "top") : null,
+      rightEdge: raw.rightEdge ? normalizeEdge(raw.rightEdge, "right") : null,
+      legend: raw.legend ? normalizeLegend(raw.legend, raw.legend.visible) : null,
+      defaultSeriesStyle: normalizeDefaultSeriesStyle(raw.defaultSeriesStyle),
+      textStyles: textSource ? templateTextStyles(textSource) : null
+    };
+  }
+
+  function validateFigureTemplate(raw) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { ok: false, error: "模板必须是 JSON 对象。" };
+    if (raw.projectFormatVersion && raw.templateFormatVersion == null) return { ok: false, error: "这是工程文件，不是图表模板。" };
+    if (Number(raw.templateFormatVersion) !== TEMPLATE_FORMAT_VERSION) return { ok: false, error: "不支持的模板版本。" };
+    if (raw.datasets || raw.plots || raw.seriesRefs) return { ok: false, error: "模板不能包含数据或工程图列表。" };
+    return { ok: true, error: "" };
+  }
+
+  function extractFigureTemplate(plot, meta) {
+    if (!plot || plot.type === "detail") return null;
+    var now = (meta && meta.now) || new Date().toISOString();
+    var ref = (plot.seriesRefs || [])[0];
+    var painted = ref ? normalizeSeriesStyle(ref.style, ref.color) : normalizeSeriesStyle(null, null);
+    var seriesStyle = plot.defaultSeriesStyle
+      ? normalizeDefaultSeriesStyle(plot.defaultSeriesStyle)
+      : {
+        lineWidth: painted.lineWidth,
+        lineType: painted.lineType,
+        opacity: painted.opacity,
+        colorMode: "series",
+        paletteId: "high-contrast"
+      };
+    var draft = { templateFormatVersion: TEMPLATE_FORMAT_VERSION };
+    if (sectionEnabled(meta, "figure")) {
+      draft.figure = {
+        width: plot.layout.width,
+        height: plot.layout.height,
+        background: plot.background || "",
+        showTitle: plot.showTitle !== false
+      };
+    }
+    if (sectionEnabled(meta, "text")) draft.textStyles = templateTextStyles(plot.textStyles);
+    if (sectionEnabled(meta, "xAxis")) draft.xAxis = pickAxisStyle(plot.xAxis);
+    if (sectionEnabled(meta, "yAxis")) draft.yAxis = pickAxisStyle(plot.yAxis);
+    if (sectionEnabled(meta, "edges")) {
+      draft.topEdge = normalizeEdge(plot.topEdge, "top");
+      draft.rightEdge = normalizeEdge(plot.rightEdge, "right");
+    }
+    if (sectionEnabled(meta, "legend")) draft.legend = cloneJson(plot.legend);
+    if (sectionEnabled(meta, "series")) draft.defaultSeriesStyle = seriesStyle;
+    draft.id = (meta && meta.id) || makeId("tpl");
+    draft.name = (meta && meta.name) || "未命名模板";
+    draft.createdAt = (meta && meta.createdAt) || now;
+    draft.updatedAt = now;
+    return normalizeFigureTemplate(draft);
+  }
+
+  function applyFigureTemplate(plot, template) {
+    var tpl = normalizeFigureTemplate(template);
+    if (!tpl || !plot || plot.type === "detail") return plot;
+    if (tpl.figure) {
+      plot.layout.width = Math.max(240, Math.round(tpl.figure.width));
+      plot.layout.height = Math.max(180, Math.round(tpl.figure.height));
+      plot.background = tpl.figure.background || "";
+      plot.showTitle = tpl.figure.showTitle !== false;
+      if (!plot.lockAspect) plot.aspectRatio = plot.layout.height ? plot.layout.width / plot.layout.height : plot.aspectRatio;
+    }
+    if (tpl.textStyles) {
+      var styles = normalizePlotTextStyles(plot.textStyles);
+      ["title", "xAxisTitle", "yAxisTitle", "xTick", "yTick", "legend"].forEach(function (key) {
+        styles[key] = normalizeTextStyle(tpl.textStyles[key], styles[key]);
+      });
+      if (tpl.textStyles.title) styles.title.align = normalizeTitleAlign(tpl.textStyles.title.align);
+      plot.textStyles = styles;
+      if (plot.legend && styles.legend) {
+        plot.legend.fontFamily = styles.legend.fontFamily;
+        plot.legend.fontSize = styles.legend.fontSize;
+        plot.legend.fontColor = styles.legend.fontColor;
+        plot.legend.fontWeight = styles.legend.fontWeight;
+        plot.legend.italic = styles.legend.italic;
+      }
+    }
+    if (tpl.xAxis) applyAxisStyle(plot.xAxis, tpl.xAxis);
+    if (tpl.yAxis) applyAxisStyle(plot.yAxis, tpl.yAxis);
+    if (tpl.topEdge) plot.topEdge = normalizeEdge(tpl.topEdge, "top");
+    if (tpl.rightEdge) plot.rightEdge = normalizeEdge(tpl.rightEdge, "right");
+    if (tpl.legend) {
+      var keptX = plot.legend ? plot.legend.x : null;
+      var keptY = plot.legend ? plot.legend.y : null;
+      plot.legend = normalizeLegend(tpl.legend, tpl.legend.visible);
+      plot.legendVisible = plot.legend.visible;
+      if (plot.legend.position !== "free" && keptX != null) {
+        plot.legend.x = keptX;
+        plot.legend.y = keptY;
+        plot.legend.floatingX = keptX;
+        plot.legend.floatingY = keptY;
+      }
+    }
+    if (tpl.defaultSeriesStyle) plot.defaultSeriesStyle = normalizeDefaultSeriesStyle(tpl.defaultSeriesStyle);
+    if (!tpl.system) plot.templateMeta = { templateId: tpl.id, templateName: tpl.name || "" };
+    return plot;
+  }
+
+  function getSystemFigureTemplate() {
+    var blank = {
+      templateFormatVersion: TEMPLATE_FORMAT_VERSION,
+      id: "system-default",
+      name: "系统默认",
+      system: true,
+      createdAt: "",
+      updatedAt: "",
+      figure: { width: DEFAULT_FIGURE_WIDTH, height: DEFAULT_FIGURE_HEIGHT, background: "", showTitle: true },
+      xAxis: pickAxisStyle(null),
+      yAxis: pickAxisStyle(null),
+      topEdge: normalizeEdge(null, "top"),
+      rightEdge: normalizeEdge(null, "right"),
+      legend: normalizeLegend(null, true),
+      defaultSeriesStyle: { lineWidth: 1.5, lineType: "solid", opacity: 1, colorMode: "series", paletteId: "high-contrast" },
+      textStyles: templateTextStyles(null)
+    };
+    return normalizeFigureTemplate(blank);
+  }
+
+  function serializeFigureTemplate(template) {
+    var tpl = normalizeFigureTemplate(template);
+    if (!tpl) throw new Error("无法导出无效的图表模板。");
+    return JSON.stringify(tpl, null, 2);
+  }
+
+  function parseFigureTemplate(text) {
+    var data;
+    try {
+      data = JSON.parse(text);
+    } catch (error) {
+      return { ok: false, template: null, error: "模板文件不是有效的 JSON。" };
+    }
+    var check = validateFigureTemplate(data);
+    if (!check.ok) return { ok: false, template: null, error: check.error };
+    var template = normalizeFigureTemplate(data);
+    if (!template) return { ok: false, template: null, error: "模板内容无法识别。" };
+    return { ok: true, template: template, error: "" };
+  }
+
+  function normalizeTemplateLibrary(raw) {
+    var data = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+    var templates = [];
+    var seen = {};
+    (Array.isArray(data.templates) ? data.templates : []).forEach(function (item) {
+      var tpl = normalizeFigureTemplate(item);
+      if (!tpl || tpl.system || tpl.id === "system-default" || seen[tpl.id]) return;
+      seen[tpl.id] = true;
+      templates.push(tpl);
+    });
+    var defaultTemplateId = data.defaultTemplateId ? String(data.defaultTemplateId) : "";
+    if (defaultTemplateId && !seen[defaultTemplateId]) defaultTemplateId = "";
+    return { defaultTemplateId: defaultTemplateId, templates: templates };
+  }
+
+  function duplicateFigureTemplate(template, now) {
+    var copy = normalizeFigureTemplate(cloneJson(template));
+    if (!copy) return null;
+    var stamp = now || new Date().toISOString();
+    copy.id = makeId("tpl");
+    copy.name = (copy.name || "模板") + " 副本";
+    copy.system = false;
+    copy.createdAt = stamp;
+    copy.updatedAt = stamp;
+    return copy;
+  }
+
   function detailChildren(project, plotId) {
     return (project.plots || []).filter(function (plot) {
       return plot.detailSource && plot.detailSource.sourceFigureId === plotId;
@@ -2318,6 +2745,10 @@
     detailChildren(project, plotId).forEach(function (plot) { drop[plot.id] = true; });
     var removed = (project.plots || []).filter(function (plot) { return drop[plot.id]; });
     project.plots = (project.plots || []).filter(function (plot) { return !drop[plot.id]; });
+    (project.canvases || []).forEach(function (canvas) {
+      canvas.instances = (canvas.instances || []).filter(function (item) { return !drop[item.plotId]; });
+      assignInstanceOrder(canvas);
+    });
     assignLayerOrder(project);
     return removed;
   }
@@ -3320,12 +3751,27 @@
         });
       });
     });
-    return { plots: cloneJson(project.plots || []), series: series };
+    return {
+      plots: cloneJson(project.plots || []),
+      series: series,
+      canvases: cloneJson(project.canvases || []),
+      canvas: cloneJson(project.canvas || {})
+    };
   }
 
   function restoreEditorState(project, snap) {
     var copy = cloneJson(snap || { plots: [], series: [] });
     project.plots = (copy.plots || []).map(normalizePlot);
+    if (Array.isArray(copy.canvases)) {
+      project.canvases = copy.canvases.map(function (canvas, index) { return normalizeCanvasDoc(canvas, index); });
+    }
+    if (copy.canvas && typeof copy.canvas === "object") {
+      if (!project.canvas) project.canvas = { width: 1280, height: 800, zoom: 1 };
+      project.canvas.width = Math.max(400, Number(copy.canvas.width) || project.canvas.width);
+      project.canvas.height = Math.max(300, Number(copy.canvas.height) || project.canvas.height);
+      if (copy.canvas.id) project.canvas.id = String(copy.canvas.id);
+    }
+    pruneInstances(project);
     var saved = {};
     (copy.series || []).forEach(function (item) { saved[item.id] = item; });
     (project.datasets || []).forEach(function (dataset) {
@@ -3344,11 +3790,399 @@
     return project;
   }
 
+  function findPlot(project, plotId) {
+    return (project && project.plots || []).find(function (plot) { return plot.id === plotId; }) || null;
+  }
+
+  function findCanvas(project, canvasId) {
+    return (project && project.canvases || []).find(function (canvas) { return canvas.id === canvasId; }) || null;
+  }
+
+  function plotWindows(project) {
+    return (project && project.plots || []).filter(function (plot) { return plot.type !== "detail"; });
+  }
+
+  function nextPlotAccent(project) {
+    var index = plotWindows(project).length;
+    return PLOT_ACCENT_COLORS[index % PLOT_ACCENT_COLORS.length];
+  }
+
+  function normalizeInstance(raw) {
+    var item = raw && typeof raw === "object" ? raw : {};
+    var width = Number(item.width);
+    var height = Number(item.height);
+    var zOrder = Number(item.zOrder);
+    return {
+      id: String(item.id || makeId("inst")),
+      plotId: String(item.plotId || ""),
+      x: Number.isFinite(Number(item.x)) ? Math.round(Number(item.x)) : LAYOUT_PADDING,
+      y: Number.isFinite(Number(item.y)) ? Math.round(Number(item.y)) : LAYOUT_PADDING,
+      width: Number.isFinite(width) ? Math.max(80, Math.round(width)) : DEFAULT_FIGURE_WIDTH,
+      height: Number.isFinite(height) ? Math.max(60, Math.round(height)) : DEFAULT_FIGURE_HEIGHT,
+      zOrder: Number.isFinite(zOrder) ? zOrder : 1,
+      locked: !!item.locked,
+      visible: item.visible !== false
+    };
+  }
+
+  function normalizeCanvasDoc(raw, index) {
+    var item = raw && typeof raw === "object" ? raw : {};
+    var width = Number(item.width);
+    var height = Number(item.height);
+    return {
+      id: String(item.id || makeId("canvas")),
+      name: String(item.name || ("画布 " + ((index || 0) + 1))),
+      width: Number.isFinite(width) ? Math.max(400, Math.round(width)) : 1280,
+      height: Number.isFinite(height) ? Math.max(300, Math.round(height)) : 800,
+      background: item.background ? String(item.background) : "",
+      accentColor: CANVAS_DOCK_COLOR,
+      instances: (Array.isArray(item.instances) ? item.instances : []).map(normalizeInstance)
+    };
+  }
+
+  function instancesInOrder(canvas) {
+    return ((canvas && canvas.instances) || []).map(function (item, index) {
+      return { item: item, index: index };
+    }).sort(function (a, b) {
+      var dz = (Number(a.item.zOrder) || 0) - (Number(b.item.zOrder) || 0);
+      return dz || (a.index - b.index);
+    }).map(function (entry) { return entry.item; });
+  }
+
+  function assignInstanceOrder(canvas) {
+    if (!canvas) return canvas;
+    instancesInOrder(canvas).forEach(function (item, index) { item.zOrder = index + 1; });
+    return canvas;
+  }
+
+  function nextInstanceZ(canvas) {
+    var max = 0;
+    ((canvas && canvas.instances) || []).forEach(function (item) {
+      if (Number(item.zOrder) > max) max = Number(item.zOrder);
+    });
+    return max + 1;
+  }
+
+  function instancesBoundingBox(instances) {
+    var list = instances || [];
+    if (!list.length) return { minX: 0, minY: 0, maxX: 0, maxY: 0, width: 0, height: 0 };
+    var minX = Infinity;
+    var minY = Infinity;
+    var maxX = -Infinity;
+    var maxY = -Infinity;
+    list.forEach(function (item) {
+      var x = Number(item.x) || 0;
+      var y = Number(item.y) || 0;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x + (Number(item.width) || 0));
+      maxY = Math.max(maxY, y + (Number(item.height) || 0));
+    });
+    return { minX: minX, minY: minY, maxX: maxX, maxY: maxY, width: maxX - minX, height: maxY - minY };
+  }
+
+  function fillAccentColors(project) {
+    var index = 0;
+    (project.plots || []).forEach(function (plot) {
+      if (plot.type === "detail") return;
+      if (!plot.accentColor) plot.accentColor = PLOT_ACCENT_COLORS[index % PLOT_ACCENT_COLORS.length];
+      index += 1;
+    });
+    return project;
+  }
+
+  function pruneInstances(project) {
+    var live = {};
+    plotWindows(project).forEach(function (plot) { live[plot.id] = true; });
+    (project.canvases || []).forEach(function (canvas) {
+      canvas.instances = (canvas.instances || []).filter(function (item) { return live[item.plotId]; });
+      assignInstanceOrder(canvas);
+    });
+    return project;
+  }
+
+  function mirrorCanvas(project, canvasId) {
+    var canvas = findCanvas(project, canvasId) || (project.canvases || [])[0];
+    if (!canvas) return project;
+    if (!project.canvas) project.canvas = { width: canvas.width, height: canvas.height, zoom: 1 };
+    var zoom = project.canvas.zoom;
+    project.canvas.width = canvas.width;
+    project.canvas.height = canvas.height;
+    project.canvas.zoom = zoom || 1;
+    project.canvas.id = canvas.id;
+    return project;
+  }
+
+  function migrateLegacyWorkspace(project, rawCanvases) {
+    if (!project.canvases) project.canvases = [];
+    if (Array.isArray(rawCanvases) && rawCanvases.length) {
+      project.canvases = rawCanvases.map(normalizeCanvasDoc);
+    } else if (!project.canvases.length && (project.plots || []).length) {
+      var page = project.canvas || {};
+      var canvas = normalizeCanvasDoc({
+        id: makeId("canvas"),
+        name: "画布 1",
+        width: page.width || 1280,
+        height: page.height || 800
+      }, 0);
+      plotWindows(project).forEach(function (plot) {
+        canvas.instances.push(normalizeInstance({
+          id: makeId("inst"),
+          plotId: plot.id,
+          x: plot.layout.x,
+          y: plot.layout.y,
+          width: plot.layout.width,
+          height: plot.layout.height,
+          zOrder: plot.zOrder,
+          locked: plot.locked,
+          visible: plot.visible !== false
+        }));
+      });
+      assignInstanceOrder(canvas);
+      project.canvases = [canvas];
+    }
+    fillAccentColors(project);
+    pruneInstances(project);
+    if (project.canvases[0]) mirrorCanvas(project, project.canvases[0].id);
+    return project;
+  }
+
+  function ensureWorkspace(project) {
+    if (!project.plots || !project.plots.length) {
+      createPlot(project, { title: "Figure 1", name: "图窗 1" });
+    }
+    migrateLegacyWorkspace(project, project.canvases && project.canvases.length ? project.canvases : null);
+    if (!project.canvases.length) {
+      var canvas = createCanvas(project, { name: "画布 1" });
+      var first = plotWindows(project)[0];
+      if (first) createInstance(project, canvas.id, first.id);
+    }
+    return project;
+  }
+
+  function createCanvas(project, partial) {
+    if (!project.canvases) project.canvases = [];
+    var given = partial || {};
+    var canvas = normalizeCanvasDoc({
+      id: given.id || makeId("canvas"),
+      name: given.name || ("画布 " + (project.canvases.length + 1)),
+      width: given.width || (project.canvas && project.canvas.width) || 1280,
+      height: given.height || (project.canvas && project.canvas.height) || 800,
+      background: given.background || "",
+      instances: given.instances || []
+    }, project.canvases.length);
+    project.canvases.push(canvas);
+    return canvas;
+  }
+
+  function duplicateCanvas(project, canvasId) {
+    var source = findCanvas(project, canvasId);
+    if (!source) throw new Error("找不到画布");
+    var copy = cloneJson(source);
+    copy.id = makeId("canvas");
+    copy.name = (source.name || "画布") + " 副本";
+    (copy.instances || []).forEach(function (item) { item.id = makeId("inst"); });
+    var canvas = normalizeCanvasDoc(copy, project.canvases.length);
+    project.canvases.push(canvas);
+    return canvas;
+  }
+
+  function deleteCanvas(project, canvasId) {
+    project.canvases = (project.canvases || []).filter(function (canvas) { return canvas.id !== canvasId; });
+    if (project.canvas && project.canvas.id === canvasId) {
+      if (project.canvases[0]) mirrorCanvas(project, project.canvases[0].id);
+      else delete project.canvas.id;
+    }
+    return project.canvases;
+  }
+
+  function findInstance(canvas, plotId) {
+    if (!canvas) return null;
+    return (canvas.instances || []).find(function (item) { return item.plotId === plotId; }) || null;
+  }
+
+  function findInstanceById(project, instanceId) {
+    var found = null;
+    (project.canvases || []).some(function (canvas) {
+      var item = (canvas.instances || []).find(function (entry) { return entry.id === instanceId; });
+      if (!item) return false;
+      found = { canvas: canvas, instance: item };
+      return true;
+    });
+    return found;
+  }
+
+  function createInstance(project, canvasId, plotId, partial) {
+    var canvas = findCanvas(project, canvasId);
+    var plot = findPlot(project, plotId);
+    if (!canvas) throw new Error("找不到画布");
+    if (!plot || plot.type === "detail") throw new Error("只能把图窗放进画布");
+    var existing = findInstance(canvas, plot.id);
+    if (existing) return existing;
+    var given = partial || {};
+    var instance = normalizeInstance({
+      id: makeId("inst"),
+      plotId: plot.id,
+      x: given.x != null ? given.x : plot.layout.x,
+      y: given.y != null ? given.y : plot.layout.y,
+      width: given.width != null ? given.width : plot.layout.width,
+      height: given.height != null ? given.height : plot.layout.height,
+      zOrder: nextInstanceZ(canvas),
+      locked: !!given.locked,
+      visible: given.visible !== false
+    });
+    canvas.instances.push(instance);
+    assignInstanceOrder(canvas);
+    return instance;
+  }
+
+  function removeInstance(project, canvasId, instanceId) {
+    var canvas = findCanvas(project, canvasId);
+    if (!canvas) return null;
+    var removed = null;
+    canvas.instances = (canvas.instances || []).filter(function (item) {
+      if (item.id !== instanceId) return true;
+      removed = item;
+      return false;
+    });
+    assignInstanceOrder(canvas);
+    return removed;
+  }
+
+  function setInstanceGeometry(instance, box) {
+    if (!instance || !box) return instance;
+    if (box.x != null && Number.isFinite(Number(box.x))) instance.x = Math.round(Number(box.x));
+    if (box.y != null && Number.isFinite(Number(box.y))) instance.y = Math.round(Number(box.y));
+    if (box.width != null && Number.isFinite(Number(box.width))) instance.width = Math.max(80, Math.round(Number(box.width)));
+    if (box.height != null && Number.isFinite(Number(box.height))) instance.height = Math.max(60, Math.round(Number(box.height)));
+    return instance;
+  }
+
+  function moveInstanceLayer(canvas, instanceId, command) {
+    var ordered = instancesInOrder(canvas);
+    var index = ordered.findIndex(function (item) { return item.id === instanceId; });
+    if (index < 0) return ordered;
+    var next = index;
+    if (command === "up") next = Math.min(ordered.length - 1, index + 1);
+    if (command === "down") next = Math.max(0, index - 1);
+    if (command === "top") next = ordered.length - 1;
+    if (command === "bottom") next = 0;
+    if (next !== index) {
+      var item = ordered.splice(index, 1)[0];
+      ordered.splice(next, 0, item);
+    }
+    ordered.forEach(function (entry, i) { entry.zOrder = i + 1; });
+    return ordered;
+  }
+
+  function reorderInstances(canvas, topFirstIds) {
+    var byId = {};
+    (canvas.instances || []).forEach(function (item) { byId[item.id] = item; });
+    var seen = {};
+    var ordered = [];
+    (Array.isArray(topFirstIds) ? topFirstIds : []).slice().reverse().forEach(function (id) {
+      var key = String(id);
+      if (!byId[key] || seen[key]) return;
+      seen[key] = true;
+      ordered.push(byId[key]);
+    });
+    instancesInOrder(canvas).forEach(function (item) {
+      if (seen[item.id]) return;
+      ordered.push(item);
+    });
+    ordered.forEach(function (item, index) { item.zOrder = index + 1; });
+    return instancesInOrder(canvas);
+  }
+
+  function plotWindowUsage(project, plotId) {
+    var names = [];
+    (project.canvases || []).forEach(function (canvas) {
+      if ((canvas.instances || []).some(function (item) { return item.plotId === plotId; })) names.push(canvas.name || canvas.id);
+    });
+    return names;
+  }
+
+  function deletePlotWindow(project, plotId, force) {
+    var names = plotWindowUsage(project, plotId);
+    if (names.length && !force) return { ok: false, canvases: names };
+    removePlot(project, plotId);
+    return { ok: true, canvases: names };
+  }
+
+  function duplicatePlotWindow(project, plotId) {
+    var source = findPlot(project, plotId);
+    if (!source || source.type === "detail") throw new Error("只能复制图窗");
+    var partial = cloneJson(source);
+    partial.id = makeId("plot");
+    partial.name = plotEditorName(source) + " 副本";
+    partial.accentColor = "";
+    (partial.annotations || []).forEach(function (ann) { ann.id = makeId("ann"); });
+    (partial.insets || []).forEach(function (inset) { inset.id = makeId("inset"); });
+    var created = createPlot(project, partial);
+    detailChildren(project, source.id).forEach(function (detail) {
+      var child = cloneJson(detail);
+      child.id = makeId("plot");
+      child.name = (detail.name || "局部视图") + " 副本";
+      if (child.detailSource) child.detailSource.sourceFigureId = created.id;
+      (child.annotations || []).forEach(function (ann) { ann.id = makeId("ann"); });
+      createPlot(project, child);
+    });
+    return created;
+  }
+
+  function renameWorkspaceItem(project, kind, id, name) {
+    var next = String(name || "").trim();
+    if (!next) throw new Error("名称不能为空");
+    if (kind === "canvas") {
+      var canvas = findCanvas(project, id);
+      if (!canvas) throw new Error("找不到画布");
+      canvas.name = next;
+      return canvas;
+    }
+    var plot = findPlot(project, id);
+    if (!plot) throw new Error("找不到图窗");
+    plot.name = next;
+    return plot;
+  }
+
+  function assertUniqueWorkspaceIds(project) {
+    var seen = {};
+    function take(id, label) {
+      if (!id) throw new Error(label + "缺少 ID");
+      if (seen[id]) throw new Error("ID 冲突：" + id);
+      seen[id] = true;
+    }
+    (project.plots || []).forEach(function (plot) { take(plot.id, "图窗"); });
+    (project.canvases || []).forEach(function (canvas) {
+      take(canvas.id, "画布");
+      (canvas.instances || []).forEach(function (item) {
+        take(item.id, "实例");
+        if (!findPlot(project, item.plotId)) throw new Error("画布实例引用了不存在的图窗：" + item.plotId);
+        if (findPlot(project, item.plotId).type === "detail") throw new Error("局部视图不能作为画布实例");
+      });
+    });
+    return true;
+  }
+
+  function addSeriesTargetId(project, focus) {
+    var hint = focus || {};
+    if (hint.type === "canvas") return null;
+    var plot = findPlot(project, hint.plotId || "");
+    if (!plot) return null;
+    if (plot.type === "detail") {
+      var parent = sourcePlotOf(project, plot);
+      return parent ? parent.id : null;
+    }
+    return plot.id;
+  }
+
   var api = {
     APP_INFO: APP_INFO,
     SOFTWARE_VERSION: SOFTWARE_VERSION,
     PROJECT_FORMAT_VERSION: PROJECT_FORMAT_VERSION,
     SCHEMA_VERSION: SCHEMA_VERSION,
+    TEMPLATE_FORMAT_VERSION: TEMPLATE_FORMAT_VERSION,
+    TEMPLATE_STORAGE_KEY: TEMPLATE_STORAGE_KEY,
     githubReleasesApiUrl: githubReleasesApiUrl,
     githubReleasesPageUrl: githubReleasesPageUrl,
     normalizeVersionTag: normalizeVersionTag,
@@ -3390,6 +4224,32 @@
     LAYOUT_GAP: LAYOUT_GAP,
     LAYOUT_TEMPLATES: LAYOUT_TEMPLATES,
     CANVAS_PRESETS: CANVAS_PRESETS,
+    PAPER_SIZE_PRESETS: PAPER_SIZE_PRESETS,
+    PLOT_ACCENT_COLORS: PLOT_ACCENT_COLORS,
+    CANVAS_DOCK_COLOR: CANVAS_DOCK_COLOR,
+    findPlot: findPlot,
+    findCanvas: findCanvas,
+    findInstance: findInstance,
+    findInstanceById: findInstanceById,
+    plotWindows: plotWindows,
+    migrateLegacyWorkspace: migrateLegacyWorkspace,
+    ensureWorkspace: ensureWorkspace,
+    createCanvas: createCanvas,
+    duplicateCanvas: duplicateCanvas,
+    deleteCanvas: deleteCanvas,
+    createInstance: createInstance,
+    removeInstance: removeInstance,
+    setInstanceGeometry: setInstanceGeometry,
+    moveInstanceLayer: moveInstanceLayer,
+    reorderInstances: reorderInstances,
+    instancesInOrder: instancesInOrder,
+    plotWindowUsage: plotWindowUsage,
+    deletePlotWindow: deletePlotWindow,
+    duplicatePlotWindow: duplicatePlotWindow,
+    renameWorkspaceItem: renameWorkspaceItem,
+    assertUniqueWorkspaceIds: assertUniqueWorkspaceIds,
+    addSeriesTargetId: addSeriesTargetId,
+    mirrorCanvas: mirrorCanvas,
     SERIES_COLORS: SERIES_COLORS,
     PALETTE_LIST: PALETTE_LIST,
     paletteColor: paletteColor,
@@ -3480,6 +4340,22 @@
     assignLayerOrder: assignLayerOrder,
     placePlotAbove: placePlotAbove,
     movePlotLayer: movePlotLayer,
+    reorderPlotLayers: reorderPlotLayers,
+    normalizeSelectedObject: normalizeSelectedObject,
+    getPropertyFocus: getPropertyFocus,
+    resolveSelectedObject: resolveSelectedObject,
+    selectedObjectAction: selectedObjectAction,
+    applySelectedObjectDelete: applySelectedObjectDelete,
+    normalizeDefaultSeriesStyle: normalizeDefaultSeriesStyle,
+    extractFigureTemplate: extractFigureTemplate,
+    normalizeFigureTemplate: normalizeFigureTemplate,
+    validateFigureTemplate: validateFigureTemplate,
+    applyFigureTemplate: applyFigureTemplate,
+    getSystemFigureTemplate: getSystemFigureTemplate,
+    serializeFigureTemplate: serializeFigureTemplate,
+    parseFigureTemplate: parseFigureTemplate,
+    normalizeTemplateLibrary: normalizeTemplateLibrary,
+    duplicateFigureTemplate: duplicateFigureTemplate,
     detailChildren: detailChildren,
     removePlot: removePlot,
     effectiveMagnification: effectiveMagnification,

@@ -1,6 +1,6 @@
 # DEVLOG
 
-本文件放在仓库根目录，只追加、不覆盖，用于完整记录开发全过程。当前版本、如何运行和下一步见 [PROGRESS-v0.4.1.md](Progress/PROGRESS-v0.4.1.md)。
+本文件放在仓库根目录，只追加、不覆盖，用于完整记录开发全过程。当前版本、如何运行和下一步见 [PROGRESS-v0.5.0.md](Progress/PROGRESS-v0.5.0.md)。
 
 ---
 
@@ -859,6 +859,149 @@ v0.3.0 在 v0.2.4 的导入、排图、样式和导出之上，加入查看与�
 正式版，不是 Draft，也不是 Pre-release。附件 `Visualizer-v0.4.1.zip`（html + `visualizer-core.js` + `README.md`，三个文件在压缩包根目录）。
 
 发布后用上一正式版 `0.2.4` 请求 `releases/latest`：状态为发现新版本，最新版 `0.4.1`，下载地址是 `Visualizer-v0.4.1.zip`。本地 `0.4.1` 的状态是已不低于最新正式版。
+
+---
+
+## v0.5.0
+
+- 软件版本：`0.5.0`
+- 工程格式：`projectFormatVersion: "1.0"`（未升）
+- 文档结构：`schemaVersion: 2`（未升）
+- 模板格式：`templateFormatVersion: 1`
+- 日期：2026-09-29
+
+v0.5.0 把 Visualizer 往科研绘图编辑器的基础架构上推进一步：点中什么就编辑什么，图层可以拖着排序，调好的出图格式可以存成模板再用。不做 Formula、误差指标、双 Y 轴、Heatmap、3D 或桌面打包。
+
+### 为什么引入 selectedObject
+
+标注、图例、来源框和引导线原来都靠「当前是主图还是局部图」决定右栏。对象一多，点图例会打开整张图的属性，点引导线会开始拖图。`selectedObject` 收成唯一焦点：`type`、`figureId`、`objectId`。主图和局部图仍是 `plot` / `detail`；图例、标注、来源框、引导线各自一种。它只活在页面内存里，不进 `.tvproj.json`，改变选中也不写撤销。
+
+命中顺序按 DOM 目标走：标注、图例、来源框、引导线先于图本身。选中不改 `zOrder`，选中框仍在独立 overlay，不进入 `buildCanvasSvg()`。
+
+### 为什么 Template 与 Project 分离
+
+工程回答「这张图画了什么数据、摆在哪里」。模板回答「这种图应该长什么样」。模板放在 App State，`localStorage` 键 `visualizer.templates.figure.v1`，单份导出为 `.tvtemplate.json`。`serializeProject` 不写模板库，也不写选中和图层拖拽状态。应用到图上时把样式抄进 Figure，所以模板后来被删掉，已保存的工程仍然能画。
+
+### Layer drag
+
+图层列表上方是最上层。拖握把只记插入位置，松手后 `reorderPlotLayers` 把 `zOrder` 收成 `1..n`，记一条撤销，并把工程标脏。点图层名字只选中，不改顺序。眼睛是 `plot.visible`，锁是 `plot.locked`。锁定后画布不能拖、不能缩放，点选和右栏编辑仍然可用。引导线继续跟局部图的 `zOrder`，插在局部图前面；用户把来源图放到局部图之上时，引导线仍可能被来源图盖住，这和上移/下移的既有规则一致。
+
+### 样式优先级
+
+```text
+Series Override
+  > Group Style
+  > Figure Template Default（plot.defaultSeriesStyle）
+  > System Default
+```
+
+模板默认只在加入新曲线、或该字段还没有单独设置时起作用。把 T1 从模板线宽改成 5 之后，再加入的 T2 用模板线宽，T1 保持 5。应用模板不清除已有 `styleOverrides`。
+
+### Template apply whitelist
+
+`applyFigureTemplate` 只复制尺寸、背景、标题显示、文字样式、轴外观、上/右边、图例和 `defaultSeriesStyle`。不碰 `seriesRefs`、坐标范围、标注、`detailSource`、`layout.x/y`、`zOrder`、`locked`、`visible`。一次应用记一条历史。局部图不能存成模板。保存模板本身不把当前工程标脏。
+
+### 验证
+
+#### Node（已执行）
+
+`node --check visualizer-core.js` 通过。`node tests/core-test.js` 全部通过。覆盖选中与删除/隐藏语义、图层归一化与拖拽结果、选中不改 `zOrder`、模板提取与往返、非法模板、应用白名单、样式优先级、工程 JSON 不包含模板库和选中状态，以及 v0.1 旧工程 normalize。
+
+#### 浏览器（已执行，Cursor 内置 Chromium，http://127.0.0.1:8765/）
+
+- 顶栏高度 52px，版本 v0.5.0。
+- 点图例、来源框、引导线、局部图、主图和自由文本，右栏只留下对应设置，`zOrder` 不变。导出 SVG 不含选中框和命中目标。
+- 图层拖到底层对象到列表顶部后 `zOrder` 连续，撤销和重做恢复，再点图层名字不改顺序。
+- 锁定主图后拖动和缩放不改变位置与尺寸，仍能点选和解锁。Delete 隐藏图例，撤销后恢复。
+- 把主图调成 Times、标题 18、轴标题 16、刻度 13、轴线 1.5、图例右上、曲线线宽 2.5，存成「论文单图」。用它新建的图样式一致。另一份 CSV 的 T1 得到 2.5，改成 5 后再加入 T2，T2 为 2.5，T1 仍为 5。
+- 主图手动 X 设为 100–900 后应用模板：标题回到 18，范围、标注、位置、图层和系列 ID 不变。局部图仍是 X 1550–1800、`auto-window`、5% 边距，Y 为 34.8–39.2。撤销恢复标题 20，重做回到 18。
+- 导出 `.tvtemplate.json`，删除本地模板后导入恢复。工程文件被拒绝，原模板库还在。v0.1 夹具能打开。
+- 局部图移到主图下方后，引导线可以点中，右栏为「引导线」，图层不变。双击图标题会切到属性页并聚焦标题输入。
+- 没有另开系统 Chrome / Edge。
+
+### 已知限制
+
+- 图层只到主图和局部图，不拆图例、标注、来源框、引导线。
+- 没有多选、对齐、分布或复制图。
+- 局部图不能保存为图表模板。
+- 来源框与局部图重叠时不画引导线。用户把来源图放到局部图之上时，引导线可能被来源图盖住。
+- 模板存在当前浏览器的 localStorage。配额或存储不可用时提示错误，绘图和工程继续可用。
+- Formula、MAE/RMSE、Results、双 Y 轴、Heatmap、3D、桌面打包仍未做。
+
+## 工作台外壳（仍为 v0.5.0）
+
+- 日期：2026-10-10
+- 软件版本未升，工程格式未升。
+
+把已接受的实验记录外壳接到现有工作台，不从外壳原型搬入叠纸拖放、抽样表或毫米纸缩放。
+
+- 顶栏分成文件、工程名、图与输出。Visualizer 打开关于。新建、打开、保存（含另存为）、导入、添加图（含模板菜单）、布局、预览、导出 PNG / SVG 的 id 和动作未改。
+- 选择、框选、读数、标注和缩放留在画布上方的分段条。状态在纸下方。
+- 界面字体统一为 `"Iowan Old Style", "Palatino Linotype", Palatino, "Songti SC", STSong, serif`。
+- 图内和导出仍用 `FONT_FAMILIES` / `DEFAULT_FONT`。`theme()` 读取的 `--surface`、`--ink`、`--muted`、`--line`、`--grid` 未改成外壳色。
+
+### 验证
+
+`node tests/core-test.js` 全部通过。Playwright Chromium 打开 `http://127.0.0.1:8766/temperature_trajectory_visualizer.html`。
+
+- 顶栏字体是 Iowan Old Style / Palatino / Songti SC。工程名「未命名工程」，已保存。导出按钮为 `#3a3228`。
+- 保存菜单含保存和另存为。添加图的模板菜单含系统默认、保存、管理和导入。点添加图后出现第二张图，标题变为未保存。
+- 框选按下，缩放从 100% 到 110%。Visualizer 打开关于，版本 v0.5.0。导出菜单为导出 PNG / 导出 SVG。导入温度 CSV 后可加入当前图。图层页可切换。预览可打开并关闭。控制台无错误。
+- 图标题改成 Times New Roman 后，画布和预览 SVG 的标题是 `Times New Roman, Times, serif`，刻度仍是 `Aptos, Helvetica Neue, Noto Sans SC, sans-serif`。预览 SVG 不含 `Iowan Old Style` 或 `Songti SC`。`--surface` 仍是 `#ffffff`，`--ink` 仍是 `#1d2024`。
+- 此浏览器有 `showSaveFilePicker`，导出点击会走系统保存框，没有落成下载文件。预览与导出共用 `buildCanvasSvg()`。
+
+### 复查修正
+
+- `showLayoutMenu` 在菜单插入文档后夹取 `left`：`Math.max(8, Math.min(按钮左缘, innerWidth - 菜单宽 - 8))`。布局动作未改。
+- 深色主题下 `.tv-button--primary:hover`、`.tv-button--export:hover` 和导出 summary 的 hover 背景改为 `#2e3c46`，略浅于深色 `--export` `#243038`。浅色 hover 仍是 `#2c261e`，浅色 `--export` 仍是 `#3a3228`。
+- `[data-theme="dark"] .tv-canvas-paper` 的 outline 改为 `1px solid var(--line)`。浅色纸边仍是 `rgba(48, 38, 26, .16)`。
+
+`node tests/core-test.js` 全部通过。夹取公式下，332px 菜单在 1280px 窗口、按钮左缘 1200 或 1240 时 left 为 940，右缘距窗口 8px；按钮已在左侧时 left 保持原值。Chrome 打开页面：1280px 时布局按钮左缘 1096、菜单宽 334，left 夹到 938，右缘 1272；980px 时右缘距窗口 8px。工作台内主按钮和导出按钮的深色 hover 为 `#2e3c46`，规则不含 `#2c261e`。浅色 hover 仍为 `#2c261e`，浅色导出底为 `#3a3228`。深色纸边为 `#354045`。
+
+---
+
+## v0.6.0
+
+- 软件版本：`0.6.0`
+- 工程格式：`projectFormatVersion: "1.1"`（仍读取 `1.0`）
+- 文档结构：`schemaVersion: 2`（未升）
+- 模板格式：`templateFormatVersion: 1`
+- 日期：2026-10-10
+
+这一版把图窗和画布拆开。图窗是可复用的图资产，画布是排版页，实例只记录某张图在某张画布上的位置、大小和层级。没有重写 SVG 绘图。
+
+### 数据
+
+`project.canvases[]` 保存画布。每个实例有自己的 `id`、`plotId`、`x`、`y`、`width`、`height`、`zOrder`、`locked`、`visible`。图窗固有尺寸仍是 `plot.layout` 的宽高。局部视图继续用 `detailSource.sourceFigureId` 挂在父图窗上，不进 Dock，也不变成实例。
+
+没有 `canvases` 的旧工程在打开时合成画布 1，并为每张非局部图按原来的 `layout` 放一个实例。空的 `canvases: []` 同样按旧工程处理。工作副本的 `projectFormatVersion` 写成 `1.1`，`softwareVersion` 写成 `0.6.0`。旧字段保留。
+
+新建工程先有图窗 1、画布 1，以及图窗 1 的一个实例。之后新建的图窗不自动放入当前画布。同一图窗可以被多张画布引用。同一画布不重复放置同一图窗。删除被引用的图窗时返回画布名称，未确认则不删。确认后清掉全部实例。移除实例不删资产。
+
+`project.ui` 增加 `workspaceMode`、`activeCanvasId`、`activePlotId`、`dockExpanded`。`selectedObject` 仍不进工程。
+
+### 界面
+
+底部 Dock：米白底、细边、大圆角。画布 `#DBE5EF`，图窗 `#F3D9C5` / `#D5E6D9` / `#E3D9F1` 循环。选中边 `#638DBB`。最右「新建」可选新建图窗或新建画布。缩略图：有曲线时在识别色上画一条降采样折线；空图仍用缩小后的图窗 SVG，背景透明。
+
+模式条显示当前画布，绘图模式再显示图窗名。双击画布中的图进入绘图模式。绘图模式的纸面只包住当前图窗及其局部视图。点选不记零距离拖动，因此单击不会把工程标脏。
+
+排版模式的框选拖出矩形，选中相交的实例。多选时不一致的 X/Y/宽/高显示「混合值」，只有改过的字段写回这些实例。对齐和等间距只改实例位置，不改图窗绘制。从 Dock 拖进画布走指针按下、移动、松开。
+
+画布模式下，未放进画布的图不再画出选中框。快速布局只排列图窗，并把结果写到当前画布的实例上。
+
+### 验证
+
+`node --check visualizer-core.js` 通过。`node tests/core-test.js` 全部通过。覆盖默认工作区、第二张图窗不自动放置、实例几何、同一画布不重复放置、跨画布引用、删除前提示画布名、移除实例保留资产、复制出新 ID、旧 `1.0` 布局迁成实例、局部视图不进实例、序列化、图层上移、重命名不改引用、选中画布时没有默认加入目标、撤销恢复实例。
+
+浏览器使用 Playwright Chromium，页面来自 `http://127.0.0.1:8876/temperature_trajectory_visualizer.html`。Microsoft Edge 本机未安装，未测。系统保存对话框没有点穿。Playwright 调用 `showSaveFilePicker` 时被 `Page.setInterceptFileChooserDialog` 拦截，返回 AbortError，系统框没有出现。SVG 导出在拿掉保存对话框后走了已有的下载回退。
+
+真实鼠标从 Dock 拖动图窗 2 和图窗 3 放进画布 1。绘图模式纸面为 1280×800，只有当前图窗。框选一次选中 3 个实例。只改宽度时另外三个字段保持原值。顶对齐和水平等距只改位置，z 顺序不变。有数据的 Dock 缩略图能看出折线。这一轮控制台没有错误。
+
+### 未完成
+
+同一画布放同一图窗的第二个实例、系统保存框里保存后再打开、十余个图窗的压力，以及 Edge。这些没有标成通过。
+
 
 
 

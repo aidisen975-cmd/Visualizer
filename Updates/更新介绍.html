@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<!-- ==================================================================
+     CHANGELOG TEMPLATE · parchment design system
+     1-2 页 A4 版本更新日志 / Release Notes
+     结构：版本标题 -> Breaking -> Features -> Fixes -> 致谢
+     遵循 tw93/Mole release note 格式
+     ================================================================== -->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Visualizer · 0.6.0 更新日志</title>
+<meta name="author" content="{{作者}}">
+<meta name="description" content="Visualizer 0.6.0 把图窗和画布分开，同一张图可以放进多张画布。">
+<meta name="keywords" content="Visualizer, 图窗, 画布, 导出, 旧工程">
+<meta name="generator" content="Kami">
+<style>
+  /* Regular weight */
+  @font-face {
+    font-family: "TsangerJinKai02";
+    src: url("../fonts/TsangerJinKai02-W04.ttf") format("truetype"),
+       url("https://cdn.jsdelivr.net/gh/tw93/Kami@main/assets/fonts/TsangerJinKai02-W04.ttf") format("truetype");
+    font-weight: 400;
+    font-style: normal;
+  }
+
+  /* Bold weight - W05 for all bold variants */
+  @font-face {
+    font-family: "TsangerJinKai02";
+    src: url("../fonts/TsangerJinKai02-W05.ttf") format("truetype"),
+       url("https://cdn.jsdelivr.net/gh/tw93/Kami@main/assets/fonts/TsangerJinKai02-W05.ttf") format("truetype");
+    font-weight: 500;
+    font-style: normal;
+  }
+
+  @page {
+    size: A4;
+    margin: 20mm 22mm 22mm 22mm;
+    background: #f5f4ed;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --parchment: #f5f4ed;
+    --ivory:     #faf9f5;
+    --near-black:#141413;
+    --dark-warm: #3d3d3a;
+    --olive:     #504e49;
+    --stone:     #6b6a64;
+    --brand:     #1B365D;
+    --border:    #e8e6dc;
+    --border-soft:#e5e3d8;
+    --tag-bg:    #E4ECF5;
+    --breaking-bg:#f0e0d8;
+    --breaking-fg:#8b4513;
+    --serif: "TsangerJinKai02", "Source Han Serif SC", "Source Han Serif CN", "Noto Serif CJK SC", "Noto Serif SC", "Songti SC", "STSong", "SimSun", Georgia, serif;
+    --sans: var(--serif);
+    --mono:  "JetBrains Mono", "SF Mono", "Fira Code", Consolas, Monaco, "TsangerJinKai02", "Source Han Serif SC", monospace;
+  }
+
+  html, body { background: var(--parchment); }
+
+  @media screen {
+    body { max-width: 210mm; margin: 0 auto; padding: 20mm 22mm; }
+  }
+
+  body {
+    color: var(--near-black);
+    font-family: var(--serif);
+    font-size: 10.5pt;
+    line-height: 1.55;
+    letter-spacing: 0.3pt;
+    widows: 3;
+    orphans: 3;
+  }
+
+  strong { font-weight: 500; }
+  .hl { color: var(--brand); font-weight: 500; }
+
+  /* ========== HEADER (left-aligned editorial, matches one-pager) ========== */
+  .header {
+    margin-bottom: 20pt;
+    padding-bottom: 13pt;
+    border-bottom: 0.5pt solid var(--border);
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 20pt;
+  }
+  .title-block { flex: 1; }
+  .eyebrow {
+    font-family: var(--sans);
+    font-size: 9pt;
+    color: var(--brand);
+    letter-spacing: 1.5pt;
+    font-weight: 500;
+    margin-bottom: 8pt;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-size: 26pt;
+    font-weight: 500;
+    color: var(--near-black);
+    line-height: 1.15;
+    margin-bottom: 7pt;
+  }
+  .subtitle {
+    font-size: 11.5pt;
+    color: var(--olive);
+    line-height: 1.5;
+    max-width: 150mm;
+  }
+  .meta {
+    font-size: 10pt;
+    color: var(--stone);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ========== SECTION HEAD - type and spacing only ========== */
+  h2 {
+    font-family: var(--serif);
+    font-size: 14pt;
+    font-weight: 500;
+    color: var(--near-black);
+    margin: 20pt 0 10pt 0;
+    break-after: avoid;
+  }
+  h2:first-of-type { margin-top: 0; }
+
+  p { margin: 0 0 8pt 0; line-height: 1.55; widows: 2; orphans: 2; }
+  code { font-family: var(--mono); font-size: 0.92em; }
+
+  /* ========== CHANGE LIST - numbered, brand markers, bold lead-in ========== */
+  ol.changes { margin: 0; padding-left: 18pt; }
+  ol.changes li {
+    margin-bottom: 7pt;
+    padding-left: 3pt;
+    line-height: 1.55;
+    break-inside: avoid;
+  }
+  ol.changes li:last-child { margin-bottom: 0; }
+  ol.changes li::marker { color: var(--brand); font-weight: 500; }
+  ol.changes li strong { font-weight: 500; color: var(--near-black); }
+  ol.changes li .hl { color: var(--brand); font-weight: 500; }
+
+  /* ========== TAG ========== */
+  .tag {
+    display: inline-block;
+    background: var(--tag-bg);
+    color: var(--brand);
+    font-size: 9pt;
+    font-weight: 500;
+    padding: 1pt 6pt;
+    border-radius: 3pt;
+    margin-right: 3pt;
+  }
+  .tag.breaking {
+    background: var(--breaking-bg);
+    color: var(--breaking-fg);
+  }
+
+  /* ========== ACKNOWLEDGEMENTS - quiet labelled note, not a filled card ========== */
+  .thanks {
+    margin-top: 18pt;
+    font-size: 9.5pt;
+    line-height: 1.55;
+    color: var(--olive);
+    break-inside: avoid;
+  }
+  .thanks .hl { color: var(--brand); font-weight: 500; }
+  .thanks-label {
+    font-size: 9pt;
+    color: var(--brand);
+    letter-spacing: 0.5pt;
+    text-transform: uppercase;
+    margin-bottom: 4pt;
+  }
+
+  /* ========== FOOTER ========== */
+  .changelog-footer {
+    margin-top: 20pt;
+    padding-top: 8pt;
+    border-top: 0.3pt dotted var(--border);
+    font-size: 9pt;
+    color: var(--stone);
+    line-height: 1.5;
+    display: flex;
+    justify-content: space-between;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.3pt;
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="title-block">
+    <div class="eyebrow">更新日志</div>
+    <h1>Visualizer 0.6.0</h1>
+    <div class="subtitle">图窗可以单独编辑，也可以摆进多张画布。</div>
+  </div>
+  <div class="meta">2026-10-10</div>
+</div>
+
+<h2>新功能</h2>
+<ol class="changes">
+  <li><strong>图窗 Dock</strong>：底部增加图窗 Dock，可以新建和切换画布与图窗。</li>
+  <li><strong>排版和绘图</strong>：双击画布中的图进入绘图，返回后继续排版。</li>
+  <li><strong>一张图多张画布</strong>：同一张图可以放进多张画布，位置和大小各自保留。</li>
+  <li><strong>分开导出</strong>：可以只导出当前图窗，也可以导出整张画布。</li>
+  <li><strong>旧工程</strong>：旧工程打开后，原来的图出现在 Dock 里，曲线还在。</li>
+  <li><strong>删除前提示</strong>：删除还被画布使用的图时，会先写出那些画布的名字。</li>
+</ol>
+
+<h2>修复</h2>
+<ol class="changes">
+  <li><strong>图层</strong>：点图层名字只选中，不再打乱叠放顺序。</li>
+  <li><strong>新建图窗</strong>：之后新建的图窗不会自动堆到当前画布上。</li>
+</ol>
+
+<div class="changelog-footer">
+  <span>本机实验数据可视化工作台</span>
+  <span>https://github.com/aidisen975-cmd/Visualizer</span>
+</div>
+
+</body>
+</html>

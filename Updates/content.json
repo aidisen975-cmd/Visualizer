@@ -1,0 +1,38 @@
+{
+  "type": "changelog",
+  "lang": "cn",
+  "brief": {
+    "audience": "使用 Visualizer 画实验图的人",
+    "job": "说明 0.6.0 里能看到的变化",
+    "template": "changelog",
+    "formats": ["html", "pdf"],
+    "page_target": 1,
+    "narrative": "先说能做什么，再说打开旧文件不用改",
+    "required_facts": ["版本 0.6.0", "日期 2026-10-10"],
+    "required_assets": [],
+    "acceptance_checks": ["一句一条", "不写内部字段名"],
+    "preserve": [],
+    "explicit_deviations": ["没有破坏性变更一节，因为旧工程可以直接打开"]
+  },
+  "content": {
+    "product": "Visualizer",
+    "versions": [
+      {
+        "version": "0.6.0",
+        "date": "2026-10-10",
+        "features": [
+          "底部增加图窗 Dock，可以新建和切换画布与图窗。",
+          "双击画布中的图进入绘图，返回后继续排版。",
+          "同一张图可以放进多张画布，位置和大小各自保留。",
+          "可以只导出当前图窗，也可以导出整张画布。",
+          "旧工程打开后，原来的图出现在 Dock 里，曲线还在。",
+          "删除还被画布使用的图时，会先写出那些画布的名字。"
+        ],
+        "fixes": [
+          "点图层名字只选中，不再打乱叠放顺序。",
+          "之后新建的图窗不会自动堆到当前画布上。"
+        ]
+      }
+    ]
+  }
+}
