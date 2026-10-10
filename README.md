@@ -83,7 +83,7 @@
 
 ## 如何使用
 
-1. 使用本仓库根目录文件，或下载已发布的 [Visualizer-v0.4.1.zip](https://github.com/aidisen975-cmd/Visualizer/releases/tag/v0.4.1)。v0.6.0 尚未单独发布安装包。
+1. 下载 [Visualizer-v0.6.0.zip](https://github.com/aidisen975-cmd/Visualizer/releases/tag/v0.6.0) 并解压，或直接使用本仓库根目录文件。上一正式版是 [v0.4.1](https://github.com/aidisen975-cmd/Visualizer/releases/tag/v0.4.1)。
 2. 保持以下文件在**同一文件夹**：
    - `temperature_trajectory_visualizer.html`
    - `visualizer-core.js`
