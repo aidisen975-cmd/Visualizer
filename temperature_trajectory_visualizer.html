@@ -3890,7 +3890,10 @@
           if (again.setSelectionRange) again.setSelectionRange(end, end);
         }
       });
-      filter.addEventListener("keydown", function (event) { event.stopPropagation(); });
+      filter.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") return;
+        event.stopPropagation();
+      });
       var xRow = document.createElement("div");
       xRow.className = "tv-inspector-x";
       xRow.textContent = "X = " + formatReading(dataX);
@@ -8968,7 +8971,7 @@
         if (event.key === "Escape") {
           lockReadoutSeries("");
           rows.forEach(function (row) { row.classList.remove("is-focus"); });
-          inspectorHost.blur();
+          if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
           return;
         }
         if (event.key === "Enter") {
