@@ -8,10 +8,10 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>Visualizer · 0.6.0 更新日志</title>
+<title>Visualizer · 0.6.1 更新日志</title>
 <meta name="author" content="{{作者}}">
-<meta name="description" content="Visualizer 0.6.0 把图窗和画布分开，同一张图可以放进多张画布。">
-<meta name="keywords" content="Visualizer, 图窗, 画布, 导出, 旧工程">
+<meta name="description" content="Visualizer 0.6.1 让底部图窗条默认让开绘图区，进入绘图时按窗口放大。">
+<meta name="keywords" content="Visualizer, 图窗, 适应窗口, 读数, 栏宽">
 <meta name="generator" content="Kami">
 <style>
   /* Regular weight */
@@ -198,26 +198,35 @@
 <div class="header">
   <div class="title-block">
     <div class="eyebrow">更新日志</div>
-    <h1>Visualizer 0.6.0</h1>
-    <div class="subtitle">图窗可以单独编辑，也可以摆进多张画布。</div>
+    <h1>Visualizer 0.6.1</h1>
+    <div class="subtitle">底部图窗条默认让开，进入绘图时按窗口放大。</div>
   </div>
-  <div class="meta">2026-10-10</div>
+  <div class="meta">2026-10-12</div>
 </div>
 
 <h2>新功能</h2>
 <ol class="changes">
-  <li><strong>图窗 Dock</strong>：底部增加图窗 Dock，可以新建和切换画布与图窗。</li>
-  <li><strong>排版和绘图</strong>：双击画布中的图进入绘图，返回后继续排版。</li>
-  <li><strong>一张图多张画布</strong>：同一张图可以放进多张画布，位置和大小各自保留。</li>
-  <li><strong>分开导出</strong>：可以只导出当前图窗，也可以导出整张画布。</li>
-  <li><strong>旧工程</strong>：旧工程打开后，原来的图出现在 Dock 里，曲线还在。</li>
-  <li><strong>删除前提示</strong>：删除还被画布使用的图时，会先写出那些画布的名字。</li>
+  <li><strong>图窗条让开</strong>：底部图窗条默认收起，不再挡住绘图区。</li>
+  <li><strong>需要时再出现</strong>：鼠标靠近底部才浮出；钉住之后才占高度。</li>
+  <li><strong>小图标</strong>：图窗收成一排小图标，悬停后看到名称和这张图的曲线。</li>
+  <li><strong>适应窗口</strong>：进入绘图时按窗口把当前图放大到合适大小，也可以超过 100%。</li>
+  <li><strong>三种比例</strong>：100%、适应窗口和适应宽度可以分开用。</li>
+  <li><strong>盯住一条曲线</strong>：读数框里可以点一条曲线盯住它，不会把它隐藏。</li>
+  <li><strong>数据概览</strong>：左侧可以展开数据概览，看到点数、范围和抽样，抽样不是全部数据。</li>
+  <li><strong>栏宽</strong>：单栏和双栏用两个宽度按钮切换，高度保持不变。</li>
 </ol>
 
 <h2>修复</h2>
 <ol class="changes">
-  <li><strong>图层</strong>：点图层名字只选中，不再打乱叠放顺序。</li>
-  <li><strong>新建图窗</strong>：之后新建的图窗不会自动堆到当前画布上。</li>
+  <li><strong>顶栏</strong>：顶部说明收成一行，帮助改到问号上。</li>
+  <li><strong>开关</strong>：显示类开关改成开关，数据勾选仍是方框。</li>
+</ol>
+
+<h2>0.6.0</h2>
+<ol class="changes">
+  <li><strong>图窗 Dock</strong>：底部增加图窗 Dock，可以新建和切换画布与图窗。</li>
+  <li><strong>一张图多张画布</strong>：同一张图可以放进多张画布，位置和大小各自保留。</li>
+  <li><strong>旧工程</strong>：旧工程打开后，原来的图出现在 Dock 里，曲线还在。</li>
 </ol>
 
 <div class="changelog-footer">
