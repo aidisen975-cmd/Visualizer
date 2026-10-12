@@ -1,6 +1,6 @@
 # DEVLOG
 
-本文件放在仓库根目录，只追加、不覆盖，用于完整记录开发全过程。当前版本、如何运行和下一步见 [PROGRESS-v0.5.0.md](Progress/PROGRESS-v0.5.0.md)。
+本文件放在仓库根目录，只追加、不覆盖，用于完整记录开发全过程。当前版本、如何运行和下一步见 [PROGRESS-v0.6.1.md](Progress/PROGRESS-v0.6.1.md)。
 
 ---
 
@@ -1015,6 +1015,51 @@ Series Override
 
 发布后用上一正式版 `0.4.1` 请求 `releases/latest`：状态为发现新版本，最新版 `0.6.0`，下载地址是 `Visualizer-v0.6.0.zip`。本地 `0.6.0` 的状态是当前版本不低于最新正式版本。
 
+---
 
+## v0.6.1
 
+- 软件版本：`0.6.1`
+- 工程格式：`projectFormatVersion: "1.1"`（仍读取 `1.0`，未升格式）
+- 文档结构：`schemaVersion: 2`（未升）
+- 模板格式：`templateFormatVersion: 1`
+- 日期：2026-10-12
+- 分支：`cursor/v061-workspace-65eb`
+- 没有创建 GitHub Release
+
+这一版只改工作区怎么把空间留给图。图窗、图层、数据选择、局部放大和工程保存没有重写。绘图仍是原来的 SVG。
+
+### 数据
+
+`projectFormatVersion` 仍是 `1.1`。视口模式（`auto-fit` / `fit-width` / `manual`）是会话状态，不写入工程。Dock 的固定与密度记在本机：`visualizer.dock.pinned`、`visualizer.dock.density`。密度仍镜像到已有的 `project.ui.dockExpanded`，便于旧工程打开后沿用展开偏好；固定与否不进工程格式。
+
+适应窗口用 `fitContentScale`：等比例，取宽高里更紧的一边，允许大于 1，并夹在原有 25%–300%。单栏 89 mm、双栏 183 mm 只改宽度。读数关注只增加 `focusSeriesId`，不改 `visible`。数据概览按 Dataset 的稳定 `id` 汇总，单位来自 `xUnit` 和各 Series 的 `unit`。
+
+### 界面
+
+Dock 默认 `position: absolute`，隐藏时布局高度为零，底部留 10px 透明触发条。浮出过渡 200ms，离开 300ms 后隐藏。固定后才进入网格的最后一行。紧凑卡片宽 44px，名称视觉隐藏；展开卡片 156×104，名称可见。预览挂在 `document.body`，宽 280px，悬停 300ms 后出现，不改 `zOrder`。
+
+模式条高度 48px。常驻说明改为问号悬停。进入绘图模式保存当前画布缩放并切到适应窗口；回到排版时恢复那次缩放。100%、适应窗口、适应宽度分三个按钮。手动缩放后，侧栏、Dock 固定和窗口变化不重算比例。
+
+读数框可过滤、悬停、点击锁定。指针在框内时不再跟着图上的移动改 X。左栏数据概览默认折叠，抽样写明「抽样，不是全量」。画布宽高改为数字加毫米。显示类开关用 `role="switch"`。粗体、斜体和数据勾选仍是复选框。线宽不再用大滑块。
+
+### 验证
+
+`node --check visualizer-core.js` 通过。页面两个内联脚本抽出后 `node --check` 通过。`node tests/core-test.js` 输出 `all core tests passed`。新增覆盖：适应窗口 scale 可大于 1、适应宽度不按高度压扁、自动隐藏 Dock 不占布局、读数关注不改显隐、概览按稳定 ID 且单位来自数据、栏宽切换保持高度。测试夹具 `tests/fixtures/TESTDATA_v010.tvproj.json` 补进仓库，因为旧测试依赖它，而 `*.tvproj.json` 原先被忽略。
+
+浏览器是本机 Google Chrome（headless），页面 `http://127.0.0.1:8876/temperature_trajectory_visualizer.html`。Microsoft Edge 未安装，未测。系统保存框没有再打开。
+
+实际看到：关于对话框为当前版本 v0.6.1、工程格式 1.1。模式条高 48px，帮助悬停后高度不变。未固定时工作区高 804px，固定后 698px，取消固定回到 804px。进入绘图为 63%（zoom 0.6296875），实例仍是 x 40、y 40、1280×800、z 1。把图窗临时改成 280×180 再点适应窗口，比例到 2.878，随后恢复。手动 100% 在折叠侧栏后仍是 1。双栏把宽改成 692px（183.1 mm），高保持 880。导出 SVG 长度 8608，不含 Dock 和缩放条。读数点击锁定后 `visible` 未变。数据概览写出稳定 ID、多种单位和「抽样，不是全量」。绘图模式属性里有 23 个显示开关，粗体和斜体仍是复选框。约 9 个图窗时展开 Dock 的 `scrollWidth` 1854、`clientWidth` 1390、`flex-wrap: nowrap`、行高 148。控制台没有错误。
+
+### 补测
+
+Chrome headless 再按了读数键和 Dock 预览。读数框没有焦点时，下键不产生关注。点中 Alpha 后，下、下、上、Enter 停在 Beta；四条曲线 `visible` 仍为真，左侧勾选仍未勾。Esc 清掉关注，读数框还在，读数工具还开着。焦点离开后再按 Esc，才退出读数。过滤框里左键只移动光标。过滤框的 Esc 原先被拦住，改成继续冒泡并模糊当前焦点后，Esc 能清掉关注且不退出读数。
+
+悬停「图窗 1」约 450ms 后预览宽 280px。鼠标分 15 步移进预览，500ms 后预览仍在。接着以约 40ms 滑过 8 个图标，每一步预览数量为 0；离开后再等 700ms 仍为 0。
+
+### 未完成
+
+Edge、系统保存框里保存后再打开、几十个图窗的压力，都没有标成通过。预览右缘和放不下时翻到图标下方没有单独测。`kami` 不在本机，`Updates/更新介绍.pdf` 没有重新生成。同一画布仍不能放同一图窗的第二个实例。
+
+必读技能 `ponytail`、`frontend-design`、`web-design-engineer`、`algorithmic-art` 在本机没有找到。经验回放文件 `/Users/elssssa/Documents/Codex/2026-05-27/codex-ui-codex-agent-codex/codex_experience_replay_2026-05-27.md` 也不在这台机器上。这些都没有当成已读。
 

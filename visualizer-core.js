@@ -4,7 +4,7 @@
 
   var APP_INFO = Object.freeze({
     name: "Visualizer",
-    version: "0.6.0",
+    version: "0.6.1",
     repositoryOwner: "aidisen975-cmd",
     repositoryName: "Visualizer",
     updateChannel: "stable"
@@ -27,6 +27,8 @@
   var ZOOM_MIN = 0.25;
   var ZOOM_MAX = 3;
   var ZOOM_STEP = 0.1;
+  var PX_PER_MM = 96 / 25.4;
+  var COLUMN_WIDTH_MM = { "single-89": 89, "double-183": 183 };
   var SNAP_SCREEN_PX = 8;
   var DEFAULT_FIGURE_WIDTH = 1280;
   var DEFAULT_FIGURE_HEIGHT = 800;
@@ -1983,6 +1985,121 @@
       (Math.max(1, viewportHeight) - pad * 2) / box.height
     );
     return clampZoom(zoom);
+  }
+
+  function fitContentScale(contentWidth, contentHeight, viewportWidth, viewportHeight, padding, mode) {
+    var pad = padding == null ? 24 : Number(padding);
+    if (!Number.isFinite(pad) || pad < 0) pad = 0;
+    var contentW = Math.max(1, Number(contentWidth) || 1);
+    var contentH = Math.max(1, Number(contentHeight) || 1);
+    var viewW = Math.max(1, Number(viewportWidth) || 1);
+    var viewH = Math.max(1, Number(viewportHeight) || 1);
+    var innerW = Math.max(1, viewW - pad * 2);
+    var innerH = Math.max(1, viewH - pad * 2);
+    var scaleX = innerW / contentW;
+    var scaleY = innerH / contentH;
+    var scale = mode === "width" ? scaleX : Math.min(scaleX, scaleY);
+    if (!Number.isFinite(scale) || scale <= 0) return 1;
+    return clampZoom(scale);
+  }
+
+  function pxToMm(px) {
+    var n = Number(px);
+    if (!Number.isFinite(n)) return 0;
+    return Math.round((n / PX_PER_MM) * 10) / 10;
+  }
+
+  function mmToPx(mm) {
+    var n = Number(mm);
+    if (!Number.isFinite(n)) return 0;
+    return Math.round(n * PX_PER_MM);
+  }
+
+  function columnPresetForWidth(px) {
+    var mm = pxToMm(px);
+    if (Math.abs(mm - COLUMN_WIDTH_MM["single-89"]) <= 0.6) return "single-89";
+    if (Math.abs(mm - COLUMN_WIDTH_MM["double-183"]) <= 0.6) return "double-183";
+    return "custom";
+  }
+
+  function applyColumnWidth(widthPx, heightPx, preset) {
+    var mm = COLUMN_WIDTH_MM[preset];
+    var height = Number(heightPx);
+    return {
+      width: mm ? mmToPx(mm) : Math.round(Number(widthPx) || 0),
+      height: Number.isFinite(height) ? Math.round(height) : 0,
+      preset: mm ? preset : "custom"
+    };
+  }
+
+  function dockOccupiesLayout(pinned) {
+    return !!pinned;
+  }
+
+  function assignReadoutFocus(cursor, seriesId) {
+    var source = cursor && typeof cursor === "object" ? cursor : {};
+    return {
+      plotId: source.plotId || "",
+      x: source.x,
+      nearestSeriesId: source.nearestSeriesId || "",
+      focusSeriesId: seriesId ? String(seriesId) : ""
+    };
+  }
+
+  function summarizeDataset(dataset) {
+    if (!dataset || !Array.isArray(dataset.series)) return null;
+    var xMin = Infinity;
+    var xMax = -Infinity;
+    var yMin = Infinity;
+    var yMax = -Infinity;
+    var units = {};
+    var points = 0;
+    dataset.series.forEach(function (item) {
+      var xs = item && item.x ? item.x : [];
+      var ys = item && item.y ? item.y : [];
+      points = Math.max(points, xs.length);
+      xs.forEach(function (value) {
+        var n = Number(value);
+        if (!Number.isFinite(n)) return;
+        if (n < xMin) xMin = n;
+        if (n > xMax) xMax = n;
+      });
+      ys.forEach(function (value) {
+        var n = Number(value);
+        if (!Number.isFinite(n)) return;
+        if (n < yMin) yMin = n;
+        if (n > yMax) yMax = n;
+      });
+      units[item && item.unit != null ? String(item.unit) : ""] = true;
+    });
+    var sampleCount = Math.min(6, points);
+    var sample = [];
+    var head = dataset.series[0];
+    for (var i = 0; i < sampleCount; i += 1) {
+      var values = [];
+      dataset.series.slice(0, 3).forEach(function (item) {
+        values.push({
+          seriesId: item.id,
+          name: seriesDisplayName(item),
+          y: item.y ? item.y[i] : null,
+          unit: item.unit == null ? "" : String(item.unit)
+        });
+      });
+      sample.push({ index: i, x: head && head.x ? head.x[i] : null, values: values });
+    }
+    return {
+      datasetId: String(dataset.id || ""),
+      pointCount: points,
+      xMin: Number.isFinite(xMin) ? xMin : null,
+      xMax: Number.isFinite(xMax) ? xMax : null,
+      yMin: Number.isFinite(yMin) ? yMin : null,
+      yMax: Number.isFinite(yMax) ? yMax : null,
+      xUnit: dataset.xUnit == null ? "" : String(dataset.xUnit),
+      yUnits: Object.keys(units),
+      sample: sample,
+      sampleIsPartial: points > sample.length,
+      sampleNote: "抽样，不是全量"
+    };
   }
 
   function syncCanvasToPlots(project) {
@@ -4328,6 +4445,15 @@
     worldToScreen: worldToScreen,
     plotsBoundingBox: plotsBoundingBox,
     fitViewZoom: fitViewZoom,
+    fitContentScale: fitContentScale,
+    PX_PER_MM: PX_PER_MM,
+    pxToMm: pxToMm,
+    mmToPx: mmToPx,
+    columnPresetForWidth: columnPresetForWidth,
+    applyColumnWidth: applyColumnWidth,
+    dockOccupiesLayout: dockOccupiesLayout,
+    assignReadoutFocus: assignReadoutFocus,
+    summarizeDataset: summarizeDataset,
     syncCanvasToPlots: syncCanvasToPlots,
     setPlotSize: setPlotSize,
     layoutSlots: layoutSlots,

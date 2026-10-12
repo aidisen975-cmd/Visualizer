@@ -1,0 +1,35 @@
+{
+  "projectFormatVersion": "1.0",
+  "projectName": "v0.1.0 旧工程",
+  "datasets": [
+    {
+      "id": "ds-old",
+      "name": "旧数据",
+      "xHeader": "Time",
+      "xName": "Time",
+      "xUnit": "s",
+      "xIsTime": true,
+      "series": [
+        {
+          "id": "ds-old::T1",
+          "localId": "T1",
+          "name": "T1",
+          "x": [0, 10, 20],
+          "y": [1, 2, 3]
+        }
+      ]
+    }
+  ],
+  "plots": [
+    {
+      "id": "old-fig",
+      "title": "Figure 1",
+      "layout": { "x": 40, "y": 40, "width": 640, "height": 400 },
+      "xAxis": { "mode": "manual", "min": 0, "max": 20 },
+      "seriesRefs": [
+        { "seriesId": "ds-old::T1", "color": "#d14e3d", "visible": true }
+      ]
+    }
+  ],
+  "canvas": { "width": 1280, "height": 800 }
+}

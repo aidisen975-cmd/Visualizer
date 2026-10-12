@@ -20,6 +20,7 @@ Desktop.ini
 *.tvproj.json
 !tests/fixtures/*.csv
 !tests/fixtures/*.tsv
+!tests/fixtures/*.tvproj.json
 
 # Temporary and generated files
 /tmp/
