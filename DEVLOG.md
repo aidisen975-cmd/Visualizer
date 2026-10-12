@@ -1046,3 +1046,42 @@ Edge、多图窗压力、系统保存框往返、网格线开关。本机没有 
 
 
 
+
+## v0.6.2
+
+日期：2026-10-12。目标是数据面板精简、样式联动修复与画布交互优化。不加新的功能面。
+
+软件版本改为 `0.6.2`。`projectFormatVersion` 仍是 `1.1`，没有新的工程字段。
+
+### 改动模块
+
+- `visualizer-core.js`：`applyGroupStyle` 改为按字段写入；新增 `updateSeriesStyle`、`viewportLayout`、`viewportWorldAt`、`viewportScrollFor`、`viewportCenterScroll`、`wheelZoomFactor`、`steppedZoom`、`computeOverlayPosition`、`datasetUsage`；`summarizeDataset` 增加来源文件、导入时间、每条点数是否一致、Y 单位。
+- `temperature_trajectory_visualizer.html`：样式入口 `patchSeriesStyle`；绘图视口 `applyCanvasZoom` / `setCanvasZoom` / 滚轮处理；浮层 `placeFloating`、`closeFloatingLayers`、Dock 提示；数据面板系列行与数据簇概览。
+- `tests/core-test.js`：新增样式、视口、滚轮、浮层、55 × 2000 概览测试。
+
+### 五个问题的原因与修复
+
+1. 簇样式线宽不实时。颜色控件直接写 `groupStyles`，线型和线宽只改面板草稿，要按「应用到该数据簇全部系列」才写。按钮把草稿全部字段写回，草稿里没改过的颜色是默认 `#25884d`，同时清掉所有单独覆盖，所以改线宽会把颜色和线型一起重置。修复：所有控件实时调用同一个 `patchSeriesStyle(plot, target, patch)`，内部走 `core.updateSeriesStyle`。`target.datasetId` 时只改该簇在当前图里的系列，`target.seriesIds` 时只改选中系列。patch 里有哪个字段就只写哪个字段、只清哪个覆盖标记。选中系列的编辑不再调用 `applyStyleToSeries` 改源系列，避免影响其他图窗。按钮改名「全部重新应用」，保留整套覆盖的语义。
+2. 适应窗口偏移、贴右、平移不到边。旧实现用 flex 居中加 overflow 滚动，内容大于视口时 flex 居中会把左侧推到负区，靠 `is-overflow-*` 类补救，类名会过期；最大滚动时纸面贴右边，没有尾部留白；`setCanvasZoom` 换算世界坐标时没算居中偏移；程序滚动的保护标记用 `setTimeout(0)` 清除，早于异步滚动事件，适应模式被误判成手动平移。修复：滚动区是普通块，内部一个尺寸明确的 surface，纸面和参考线用 `translate(offsetX, offsetY) scale(zoom)` 定位。surface 和偏移由 `viewportLayout` 算：内容小于视口时居中，大于视口时两侧各留 `VIEWPORT_GUTTER = 24` px。程序滚动记录期望位置，滚动事件只有位置不同才算用户平移。可见区尺寸变化（侧栏、窗口、Dock 固定）时重新适应。
+3. 浮层出界。右键菜单只夹左上；Dock「新建」弹层在 `overflow-x: auto` 的 Dock 行里被裁；紧凑 Dock 图标没有名字提示；吸附和布局菜单各写一套夹取。修复：纯函数 `computeOverlayPosition` 负责翻转、平移和限高，`placeFloating` 只做测量和写样式。所有跨容器浮层挂在 `body`。层级：Dock 36 < 提示 / 预览 52 < 弹层 58 < 右键菜单 60，对话框用 `showModal` 进浏览器顶层。提示离开即隐藏；可交互的弹层沿用 Dock 的延迟隐藏，指针进入弹层时取消隐藏。Esc 统一关闭。
+4. 系列行拥挤。每行有「概览」按钮和可展开表。修复：概览移到数据簇，系列行只保留复选框、颜色点、名称和点数，详细信息放在悬停时才生成的 `title`。数据簇概览是可关闭弹层，打开时随勾选和加入图窗实时重算，区分「已选」「已加入任一图窗」「当前图」。系列颜色先整图算一次，避免 55 条系列时每行重算全图。
+5. 触控板捏合太灵敏。每个滚轮事件固定 ±10%。修复：`wheelZoomFactor` 把 deltaMode 行 / 页换成像素，按 `exp(-deltaY × gain)` 连续缩放，单次步长上限 0.2；捏合（`ctrlKey`、无 `metaKey`、像素模式、小 delta）用 `PINCH_ZOOM_GAIN`，否则用 `WHEEL_ZOOM_GAIN`，不把所有 Ctrl + 滚轮都当触控板。同一帧内的事件合并，锚点取最后一个指针位置；250 ms 内连续手势锁住同一个世界坐标，避免取整漂移。只有带 Ctrl / ⌘ 的滚轮才 `preventDefault`。工具栏和快捷键按 10% 档位，缩放百分比可直接输入。
+
+### 状态与坐标
+
+- 视口：`viewportLayoutState` 保存最近一次布局。世界坐标 = (滚动位置 + 视口内坐标 − 偏移) / 缩放。适应模式不改 `plot.layout` 和画布实例尺寸，只改显示缩放。
+- 样式：优先级仍是系列覆盖 > 簇样式 > 图窗默认 > 系统默认。没有新增并行状态。
+
+### 兼容
+
+旧工程直接打开。`groupStyles` 和 `styleOverrides` 的结构不变，只是写入粒度变细。没有改导出、模板、局部图、图层和 Dock 偏好的格式。
+
+### 验证
+
+`node tests/core-test.js` 通过。Chrome（Cursor 内置浏览器）1920×1080 与 760×480 核对了 55 × 2000 导入、数据簇概览实时计数、簇样式逐项实时生效与撤销、右键菜单四角、Dock 提示和「新建」弹层、输入缩放、两端平移与适应后重新居中。没有真实触控板手测，没有测 Edge，没有走系统保存框。
+
+### 未完成
+
+真机触控板手感、Edge、保存框往返。注释菜单、模式说明和顶部下拉仍是 CSS 定位。
+
+`Updates/更新介绍.pdf` 本机没有 weasyprint，改用 Chrome headless 从同目录 HTML 打印，单页。

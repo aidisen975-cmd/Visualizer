@@ -339,7 +339,7 @@ assert(legend.columns >= 2, "大量图例自动多列");
 assert(legend.placed.length >= 20, "多列后尽量保留图例项");
 
 var v021 = core.parseProject(core.serializeProject(elecProject));
-assert(v021.softwareVersion === "0.6.1", "新工程写入 0.6.1");
+assert(v021.softwareVersion === "0.6.2", "新工程写入 0.6.2");
 assert(v021.schemaVersion === 2, "新工程写入 schemaVersion 2");
 assert(v021.plots[0].legend.visible === true, "legend 随工程保存");
 assert(v021.ui.leftPanelWidth >= 220, "ui layout 随工程保存");
@@ -473,7 +473,7 @@ var oldMigrated = core.parseProject(readFixture("TESTDATA_v010.tvproj.json"));
 assert(oldMigrated.plots[0].seriesRefs[0].style && oldMigrated.plots[0].seriesRefs[0].style.lineWidth === 1.5, "旧工程补齐 series.style");
 assert(oldMigrated.plots[0].xAxis.time && oldMigrated.plots[0].xAxis.time.displayUnit, "旧工程补齐 per-chart time");
 assert(oldMigrated.plots[0].textStyles && oldMigrated.plots[0].textStyles.title.fontSize === 14, "旧工程补齐 textStyles");
-assert(oldMigrated.softwareVersion === "0.6.1", "打开后 working copy 版本为 0.6.1，源文件未改");
+assert(oldMigrated.softwareVersion === "0.6.2", "打开后 working copy 版本为 0.6.2，源文件未改");
 assert(oldMigrated.plots[0].type === "normal" && oldMigrated.plots[0].topEdge.showLine === false, "旧工程补上普通图和默认关闭的上边轴");
 assert(oldMigrated.plots[0].xAxis.showLine === true && oldMigrated.plots[0].xAxis.showTickLabels === true && oldMigrated.plots[0].xAxis.tickDirection === "out", "旧工程底轴默认轴线、刻度标签和向外刻度");
 assert(oldMigrated.plots[0].showTitle === true && oldMigrated.plots[0].title !== "未命名图", "旧工程有标题时显示标题，不回写成未命名图");
@@ -583,7 +583,7 @@ assert(huge.grown, "文字过大时允许增大 Figure");
 assert(huge.plotArea.width >= core.FIGURE_LAYOUT.minPlotWidth, "Plot Area 不低于最小宽度");
 assert(huge.plotArea.height >= core.FIGURE_LAYOUT.minPlotHeight, "Plot Area 不低于最小高度");
 
-assert(core.APP_INFO.version === "0.6.1", "APP version 为 0.6.1");
+assert(core.APP_INFO.version === "0.6.2", "APP version 为 0.6.2");
 assert(core.SOFTWARE_VERSION === core.APP_INFO.version, "SOFTWARE_VERSION 与 APP_INFO.version 相同");
 assert(core.PROJECT_FORMAT_VERSION === "1.1", "工程格式为 1.1");
 assert(core.APP_INFO.version !== core.PROJECT_FORMAT_VERSION, "软件版本与工程格式分离");
@@ -706,7 +706,11 @@ var page = fs.readFileSync(path.join(__dirname, "../temperature_trajectory_visua
 assert(page.indexOf("aboutDialog.showModal") >= 0, "About 使用模态 showModal");
 assert(page.indexOf("aboutDialog.show()") < 0, "About 不再使用非模态 show");
 assert(page.indexOf("标题对齐") >= 0, "界面有标题对齐");
-assert(page.indexOf("应用到该数据簇全部系列") >= 0, "界面有簇样式应用");
+assert(page.indexOf("全部重新应用") >= 0, "界面有簇样式重新应用");
+assert(page.indexOf("patchSeriesStyle(plot, { datasetId: dataset.id }") >= 0 && page.indexOf("patchSeriesStyle(plot, { seriesIds: selectedIds }") >= 0, "簇样式和选中系列样式走同一个入口");
+assert(page.indexOf("core.applyStyleToSeries(") < 0 && page.indexOf("core.setGroupStyle(") < 0, "界面不再绕过统一样式入口");
+assert(page.indexOf('seriesInfo.textContent = "概览"') < 0, "系列行不再有单独的概览按钮");
+assert(page.indexOf("placeFloating(menu, { left: x, top: y, right: x, bottom: y }, \"point\")") >= 0, "右键菜单走统一浮层定位");
 assert(page.indexOf("z-index: 1000") >= 0 && page.indexOf("z-index: 10") >= 0, "Modal 层级高于分隔条");
 var savedProject = core.serializeProject(project);
 assert(savedProject.indexOf("updateState") < 0, "工程不含 updateState");
@@ -1400,6 +1404,124 @@ var updateChecks = [
     assert(state.downloadUrl === "https://example.invalid/Visualizer-v0.3.0.zip", "checkForUpdates 使用精确 zip");
   })
 ];
+
+// v0.6.2: one style entry; data group edits only touch the field that changed.
+(function () {
+  var p = core.createProject({ projectName: "v062-style" });
+  var dsA = core.parseDatasetFromCsv("t,A,B,C\n0,1,2,3\n1,2,3,4\n", { id: "ds-a", name: "A", sourceFilename: "a.csv" });
+  var dsB = core.parseDatasetFromCsv("t,D\n0,1\n1,2\n", { id: "ds-b", name: "B", sourceFilename: "b.csv" });
+  core.addDataset(p, dsA);
+  core.addDataset(p, dsB);
+  var plot = core.createPlot(p, { title: "F" });
+  var other = core.createPlot(p, { title: "G" });
+  var idsA = dsA.series.map(function (s) { return s.id; });
+  core.addSeriesToPlot(p, plot, idsA.concat([dsB.series[0].id]));
+  core.addSeriesToPlot(p, other, idsA);
+  core.updateSeriesStyle(p, plot, { seriesIds: [idsA[0]] }, { color: "#ff0000", lineWidth: 2, lineType: "solid" });
+  core.updateSeriesStyle(p, plot, { seriesIds: [idsA[1]] }, { color: "#0000ff", lineWidth: 3, lineType: "dashed" });
+  core.updateSeriesStyle(p, plot, { seriesIds: [idsA[2]] }, { color: "#00ff00", lineWidth: 1, lineType: "dotted" });
+  var bBefore = core.resolvePlotSeries(p, plot).find(function (i) { return i.series.id === dsB.series[0].id; }).style;
+  var otherBefore = JSON.stringify(core.resolvePlotSeries(p, other).map(function (i) { return i.style; }));
+  var touched = core.updateSeriesStyle(p, plot, { datasetId: "ds-a" }, { lineWidth: 5 });
+  var byId = {};
+  core.resolvePlotSeries(p, plot).forEach(function (i) { byId[i.series.id] = i.style; });
+  assert(touched.length === 3, "数据簇样式作用于该簇在当前图里的全部系列");
+  assert(byId[idsA[0]].lineWidth === 5 && byId[idsA[1]].lineWidth === 5 && byId[idsA[2]].lineWidth === 5, "数据簇线宽立即写入全部系列");
+  assert(byId[idsA[0]].color === "#ff0000" && byId[idsA[1]].color === "#0000ff" && byId[idsA[2]].color === "#00ff00", "改线宽不覆盖颜色");
+  assert(byId[idsA[0]].lineType === "solid" && byId[idsA[1]].lineType === "dashed" && byId[idsA[2]].lineType === "dotted", "改线宽不覆盖线型");
+  var bAfter = byId[dsB.series[0].id];
+  assert(bAfter.lineWidth === bBefore.lineWidth && bAfter.color === bBefore.color, "其他数据簇不被串改");
+  assert(JSON.stringify(core.resolvePlotSeries(p, other).map(function (i) { return i.style; })) === otherBefore, "引用同一数据的其他图窗不受影响");
+  core.updateSeriesStyle(p, plot, { datasetId: "ds-a" }, { color: "#123456" });
+  core.resolvePlotSeries(p, plot).forEach(function (i) { byId[i.series.id] = i.style; });
+  assert(idsA.every(function (id) { return byId[id].color === "#123456" && byId[id].lineWidth === 5; }), "改颜色不覆盖线宽");
+  assert(byId[idsA[1]].lineType === "dashed", "改颜色不覆盖线型");
+  core.updateSeriesStyle(p, plot, { datasetId: "ds-a" }, { lineType: "dash-dot" });
+  core.resolvePlotSeries(p, plot).forEach(function (i) { byId[i.series.id] = i.style; });
+  assert(idsA.every(function (id) { return byId[id].lineType === "dash-dot" && byId[id].color === "#123456"; }), "数据簇线型立即生效");
+  core.updateSeriesStyle(p, plot, { seriesIds: [idsA[0], idsA[1]] }, { lineWidth: 2.5 });
+  core.resolvePlotSeries(p, plot).forEach(function (i) { byId[i.series.id] = i.style; });
+  assert(byId[idsA[0]].lineWidth === 2.5 && byId[idsA[1]].lineWidth === 2.5 && byId[idsA[2]].lineWidth === 5, "选中系列修改不影响未选中系列");
+  core.updateSeriesStyle(p, plot, { datasetId: "ds-a" }, { colorMode: "palette", paletteId: "high-contrast" });
+  var palette = core.resolvePlotSeries(p, plot).filter(function (i) { return i.series.datasetId === "ds-a"; });
+  assert(palette[0].style.color !== palette[1].style.color && palette[0].style.lineWidth === 2.5, "Palette 分配只改颜色");
+  var round = core.parseProject(core.serializeProject(p));
+  var roundStyles = core.resolvePlotSeries(round, round.plots.find(function (x) { return x.id === plot.id; })).map(function (i) { return i.style; });
+  var nowStyles = core.resolvePlotSeries(p, plot).map(function (i) { return i.style; });
+  assert(JSON.stringify(roundStyles) === JSON.stringify(nowStyles), "统一入口写入的样式保存重开后不变");
+  assert(round.projectFormatVersion === "1.1", "v0.6.2 不升工程格式");
+}());
+
+// v0.6.2: viewport geometry, wheel zoom and overlay placement.
+(function () {
+  var fitZoom = core.fitContentScale(1280, 800, 1000, 700, core.VIEWPORT_GUTTER);
+  var fit = core.viewportLayout(1000, 700, 1280, 800, fitZoom);
+  assert(fit.maxScrollLeft === 0 && fit.maxScrollTop === 0, "适应窗口后没有多余滚动");
+  assert(Math.abs(fit.offsetX * 2 + fit.contentWidth - 1000) < 1e-6 && Math.abs(fit.offsetY * 2 + fit.contentHeight - 700) < 1e-6, "适应窗口在可见工作区水平和垂直居中");
+  assert(fit.offsetX >= core.VIEWPORT_GUTTER - 1e-6 || fit.offsetY >= core.VIEWPORT_GUTTER - 1e-6, "适应窗口保留边距");
+  var big = core.viewportLayout(1000, 700, 1280, 800, 1.5);
+  assert(big.offsetX === core.VIEWPORT_GUTTER && big.maxScrollLeft === big.surfaceWidth - 1000, "放大后左右都留出可滚动边距");
+  var leftEdge = core.viewportWorldAt(big, 0, 0, core.VIEWPORT_GUTTER, 0);
+  var rightEdge = core.viewportWorldAt(big, big.maxScrollLeft, 0, 1000 - core.VIEWPORT_GUTTER, 0);
+  assert(Math.abs(leftEdge.x) < 1e-6 && Math.abs(rightEdge.x - 1280) < 1, "平移可以到达图窗左右两边");
+  var anchorWorld = core.viewportWorldAt(big, 300, 120, 420, 260);
+  var zoomed = core.viewportLayout(1000, 700, 1280, 800, 2.2);
+  var keep = core.viewportScrollFor(zoomed, anchorWorld.x, anchorWorld.y, 420, 260);
+  var after = core.viewportWorldAt(zoomed, keep.left, keep.top, 420, 260);
+  assert(Math.abs(after.x - anchorWorld.x) < 1e-6 && Math.abs(after.y - anchorWorld.y) < 1e-6, "以光标为中心缩放时光标下的世界坐标不变");
+  var center = core.viewportCenterScroll(big);
+  var mid = core.viewportWorldAt(big, center.left, center.top, 500, 350);
+  assert(Math.abs(mid.x - 640) < 1e-6 && Math.abs(mid.y - 400) < 1e-6, "居中滚动对准图窗中心");
+  var pinch = core.wheelZoomFactor(-2, 0, true);
+  assert(pinch > 1 && pinch < 1.02, "触控板单次小幅捏合只改变约 1%");
+  var notch = core.wheelZoomFactor(100, 0, false);
+  assert(notch < 1 && notch > 0.8, "鼠标滚轮一格缩小幅度可控");
+  assert(core.wheelZoomFactor(-100000, 0, false) <= Math.exp(0.2) + 1e-9, "异常大的滚轮值被限幅");
+  assert(Math.abs(core.wheelZoomFactor(3, 1, false) - core.wheelZoomFactor(48, 0, false)) < 1e-9, "按行滚动的 deltaMode 被归一化");
+  var z = 1;
+  for (var i = 0; i < 20; i += 1) z *= core.wheelZoomFactor(-1, 0, true);
+  for (var j = 0; j < 20; j += 1) z *= core.wheelZoomFactor(1, 0, true);
+  assert(Math.abs(z - 1) < 1e-9, "等量来回捏合回到原比例，没有累积误差");
+  assert(core.steppedZoom(1.23, 1) === 1.3 && core.steppedZoom(1.23, -1) === 1.2 && core.steppedZoom(1.2, 1) === 1.3, "工具栏缩放按 10% 刻度步进");
+  var rightClick = core.computeOverlayPosition({ viewportWidth: 1000, viewportHeight: 700, anchor: { left: 990, top: 690, right: 990, bottom: 690 }, width: 180, height: 260, placement: "point" });
+  assert(rightClick.left + 180 <= 992 && rightClick.top + 260 <= 692 && rightClick.left >= 8 && rightClick.top >= 8, "右下角右键菜单完整留在视口内");
+  assert(rightClick.left === 810 && rightClick.side === "top", "右下角右键菜单向左上展开");
+  var topLeft = core.computeOverlayPosition({ viewportWidth: 1000, viewportHeight: 700, anchor: { left: 4, top: 4, right: 4, bottom: 4 }, width: 180, height: 260, placement: "point" });
+  assert(topLeft.left === 8 && topLeft.top === 8 && topLeft.side === "bottom", "左上角右键菜单不出界");
+  var dockTipLeft = core.computeOverlayPosition({ viewportWidth: 1000, viewportHeight: 700, anchor: { left: 12, top: 640, right: 58, bottom: 686 }, width: 300, height: 220, placement: "top" });
+  assert(dockTipLeft.left === 8 && dockTipLeft.top + 220 <= 640 && dockTipLeft.side === "top", "Dock 最左图标的提示向上并贴回左侧");
+  var dockTipRight = core.computeOverlayPosition({ viewportWidth: 1000, viewportHeight: 700, anchor: { left: 950, top: 640, right: 996, bottom: 686 }, width: 300, height: 220, placement: "top" });
+  assert(dockTipRight.left + 300 <= 992, "Dock 最右图标的提示不出右边界");
+  var tall = core.computeOverlayPosition({ viewportWidth: 1000, viewportHeight: 300, anchor: { left: 100, top: 150, right: 100, bottom: 150 }, width: 180, height: 600, placement: "point" });
+  assert(tall.maxHeight === 284 && tall.top === 8, "超高浮层限制高度并内部滚动");
+  var below = core.computeOverlayPosition({ viewportWidth: 1000, viewportHeight: 700, anchor: { left: 100, top: 40, right: 140, bottom: 64 }, width: 200, height: 120, placement: "top" });
+  assert(below.side === "bottom" && below.top === 70, "上方空间不足时翻到下方");
+}());
+
+// v0.6.2: data group overview is computed live and keeps selected / in-plot / owned apart.
+(function () {
+  var p = core.createProject({ projectName: "v062-overview" });
+  var header = ["Time(s)"];
+  var rows = [];
+  for (var c = 1; c <= 55; c += 1) header.push("T" + c + "(°C)");
+  for (var r = 0; r < 2000; r += 1) {
+    var row = [r];
+    for (var k = 1; k <= 55; k += 1) row.push(20 + k + r / 1000);
+    rows.push(row.join(","));
+  }
+  var ds = core.parseDatasetFromCsv(header.join(",") + "\n" + rows.join("\n") + "\n", { id: "ds-55", name: "全测点温度", sourceFilename: "all.csv" });
+  core.addDataset(p, ds);
+  var summary = core.summarizeDataset(ds);
+  assert(summary.seriesCount === 55 && summary.count === 110000, "数据簇概览统计 55 条系列和 110000 个点");
+  assert(summary.uniformPoints && summary.maxPoints === 2000, "数据簇概览判断各系列点数一致");
+  assert(summary.sourceFilename === "all.csv", "数据簇概览带来源文件名");
+  var plot = core.plotWindows(p)[0] || core.createPlot(p, { title: "F" });
+  core.addSeriesToPlot(p, plot, ds.series.slice(0, 3).map(function (s) { return s.id; }));
+  var usage = core.datasetUsage(p, ds, [ds.series[10].id, ds.series[11].id, "other::x"], plot.id);
+  assert(usage.total === 55 && usage.selected === 2 && usage.inAnyPlot === 3 && usage.inCurrentPlot === 3, "已选、已加入图窗、全部系列分别统计");
+  core.addSeriesToPlot(p, plot, [ds.series[20].id]);
+  assert(core.datasetUsage(p, ds, [], plot.id).inAnyPlot === 4, "概览统计读当前状态而不是导入时缓存");
+}());
 
 Promise.all(updateChecks).then(function () {
   if (failed) {

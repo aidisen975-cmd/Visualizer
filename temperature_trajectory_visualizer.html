@@ -330,12 +330,19 @@
       padding: 0 16px 8px;
     }
     .tv-zoombar-label {
-      min-width: 44px;
+      width: 52px;
+      height: 24px;
+      padding: 0 2px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      background: transparent;
       text-align: center;
       font: 500 14px/1 var(--ui-font);
       font-variant-numeric: tabular-nums;
       color: var(--secondary);
     }
+    .tv-zoombar-label:hover { border-color: var(--rule); }
+    .tv-zoombar-label:focus { border-color: var(--focus); background: var(--surface); color: var(--ui); outline: none; }
     .tv-tools {
       display: inline-flex;
       align-items: center;
@@ -780,23 +787,21 @@
     .tv-canvas-scroll {
       min-width: 0;
       overflow: auto;
-      display: flex;
-      align-items: center;
-      justify-content: center;
       background: transparent;
-      padding: 8px 28px 12px;
+      padding: 0;
+      overscroll-behavior: contain;
     }
-    .tv-canvas-scroll.is-overflow-x { justify-content: flex-start; }
-    .tv-canvas-scroll.is-overflow-y { align-items: flex-start; }
     [data-theme="dark"] .tv-canvas-scroll { background: transparent; }
     [data-theme="dark"] .tv-tools { background: #242a2e; }
     [data-theme="dark"] .tv-tools button.is-on,
     [data-theme="dark"] .tv-annotate.is-on > summary { background: #1b2023; color: var(--ui); }
-    .tv-canvas-zoom { position: relative; }
+    .tv-canvas-zoom { position: relative; overflow: hidden; }
     .tv-canvas-paper {
-      position: relative;
+      position: absolute;
+      left: 0;
+      top: 0;
       isolation: isolate;
-      margin: 0 auto;
+      margin: 0;
       background: var(--surface);
       box-shadow: var(--paper-shadow);
       outline: 1px solid rgba(48, 38, 26, .16);
@@ -1496,28 +1501,47 @@
     [data-theme="dark"] .tv-mode-switch { background: #242a2e; }
     [data-theme="dark"] .tv-mode-switch button[aria-pressed="true"],
     [data-theme="dark"] .tv-segment button[aria-pressed="true"] { background: var(--surface); color: var(--ui); }
-    .tv-overview {
-      margin: 8px 10px 0;
-      padding: 8px;
+    .tv-cluster-pop {
+      position: fixed;
+      z-index: 58;
+      width: 280px;
+      padding: 8px 10px 10px;
+      background: var(--frame);
       border: 1px solid var(--rule);
-      border-radius: 8px;
-      background: var(--surface);
+      border-radius: 10px;
+      box-shadow: var(--chrome-shadow);
+      color: var(--ui);
       font-size: 12px;
     }
-    .tv-overview p { margin: 0 0 4px; }
-    .tv-overview table { width: 100%; border-collapse: collapse; margin-top: 6px; }
-    .tv-overview th, .tv-overview td { padding: 2px 4px; text-align: right; font-variant-numeric: tabular-nums; }
-    .tv-overview th:first-child, .tv-overview td:first-child { text-align: left; }
-    .tv-overview caption { caption-side: bottom; padding-top: 4px; color: var(--secondary); text-align: left; }
+    .tv-cluster-pop-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+    .tv-cluster-pop-head strong { font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+    .tv-cluster-pop dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 12px; margin: 0; }
+    .tv-cluster-pop dt { color: var(--secondary); }
+    .tv-cluster-pop dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
     .tv-dock-split { width: 1px; align-self: stretch; background: #e2e2e2; margin: 0 2px 22px; flex: none; }
     .tv-dock-plus .tv-dock-thumb { background: #fff; border-color: #e2e2e2; color: #737373; font-size: 28px; line-height: 1; }
     .tv-dock-thumb svg { width: 100%; height: 100%; display: block; }
     .tv-dock-menu { position: relative; }
+    /* Floating layers live on body and are placed by placeFloating():
+       Dock 36 < tooltip / hover preview 52 < popover 58 < context menu 60.
+       Modals use showModal() and sit in the top layer above all of these. */
+    .tv-tip {
+      position: fixed;
+      z-index: 52;
+      padding: 4px 8px;
+      border-radius: 6px;
+      background: #2f2a24;
+      color: #fbf8f2;
+      font-size: 12px;
+      line-height: 1.3;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+    .tv-tip[hidden] { display: none; }
     .tv-dock-popover {
-      position: absolute;
-      right: 0;
-      bottom: 28px;
-      z-index: 30;
+      position: fixed;
+      z-index: 58;
+      box-shadow: var(--chrome-shadow);
       min-width: 140px;
       padding: 6px;
       background: #fafafa;
@@ -1652,7 +1676,7 @@
             </details>
           </div>
           <button type="button" class="tv-button tv-button--tiny" id="tvZoomOut">−</button>
-          <div class="tv-zoombar-label" id="tvZoomLabel">100%</div>
+          <input class="tv-zoombar-label" id="tvZoomLabel" value="100%" inputmode="decimal" spellcheck="false" autocomplete="off" aria-label="显示比例" title="输入比例后回车，例如 125">
           <button type="button" class="tv-button tv-button--tiny" id="tvZoomIn">+</button>
           <button type="button" class="tv-button tv-button--tiny" id="tvZoomFit">适应窗口</button>
           <button type="button" class="tv-button tv-button--tiny" id="tvZoomWidth">适应宽度</button>
@@ -1685,6 +1709,7 @@
     <footer class="tv-dock is-floating is-compact" id="tvDock" aria-label="图窗 Dock"></footer>
   </div>
   <div id="tvDockPreview" class="tv-hover-preview" hidden></div>
+  <div id="tvDockTip" class="tv-tip" role="tooltip" hidden></div>
   <div class="tv-context" id="tvContext" hidden></div>
   <dialog class="tv-preview" id="tvPreviewDialog" aria-label="画布预览">
     <div class="tv-preview-bar">
@@ -1793,10 +1818,12 @@
     var dockPreviewHideTimer = null;
     var dockPreviewId = "";
     var plotViewport = { mode: "auto-fit", plotId: "", zoom: 1 };
-    var viewportApplying = false;
+    var viewportLayoutState = null;
+    var expectedScroll = null;
+    var zoomAnchor = null;
     var inspectorLocked = false;
     var inspectorFilter = "";
-    var overviewOpen = {};
+    var overviewOpenId = null;
     try {
       var storedDock = JSON.parse(localStorage.getItem("visualizer.workspace.dock") || "");
       if (storedDock && typeof storedDock === "object") {
@@ -1992,60 +2019,69 @@
       propsPanel.parentElement.style.overflow = ui.rightPanelCollapsed ? "hidden" : "auto";
     }
 
-    function applyCanvasZoom(keepPoint) {
-      if (workspaceMode() === "plot" && plotViewport.mode !== "manual" && !keepPoint) {
-        if (canvasScroll.clientWidth > 40 && canvasScroll.clientHeight > 40) {
-          var view = viewportContentBox();
-          var stage = plotStageBox();
-          plotViewport.zoom = plotViewport.mode === "fit-width"
-            ? core.fitWidthScale(stage.width, view.width, 16)
-            : core.fitContentScale(stage.width, stage.height, view.width, view.height, 16);
-        }
-      }
-      var zoom = canvasZoom();
-      var metrics = stageMetrics();
-      var width = metrics.width;
-      var height = metrics.height;
-      var contentW = width * zoom;
-      var contentH = height * zoom;
-      var viewBox = viewportContentBox();
-      canvasZoomEl.style.width = contentW + "px";
-      canvasZoomEl.style.height = contentH + "px";
-      paper.style.width = width + "px";
-      paper.style.height = height + "px";
-      paper.style.transform = "scale(" + zoom + ")";
-      paper.style.transformOrigin = "0 0";
-      guidesEl.style.width = width + "px";
-      guidesEl.style.height = height + "px";
-      guidesEl.style.transform = "scale(" + zoom + ")";
-      guidesEl.style.transformOrigin = "0 0";
-      document.getElementById("tvZoomLabel").textContent = Math.round(zoom * 100) + "%";
-      canvasScroll.classList.toggle("is-overflow-x", contentW > viewBox.width + 1);
-      canvasScroll.classList.toggle("is-overflow-y", contentH > viewBox.height + 1);
-      if (keepPoint || (workspaceMode() === "plot" && plotViewport.mode !== "manual")) {
-        viewportApplying = true;
-        if (keepPoint) {
-          canvasScroll.scrollLeft = keepPoint.worldX * zoom - keepPoint.offsetX;
-          canvasScroll.scrollTop = keepPoint.worldY * zoom - keepPoint.offsetY;
-        } else {
-          canvasScroll.scrollLeft = 0;
-          canvasScroll.scrollTop = 0;
-        }
-        setTimeout(function () { viewportApplying = false; }, 0);
-      }
+    function paintZoomLabel(zoom) {
+      var label = document.getElementById("tvZoomLabel");
+      if (document.activeElement !== label) label.value = Math.round(zoom * 100) + "%";
     }
 
-    function setCanvasZoom(nextZoom, originEvent) {
+    function scrollViewport(left, top) {
+      var x = Math.round(left);
+      var y = Math.round(top);
+      if (canvasScroll.scrollLeft === x && canvasScroll.scrollTop === y) return;
+      expectedScroll = { left: x, top: y };
+      canvasScroll.scrollLeft = x;
+      canvasScroll.scrollTop = y;
+    }
+
+    // keep: { worldX, worldY, viewX, viewY } pins that world point under that viewport point.
+    // Without keep, fit modes re-center; manual mode holds the world point at the view center.
+    function applyCanvasZoom(keep) {
+      var view = viewportContentBox();
+      var metrics = stageMetrics();
+      var fitting = workspaceMode() === "plot" && plotViewport.mode !== "manual";
+      if (!keep && !fitting && viewportLayoutState) {
+        var center = core.viewportWorldAt(viewportLayoutState, canvasScroll.scrollLeft, canvasScroll.scrollTop, viewportLayoutState.viewWidth / 2, viewportLayoutState.viewHeight / 2);
+        keep = { worldX: center.x, worldY: center.y, viewX: view.width / 2, viewY: view.height / 2 };
+      }
+      if (fitting && !keep && view.width > 40 && view.height > 40) {
+        plotViewport.zoom = plotViewport.mode === "fit-width"
+          ? core.fitWidthScale(metrics.width, view.width, core.VIEWPORT_GUTTER)
+          : core.fitContentScale(metrics.width, metrics.height, view.width, view.height, core.VIEWPORT_GUTTER);
+      }
+      var zoom = canvasZoom();
+      var layout = core.viewportLayout(view.width, view.height, metrics.width, metrics.height, zoom);
+      viewportLayoutState = layout;
+      canvasZoomEl.style.width = layout.surfaceWidth + "px";
+      canvasZoomEl.style.height = layout.surfaceHeight + "px";
+      var transform = "translate(" + layout.offsetX + "px, " + layout.offsetY + "px) scale(" + zoom + ")";
+      [paper, guidesEl].forEach(function (node) {
+        node.style.width = metrics.width + "px";
+        node.style.height = metrics.height + "px";
+        node.style.transform = transform;
+        node.style.transformOrigin = "0 0";
+      });
+      paintZoomLabel(zoom);
+      var target = keep
+        ? core.viewportScrollFor(layout, keep.worldX, keep.worldY, keep.viewX, keep.viewY)
+        : core.viewportCenterScroll(layout);
+      if (fitting && plotViewport.mode === "fit-width" && !keep) target.top = 0;
+      scrollViewport(target.left, target.top);
+    }
+
+    function setCanvasZoom(nextZoom, origin) {
       if (workspaceMode() === "plot") plotViewport.mode = "manual";
-      var oldZoom = canvasZoom();
-      var zoom = core.clampZoom(nextZoom);
       var rect = canvasScroll.getBoundingClientRect();
-      var offsetX = originEvent ? (originEvent.clientX - rect.left) : canvasScroll.clientWidth / 2;
-      var offsetY = originEvent ? (originEvent.clientY - rect.top) : canvasScroll.clientHeight / 2;
-      var worldX = (canvasScroll.scrollLeft + offsetX) / oldZoom;
-      var worldY = (canvasScroll.scrollTop + offsetY) / oldZoom;
-      writeDisplayZoom(zoom);
-      applyCanvasZoom({ worldX: worldX, worldY: worldY, offsetX: offsetX, offsetY: offsetY });
+      var viewX = origin ? origin.clientX - rect.left : canvasScroll.clientWidth / 2;
+      var viewY = origin ? origin.clientY - rect.top : canvasScroll.clientHeight / 2;
+      var layout = viewportLayoutState || core.viewportLayout(canvasScroll.clientWidth, canvasScroll.clientHeight, stageMetrics().width, stageMetrics().height, canvasZoom());
+      var now = Date.now();
+      // Reuse the anchor during one continuous gesture so integer scroll rounding cannot accumulate drift.
+      var held = zoomAnchor && now - zoomAnchor.time < 250 && zoomAnchor.viewX === viewX && zoomAnchor.viewY === viewY
+        && canvasScroll.scrollLeft === zoomAnchor.scrollLeft && canvasScroll.scrollTop === zoomAnchor.scrollTop;
+      var world = held ? zoomAnchor.world : core.viewportWorldAt(layout, canvasScroll.scrollLeft, canvasScroll.scrollTop, viewX, viewY);
+      writeDisplayZoom(nextZoom);
+      applyCanvasZoom({ worldX: world.x, worldY: world.y, viewX: viewX, viewY: viewY });
+      zoomAnchor = { time: now, viewX: viewX, viewY: viewY, world: world, scrollLeft: canvasScroll.scrollLeft, scrollTop: canvasScroll.scrollTop };
     }
 
     function fitCanvasView(kind) {
@@ -2057,11 +2093,10 @@
       }
       var view = viewportContentBox();
       var metrics = stageMetrics();
-      var zoom = kind === "width"
-        ? core.fitWidthScale(metrics.width, view.width, 16)
-        : core.fitContentScale(metrics.width, metrics.height, view.width, view.height, 16);
-      writeDisplayZoom(zoom);
-      applyCanvasZoom();
+      writeDisplayZoom(kind === "width"
+        ? core.fitWidthScale(metrics.width, view.width, core.VIEWPORT_GUTTER)
+        : core.fitContentScale(metrics.width, metrics.height, view.width, view.height, core.VIEWPORT_GUTTER));
+      applyCanvasZoom({ worldX: metrics.width / 2, worldY: kind === "width" ? 0 : metrics.height / 2, viewX: view.width / 2, viewY: kind === "width" ? core.VIEWPORT_GUTTER : view.height / 2 });
     }
 
     function showGuides(lines) {
@@ -2114,47 +2149,84 @@
       return unit ? text + " " + unit : text;
     }
 
-    function overviewTable(summary) {
-      var table = document.createElement("table");
-      var caption = document.createElement("caption");
-      caption.textContent = summary.sampled ? "等间隔抽样，不是完整数据。" : "全部有效点。";
-      var headRow = document.createElement("tr");
-      [summary.xName + (summary.xUnit ? "/" + summary.xUnit : ""), (summary.yName || "Y") + (summary.yUnit ? "/" + summary.yUnit : "")].forEach(function (text) {
-        var cell = document.createElement("th");
-        cell.textContent = text;
-        headRow.appendChild(cell);
-      });
-      table.append(caption, headRow);
-      (summary.sample || []).forEach(function (point) {
-        var tr = document.createElement("tr");
-        [point.x, point.y].forEach(function (value) {
-          var cell = document.createElement("td");
-          cell.textContent = formatOverviewNumber(value);
-          tr.appendChild(cell);
-        });
-        table.appendChild(tr);
-      });
-      return table;
+    function seriesTooltip(series, dataset) {
+      var summary = core.summarizeSeries(series, dataset);
+      var lines = [
+        summary.name,
+        summary.count + " pts" + (summary.missing ? "，缺失 " + summary.missing : ""),
+        (summary.xName || "X") + "  " + overviewRange(summary.xMin, summary.xMax, summary.xUnit),
+        "Y  " + overviewRange(summary.yMin, summary.yMax, summary.yUnit)
+      ];
+      if (summary.yMean != null) lines.push("均值  " + formatOverviewNumber(summary.yMean) + (summary.yUnit ? " " + summary.yUnit : ""));
+      return lines.join("\n");
     }
 
-    function overviewBlock(summary, datasetLevel) {
+    function formatImportedAt(value) {
+      var date = value ? new Date(value) : null;
+      if (!date || isNaN(date.getTime())) return "";
+      function two(n) { return n < 10 ? "0" + n : String(n); }
+      return date.getFullYear() + "-" + two(date.getMonth() + 1) + "-" + two(date.getDate()) + " " + two(date.getHours()) + ":" + two(date.getMinutes());
+    }
+
+    // Data group summary only: counts and ranges, never a second series list.
+    function clusterOverview(dataset) {
+      var summary = core.summarizeDataset(dataset);
+      var usage = core.datasetUsage(project, dataset, Array.from(checkedSeries), selectedPlotId);
+      var currentPlot = selectedPlot();
       var box = document.createElement("div");
-      box.className = "tv-overview";
-      function line(text) {
-        var p = document.createElement("p");
-        p.textContent = text;
-        box.appendChild(p);
+      box.className = "tv-cluster-pop";
+      box.setAttribute("role", "dialog");
+      box.setAttribute("aria-label", "数据簇概览 " + (dataset.name || ""));
+      var head = document.createElement("div");
+      head.className = "tv-cluster-pop-head";
+      var title = document.createElement("strong");
+      title.textContent = dataset.name || "未命名数据";
+      var close = document.createElement("button");
+      close.type = "button";
+      close.className = "tv-icon-button";
+      close.textContent = "×";
+      close.setAttribute("aria-label", "关闭概览");
+      close.addEventListener("click", function () {
+        overviewOpenId = null;
+        box.remove();
+      });
+      head.append(title, close);
+      var list = document.createElement("dl");
+      function row(label, value) {
+        if (value == null || value === "") return;
+        var dt = document.createElement("dt");
+        dt.textContent = label;
+        var dd = document.createElement("dd");
+        dd.textContent = value;
+        list.append(dt, dd);
       }
-      line(summary.name || "未命名");
-      if (datasetLevel) line("系列  " + summary.seriesCount);
-      line("点数  " + summary.count + (summary.missing ? "，缺失 " + summary.missing : ""));
-      line((summary.xName || "X") + "  " + overviewRange(summary.xMin, summary.xMax, summary.xUnit));
-      if (!datasetLevel) {
-        line((summary.yName || "Y") + "  " + overviewRange(summary.yMin, summary.yMax, summary.yUnit));
-        if (summary.yMean != null) line("均值  " + formatOverviewNumber(summary.yMean) + (summary.yUnit ? " " + summary.yUnit : ""));
-        box.appendChild(overviewTable(summary));
-      }
+      row("来源文件", summary.sourceFilename);
+      row("系列", usage.total + " 条");
+      row("已选", usage.selected + " / " + usage.total);
+      row("已加入图窗", usage.inAnyPlot + " / " + usage.total + (currentPlot && currentPlot.type !== "detail" ? "（当前图 " + usage.inCurrentPlot + "）" : ""));
+      row("有效点", summary.count.toLocaleString("en-US") + (summary.missing ? "，缺失 " + summary.missing.toLocaleString("en-US") : ""));
+      row("每条点数", summary.uniformPoints ? summary.maxPoints + "（一致）" : summary.minPoints + "–" + summary.maxPoints + "（不一致）");
+      row("X 列", summary.xName + (summary.xUnit ? "（" + summary.xUnit + "）" : ""));
+      row("X 范围", overviewRange(summary.xMin, summary.xMax, summary.xUnit));
+      row("Y 单位", summary.yUnits.length ? summary.yUnits.join("、") + (summary.yUnits.length > 1 ? "（多个单位）" : "") : "未标注");
+      row("导入时间", formatImportedAt(summary.importedAt));
+      box.append(head, list);
+      box.addEventListener("click", function (event) { event.stopPropagation(); });
       return box;
+    }
+
+    function syncClusterOverview() {
+      document.querySelectorAll(".tv-cluster-pop").forEach(function (node) { node.remove(); });
+      if (!overviewOpenId) return;
+      var dataset = core.findDataset(project, overviewOpenId);
+      var anchor = dataPanel.querySelector('.tv-dataset[data-dataset-id="' + CSS.escape(overviewOpenId) + '"] .tv-dataset-overview');
+      if (!dataset || !anchor) {
+        overviewOpenId = null;
+        return;
+      }
+      var pop = clusterOverview(dataset);
+      document.body.appendChild(pop);
+      placeFloating(pop, anchor, "bottom");
     }
 
     function selectedCount(dataset) {
@@ -2923,54 +2995,73 @@
       var mode = selectControl("颜色方式", draft.colorMode, [["single", "统一颜色"], ["palette", "Palette 分配"]]);
       var paletteOptions = (core.PALETTE_LIST || []).map(function (item) { return [item.id, item.label]; });
       var palette = selectControl("配色", draft.paletteId, paletteOptions.length ? paletteOptions : [["high-contrast", "自动高对比"]]);
-      function pushGroupColor() {
-        core.setGroupStyle(plot, dataset.id, {
-          colorMode: draft.colorMode,
-          paletteId: draft.paletteId,
-          color: draft.color
-        });
-        setDirty(true);
-        renderCanvas();
-        renderData();
+      function push(patch) {
+        patchSeriesStyle(plot, { datasetId: dataset.id }, patch);
       }
       mode.input.addEventListener("change", function () {
         draft.colorMode = mode.input.value;
         palette.wrap.hidden = draft.colorMode !== "palette";
-        pushGroupColor();
+        push(draft.colorMode === "palette"
+          ? { colorMode: "palette", paletteId: draft.paletteId }
+          : { colorMode: "single", color: draft.color });
       });
       palette.input.addEventListener("change", function () {
         draft.paletteId = palette.input.value;
-        pushGroupColor();
+        push({ colorMode: "palette", paletteId: draft.paletteId });
       });
       palette.wrap.hidden = draft.colorMode !== "palette";
-      var color = colorControl("颜色", stored.color || "#25884d", function (hex) {
+      var color = colorControl("颜色", draft.color, function (hex) {
         draft.color = hex;
-        if (draft.colorMode !== "palette") pushGroupColor();
+        if (draft.colorMode !== "palette") push({ color: hex });
       });
-      var lineType = lineTypeControl("线型", stored.lineType || "solid", function (id) { draft.lineType = id; });
-      var lineWidth = sliderNumberControl("线宽", stored.lineWidth == null ? 1.5 : stored.lineWidth, {
+      var lineType = lineTypeControl("线型", stored.lineType || null, function (id) {
+        draft.lineType = id;
+        push({ lineType: id });
+      });
+      var lineWidth = sliderNumberControl("线宽", draft.lineWidth, {
         min: core.LINE_WIDTH_MIN,
         max: core.LINE_WIDTH_MAX,
         step: core.LINE_WIDTH_STEP,
         unit: "px"
       });
-      lineWidth.onValue(function (value) { draft.lineWidth = value; });
+      lineWidth.onValue(function (value) {
+        draft.lineWidth = value;
+        push({ lineWidth: value });
+      });
       var apply = document.createElement("button");
       apply.type = "button";
-      apply.className = "tv-button tv-button--primary";
-      apply.textContent = "应用到该数据簇全部系列";
+      apply.className = "tv-button";
+      apply.textContent = "全部重新应用";
+      apply.title = "把上面的颜色、线型和线宽重新写到该数据簇全部系列，覆盖单独改过的系列";
       apply.addEventListener("click", function () {
         commitEdit("Group style", function () {
-          core.applyGroupStyle(project, plot, dataset.id, draft);
+          core.updateSeriesStyle(project, plot, { datasetId: dataset.id }, draft);
         });
-        openGroupStyleKey = null;
-        setStatus("已更新「" + (dataset.name || dataset.id) + "」在当前图中的样式。单独改过的系列需再次应用才会被覆盖。", "ok");
+        setStatus("已把「" + (dataset.name || dataset.id) + "」的样式重新应用到当前图中的全部系列。", "ok");
         renderAll();
       });
-      panel.addEventListener("pointerdown", function (event) { event.stopPropagation(); });
+      panel.addEventListener("pointerdown", function (event) { event.stopPropagation(); armStyleGesture(); });
+      panel.addEventListener("focusin", armStyleGesture);
+      panel.addEventListener("pointerup", finishStyleGesture);
+      panel.addEventListener("focusout", function (event) {
+        if (!panel.contains(event.relatedTarget)) finishStyleGesture();
+      });
       panel.addEventListener("click", function (event) { event.stopPropagation(); });
       panel.append(mode.wrap, palette.wrap, color.wrap, lineType.wrap, lineWidth.wrap, apply);
       return panel;
+    }
+
+    // Every series style editor goes through here so color, type and width share one path.
+    function patchSeriesStyle(plot, target, patch) {
+      core.updateSeriesStyle(project, plot, target, patch);
+      setDirty(true);
+      renderCanvas();
+      renderData();
+      var painted = {};
+      core.resolvePlotSeries(project, plot).forEach(function (item) { painted[item.series.id] = item.color; });
+      propsPanel.querySelectorAll(".tv-swatch[data-series-id]").forEach(function (node) {
+        if (painted[node.dataset.seriesId]) node.style.background = painted[node.dataset.seriesId];
+      });
     }
 
     function syncDatasetChecks(box, dataset) {
@@ -2979,6 +3070,7 @@
       });
       var count = box.querySelector(".tv-dataset-count");
       if (count) count.textContent = "已选 " + selectedCount(dataset) + "/" + dataset.series.length;
+      if (overviewOpenId === dataset.id) syncClusterOverview();
     }
 
     function renderData() {
@@ -2988,8 +3080,12 @@
         empty.className = "tv-hint";
         empty.textContent = "尚未导入数据。CSV 只要含可绘制的数值列即可；时间列或第一数值列将作为横坐标。";
         dataPanel.appendChild(empty);
+        syncClusterOverview();
         return;
       }
+      var painted = {};
+      var browserPlot = selectedPlot();
+      if (browserPlot) core.resolvePlotSeries(project, browserPlot).forEach(function (item) { painted[item.series.id] = item.color; });
       project.datasets.forEach(function (dataset) {
         var box = document.createElement("section");
         box.className = "tv-dataset";
@@ -3046,18 +3142,17 @@
         head.addEventListener("mousedown", function () { activeDatasetId = dataset.id; });
         var overview = document.createElement("button");
         overview.type = "button";
-        overview.className = "tv-button tv-button--tiny";
+        overview.className = "tv-button tv-button--tiny tv-dataset-overview";
         overview.textContent = "概览";
+        overview.setAttribute("aria-haspopup", "dialog");
+        overview.setAttribute("aria-expanded", overviewOpenId === dataset.id ? "true" : "false");
         overview.addEventListener("click", function (event) {
           event.stopPropagation();
-          var key = "dataset:" + dataset.id;
-          if (overviewOpen[key]) delete overviewOpen[key];
-          else overviewOpen[key] = true;
+          overviewOpenId = overviewOpenId === dataset.id ? null : dataset.id;
           renderData();
         });
         head.append(toggle, name, count, overview, remove);
         box.appendChild(head);
-        if (overviewOpen["dataset:" + dataset.id]) box.appendChild(overviewBlock(core.summarizeDataset(dataset), true));
         if (!collapsed) {
           var tools = document.createElement("div");
           tools.className = "tv-dataset-tools";
@@ -3119,29 +3214,17 @@
             });
             var dot = document.createElement("span");
             dot.className = "tv-series-dot";
-            dot.style.background = seriesBrowserColor(series);
+            dot.style.background = painted[series.id] || core.normalizeSeriesStyle(series.style, series.color).color || "#2477b6";
             var copy = document.createElement("span");
             copy.className = "tv-series-name";
             copy.textContent = core.seriesDisplayName(series);
-            copy.title = core.seriesDisplayName(series);
             var meta = document.createElement("small");
             meta.textContent = series.x.length + " pts";
-            var seriesInfo = document.createElement("button");
-            seriesInfo.type = "button";
-            seriesInfo.className = "tv-button tv-button--tiny";
-            seriesInfo.textContent = "概览";
-            seriesInfo.addEventListener("pointerdown", function (event) { event.stopPropagation(); });
-            seriesInfo.addEventListener("click", function (event) {
-              event.preventDefault();
-              event.stopPropagation();
-              var key = "series:" + series.id;
-              if (overviewOpen[key]) delete overviewOpen[key];
-              else overviewOpen[key] = true;
-              renderData();
+            row.addEventListener("pointerenter", function () {
+              if (!row.title) row.title = seriesTooltip(series, dataset);
             });
-            row.append(check, dot, copy, meta, seriesInfo);
+            row.append(check, dot, copy, meta);
             list.appendChild(row);
-            if (overviewOpen["series:" + series.id]) list.appendChild(overviewBlock(core.summarizeSeries(series, dataset), false));
           });
           box.appendChild(list);
         }
@@ -3224,6 +3307,7 @@
       hint.className = "tv-hint";
       hint.textContent = "左侧只负责选择数据。样式在右侧当前图里设置。Shift 连选，Ctrl/Cmd 点选，Ctrl/Cmd+A 全选当前数据簇。加入图后选择会清空。";
       dataPanel.appendChild(hint);
+      syncClusterOverview();
     }
 
     function pushHistory(label, before, after) {
@@ -5016,6 +5100,7 @@
       if (!project.ui) project.ui = core.normalizeUi(null);
       project.ui.workspaceMode = "canvas";
       if (canvasId) project.ui.activeCanvasId = canvasId;
+      viewportLayoutState = null;
       var canvas = activeCanvas();
       if (canvas) core.mirrorCanvas(project, canvas.id);
       selectedInstanceIds = [];
@@ -5037,8 +5122,25 @@
       setSelectedObject({ type: "plot", figureId: plot.id, objectId: plot.id });
       plotViewport.mode = "auto-fit";
       plotViewport.plotId = plot.id;
+      viewportLayoutState = null;
       rememberWorkspace();
       renderAll();
+    }
+
+    // Esc closes the top non-modal layer first; returns true when something closed.
+    function closeFloatingLayers() {
+      var closed = false;
+      var menu = document.getElementById("tvContext");
+      if (menu && !menu.hidden) {
+        closeContextMenu();
+        closed = true;
+      }
+      document.querySelectorAll(".tv-dock-popover, .tv-cluster-pop").forEach(function (node) {
+        node.remove();
+        closed = true;
+      });
+      if (closed) overviewOpenId = null;
+      return closed;
     }
 
     function closeContextMenu() {
@@ -5046,6 +5148,36 @@
       if (!menu) return;
       menu.hidden = true;
       menu.replaceChildren();
+    }
+
+    // Every non-modal floating layer is positioned here. node must already be in
+    // a top-level container (body) so no panel overflow or transform clips it.
+    function placeFloating(node, anchor, placement) {
+      var rect = anchor && anchor.getBoundingClientRect ? anchor.getBoundingClientRect() : anchor;
+      var vw = document.documentElement.clientWidth || window.innerWidth;
+      var vh = document.documentElement.clientHeight || window.innerHeight;
+      node.style.position = "fixed";
+      node.style.maxHeight = "";
+      node.style.maxWidth = (vw - 16) + "px";
+      node.style.left = "0px";
+      node.style.top = "0px";
+      var size = node.getBoundingClientRect();
+      var pos = core.computeOverlayPosition({
+        viewportWidth: vw,
+        viewportHeight: vh,
+        anchor: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom },
+        width: size.width,
+        height: size.height,
+        placement: placement
+      });
+      node.style.left = Math.round(pos.left) + "px";
+      node.style.top = Math.round(pos.top) + "px";
+      if (pos.maxHeight != null) {
+        node.style.maxHeight = Math.floor(pos.maxHeight) + "px";
+        node.style.overflowY = "auto";
+      }
+      node.dataset.side = pos.side;
+      return pos;
     }
 
     function openContextMenu(x, y, actions) {
@@ -5062,8 +5194,9 @@
         menu.appendChild(button);
       });
       menu.hidden = false;
-      menu.style.left = Math.max(8, x) + "px";
-      menu.style.top = Math.max(8, y) + "px";
+      placeFloating(menu, { left: x, top: y, right: x, bottom: y }, "point");
+      var first = menu.querySelector("button");
+      if (first) first.focus({ preventScroll: true });
     }
 
     function exportPlotTarget() {
@@ -5203,6 +5336,7 @@
       var name = document.createElement("span");
       name.className = "tv-dock-name";
       name.textContent = label;
+      button.setAttribute("aria-label", label);
       button.append(face, name);
       return button;
     }
@@ -5375,6 +5509,8 @@
         dockOpen = false;
         applyDockChrome();
         hideDockPreview();
+        hideDockTip();
+        document.querySelectorAll(".tv-dock-popover").forEach(function (node) { node.remove(); });
       }, 300);
     }
 
@@ -5414,13 +5550,21 @@
       preview.append(title, stage);
       preview.hidden = false;
       preview.style.width = width + "px";
-      var rect = anchor.getBoundingClientRect();
-      var left = rect.left + rect.width / 2 - width / 2;
-      left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
-      var top = rect.top - (height + 46);
-      if (top < 8) top = Math.min(window.innerHeight - height - 16, rect.bottom + 8);
-      preview.style.left = left + "px";
-      preview.style.top = Math.max(8, top) + "px";
+      placeFloating(preview, anchor, "top");
+    }
+
+    // Name tooltip for compact Dock icons without a figure preview (canvases, 新建).
+    function showDockTip(anchor, text) {
+      var tip = document.getElementById("tvDockTip");
+      if (!tip || dockPrefs.expanded) return;
+      tip.textContent = text;
+      tip.hidden = false;
+      placeFloating(tip, anchor, "top");
+    }
+
+    function hideDockTip() {
+      var tip = document.getElementById("tvDockTip");
+      if (tip) tip.hidden = true;
     }
 
     function scheduleDockPreview(plot, anchor) {
@@ -5442,11 +5586,15 @@
         if (!plot || dockPrefs.expanded) {
           clearTimeout(dockPreviewTimer);
           hideDockPreview();
+          if (!plot && !document.querySelector(".tv-dock-popover")) showDockTip(card, card.getAttribute("aria-label") || "");
           return;
         }
         scheduleDockPreview(plot, card);
       });
-      card.addEventListener("pointerleave", scheduleDockPreviewHide);
+      card.addEventListener("pointerleave", function () {
+        hideDockTip();
+        scheduleDockPreviewHide();
+      });
     }
 
     function renderDock() {
@@ -5598,10 +5746,20 @@
       var plus = dockCard("新建", "#ffffff", false);
       plus.classList.add("tv-dock-plus");
       plus.querySelector(".tv-dock-thumb").textContent = "+";
+      bindDockCardHover(plus, null);
       plus.addEventListener("click", function (event) {
         event.stopPropagation();
+        hideDockTip();
+        var open = document.querySelector(".tv-dock-popover");
+        if (open) {
+          open.remove();
+          return;
+        }
         var pop = document.createElement("div");
         pop.className = "tv-dock-popover";
+        pop.setAttribute("role", "menu");
+        pop.addEventListener("pointerenter", cancelDockHide);
+        pop.addEventListener("pointerleave", scheduleDockHide);
         [["新建图窗", function () { createFigure(defaultFigureTemplate()); }], ["新建画布", function () {
           var canvas = null;
           commitEdit("New canvas", function () { canvas = core.createCanvas(project, {}); });
@@ -5617,7 +5775,8 @@
           });
           pop.appendChild(button);
         });
-        plus.appendChild(pop);
+        document.body.appendChild(pop);
+        placeFloating(pop, plus, "top");
       });
       row.appendChild(plus);
       dock.append(head, row);
@@ -6911,6 +7070,7 @@
             });
             var swatch = document.createElement("span");
             swatch.className = "tv-swatch";
+            swatch.dataset.seriesId = ref.seriesId;
             swatch.style.background = (painted && painted.color) || "#2477b6";
             var names = document.createElement("div");
             names.className = "tv-series-names";
@@ -7410,11 +7570,12 @@
         var firstStyle = paintedStyle(refs[0]);
         var sameColor = refs.every(function (ref) { return paintedStyle(ref).color === firstStyle.color; });
         var sameWidth = refs.every(function (ref) { return paintedStyle(ref).lineWidth === firstStyle.lineWidth; });
+        var sameType = refs.every(function (ref) { return paintedStyle(ref).lineType === firstStyle.lineType; });
         var color = colorControl("颜色", sameColor ? (firstStyle.color || "#2477b6") : "#2477b6", function (hex) {
           patchStyle({ color: hex });
         }, { mixed: !sameColor });
         if (!sameColor) color.input.title = "所选 Series 颜色不同；仅在你明确设置后才会统一覆盖";
-        var lineType = lineTypeControl("线型", firstStyle.lineType, function (id) {
+        var lineType = lineTypeControl("线型", sameType ? firstStyle.lineType : null, function (id) {
           patchStyle({ lineType: id });
         });
         var lineWidth = sliderNumberControl("线宽", sameWidth ? firstStyle.lineWidth : "", {
@@ -7430,11 +7591,7 @@
         opacity.input.max = "1";
         opacity.input.step = "0.05";
         function patchStyle(patch) {
-          core.applySeriesStyle(plot, selectedIds, patch);
-          core.applyStyleToSeries(project, selectedIds, patch);
-          setDirty(true);
-          renderCanvas();
-          renderData();
+          patchSeriesStyle(plot, { seriesIds: selectedIds }, patch);
         }
         lineWidth.onValue(function (value) { patchStyle({ lineWidth: value }); });
         opacity.input.addEventListener("change", function () { patchStyle({ opacity: Number(opacity.input.value) }); });
@@ -8067,6 +8224,7 @@
       thumbCache = {};
       previewCache = {};
       plotViewport = { mode: "auto-fit", plotId: "", zoom: 1 };
+      viewportLayoutState = null;
       inspectorLocked = false;
       inspectorFilter = "";
       workspaceFocus = openedCanvas ? { type: "canvas", id: openedCanvas.id } : null;
@@ -8361,9 +8519,6 @@
       closeSnapMenu();
       var menu = document.createElement("div");
       menu.className = "tv-snap-pop";
-      var rect = anchor.getBoundingClientRect();
-      menu.style.left = Math.max(8, rect.left - 180) + "px";
-      menu.style.top = (rect.bottom + 6) + "px";
       ["splitH", "splitV", "grid2x2", "onePlusTwo", "twoPlusOne"].forEach(function (id) {
         var spec = core.LAYOUT_TEMPLATES[id];
         if (!spec) return;
@@ -8402,6 +8557,7 @@
         snapCloseTimer = setTimeout(closeSnapMenu, 220);
       });
       document.body.appendChild(menu);
+      placeFloating(menu, anchor, "bottom");
       snapMenu = menu;
     }
 
@@ -8460,9 +8616,6 @@
       layoutMenu = document.createElement("div");
       layoutMenu.className = "tv-layout-menu";
       var button = document.getElementById("tvLayout");
-      var rect = button.getBoundingClientRect();
-      layoutMenu.style.left = rect.left + "px";
-      layoutMenu.style.top = (rect.bottom + 4) + "px";
       Object.keys(core.LAYOUT_TEMPLATES).forEach(function (id) {
         var spec = core.LAYOUT_TEMPLATES[id];
         var choice = document.createElement("button");
@@ -8547,8 +8700,7 @@
         });
       }
       document.body.appendChild(layoutMenu);
-      var menuLeft = Math.min(rect.left, window.innerWidth - layoutMenu.offsetWidth - 8);
-      layoutMenu.style.left = Math.max(8, menuLeft) + "px";
+      placeFloating(layoutMenu, button, "bottom");
     }
 
     function bindSplitter(el, side) {
@@ -8861,8 +9013,8 @@
       if (layoutMenu && !layoutMenu.contains(event.target) && event.target.id !== "tvLayout") closeLayoutMenu();
       if (snapMenu && !snapMenu.contains(event.target) && !(event.target.closest && event.target.closest(".tv-plot-tools"))) closeSnapMenu();
     });
-    document.getElementById("tvZoomIn").addEventListener("click", function () { setCanvasZoom(canvasZoom() + core.ZOOM_STEP); });
-    document.getElementById("tvZoomOut").addEventListener("click", function () { setCanvasZoom(canvasZoom() - core.ZOOM_STEP); });
+    document.getElementById("tvZoomIn").addEventListener("click", function () { setCanvasZoom(core.steppedZoom(canvasZoom(), 1)); });
+    document.getElementById("tvZoomOut").addEventListener("click", function () { setCanvasZoom(core.steppedZoom(canvasZoom(), -1)); });
     document.getElementById("tvZoom100").addEventListener("click", function () { setCanvasZoom(1); });
     document.getElementById("tvZoomFit").addEventListener("click", function () { fitCanvasView("window"); });
     document.getElementById("tvZoomWidth").addEventListener("click", function () { fitCanvasView("width"); });
@@ -8893,20 +9045,39 @@
     document.addEventListener("pointermove", function (event) {
       if (dockPrefs.pinned || document.querySelector("dialog[open]")) return;
       var node = event.target;
-      var overDock = node && node.closest && (node.closest("#tvDock") || node.closest("#tvDockPreview"));
+      var overDock = node && node.closest && node.closest("#tvDock, #tvDockPreview, .tv-dock-popover");
       if (overDock || event.clientY >= window.innerHeight - 12) cancelDockHide();
       else scheduleDockHide();
     });
     if (typeof ResizeObserver === "function") {
+      // Side panels, splitters, pinned Dock and window size all land here.
       var viewportObserver = new ResizeObserver(function () {
-        if (viewportApplying) return;
-        if (workspaceMode() === "plot" && plotViewport.mode !== "manual") applyCanvasZoom();
+        if (!viewportLayoutState) return;
+        var view = viewportContentBox();
+        if (Math.abs(view.width - viewportLayoutState.viewWidth) < 1 && Math.abs(view.height - viewportLayoutState.viewHeight) < 1) return;
+        applyCanvasZoom();
       });
       viewportObserver.observe(canvasScroll);
     }
     canvasScroll.addEventListener("scroll", function () {
-      if (viewportApplying) return;
+      var expected = expectedScroll;
+      expectedScroll = null;
+      if (expected && Math.abs(canvasScroll.scrollLeft - expected.left) <= 1 && Math.abs(canvasScroll.scrollTop - expected.top) <= 1) return;
       if (workspaceMode() === "plot" && plotViewport.mode !== "manual") plotViewport.mode = "manual";
+    });
+    var zoomLabel = document.getElementById("tvZoomLabel");
+    zoomLabel.addEventListener("focus", function () { zoomLabel.select(); });
+    zoomLabel.addEventListener("keydown", function (event) {
+      if (event.key === "Enter") zoomLabel.blur();
+      if (event.key === "Escape") {
+        zoomLabel.value = Math.round(canvasZoom() * 100) + "%";
+        zoomLabel.blur();
+      }
+    });
+    zoomLabel.addEventListener("change", function () {
+      var percent = parseFloat(String(zoomLabel.value).replace("%", ""));
+      if (Number.isFinite(percent) && percent > 0) setCanvasZoom(percent / 100);
+      zoomLabel.value = Math.round(canvasZoom() * 100) + "%";
     });
     var inspectorHost = document.getElementById("tvInspector");
     inspectorHost.addEventListener("pointerenter", function () { inspectorLocked = true; });
@@ -8947,11 +9118,26 @@
     bindSplitter(document.getElementById("tvSplitLeft"), "left");
     bindSplitter(document.getElementById("tvSplitRight"), "right");
     canvasScroll.addEventListener("pointerdown", function () { canvasActive = true; });
+    // Pinch arrives as ctrlKey wheel; Ctrl/Cmd + mouse wheel zooms too. Plain wheel keeps scrolling.
+    // Events are folded into one zoom per frame, anchored at the latest pointer position.
+    var wheelZoom = null;
     canvasScroll.addEventListener("wheel", function (event) {
       if (!(event.ctrlKey || event.metaKey)) return;
       event.preventDefault();
-      var delta = event.deltaY > 0 ? -core.ZOOM_STEP : core.ZOOM_STEP;
-      setCanvasZoom(canvasZoom() + delta, event);
+      var isPinch = event.ctrlKey && !event.metaKey && event.deltaMode === 0 && Math.abs(event.deltaY) < 50;
+      var factor = core.wheelZoomFactor(event.deltaY, event.deltaMode, isPinch);
+      if (wheelZoom) {
+        wheelZoom.factor *= factor;
+        wheelZoom.clientX = event.clientX;
+        wheelZoom.clientY = event.clientY;
+        return;
+      }
+      wheelZoom = { factor: factor, clientX: event.clientX, clientY: event.clientY };
+      requestAnimationFrame(function () {
+        var pending = wheelZoom;
+        wheelZoom = null;
+        setCanvasZoom(canvasZoom() * pending.factor, pending);
+      });
     }, { passive: false });
     document.getElementById("tvPreview").addEventListener("click", showPreview);
     document.getElementById("tvPreviewClose").addEventListener("click", function () {
@@ -9017,7 +9203,12 @@
       placeDraggedPlot(payload.slice(5), event.clientX, event.clientY);
     });
     document.addEventListener("click", function (event) {
-      if (event.target.closest && event.target.closest(".tv-context, .tv-dock-popover")) return;
+      if (event.target.closest && event.target.closest(".tv-context, .tv-dock-popover, .tv-cluster-pop")) return;
+      if (overviewOpenId && !dataPanel.contains(event.target)) {
+        overviewOpenId = null;
+        syncClusterOverview();
+        renderData();
+      }
       closeContextMenu();
       document.querySelectorAll(".tv-dock-popover").forEach(function (node) { node.remove(); });
     });
@@ -9042,6 +9233,10 @@
       dataPanelActive = false;
     });
     document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape" && closeFloatingLayers()) {
+        event.preventDefault();
+        return;
+      }
       var readoutOpen = interactionMode === "cursor" && !document.getElementById("tvInspector").hidden;
       if (readoutOpen && !isTextEntry(document.activeElement) && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
         event.preventDefault();
@@ -9114,12 +9309,12 @@
       if ((event.ctrlKey || event.metaKey) && (canvasActive || canvasScroll.contains(document.activeElement))) {
         if (event.key === "=" || event.key === "+") {
           event.preventDefault();
-          setCanvasZoom(canvasZoom() + core.ZOOM_STEP);
+          setCanvasZoom(core.steppedZoom(canvasZoom(), 1));
           return;
         }
         if (event.key === "-" || event.key === "_") {
           event.preventDefault();
-          setCanvasZoom(canvasZoom() - core.ZOOM_STEP);
+          setCanvasZoom(core.steppedZoom(canvasZoom(), -1));
           return;
         }
         if (event.key === "0") {

@@ -4,7 +4,7 @@
 
   var APP_INFO = Object.freeze({
     name: "Visualizer",
-    version: "0.6.1",
+    version: "0.6.2",
     repositoryOwner: "aidisen975-cmd",
     repositoryName: "Visualizer",
     updateChannel: "stable"
@@ -28,6 +28,11 @@
   var ZOOM_MAX = 8;
   var PX_PER_MM = 96 / 25.4;
   var ZOOM_STEP = 0.1;
+  var VIEWPORT_GUTTER = 24;
+  // ponytail: tuned by hand on Mac Chrome pinch and Windows wheel notches (deltaY 100); retune here.
+  var PINCH_ZOOM_GAIN = 0.004;
+  var WHEEL_ZOOM_GAIN = 0.0015;
+  var WHEEL_ZOOM_MAX_STEP = 0.2;
   var SNAP_SCREEN_PX = 8;
   var DEFAULT_FIGURE_WIDTH = 1280;
   var DEFAULT_FIGURE_HEIGHT = 800;
@@ -1147,41 +1152,78 @@
     return next;
   }
 
+  // Only the fields present in patch are written; other fields and their overrides stay.
   function applyGroupStyle(project, plot, datasetId, patch) {
-    if (!plot || !datasetId) return null;
+    if (!plot || !datasetId || !patch) return null;
     if (!plot.groupStyles) plot.groupStyles = {};
     var prev = plot.groupStyles[datasetId] || {};
     var next = {
-      colorMode: patch && patch.colorMode === "palette" ? "palette" : (patch && patch.colorMode === "single" ? "single" : (prev.colorMode || "single")),
-      paletteId: (patch && patch.paletteId) || prev.paletteId || "high-contrast",
+      colorMode: prev.colorMode === "palette" ? "palette" : "single",
+      paletteId: prev.paletteId || "high-contrast",
       color: prev.color || null,
       lineType: prev.lineType || null,
       lineWidth: prev.lineWidth != null ? prev.lineWidth : null
     };
-    if (patch && patch.color) {
-      var hex = normalizeHexColor(patch.color);
-      if (hex) next.color = hex;
+    var touchesColor = false;
+    if (patch.colorMode === "palette" || patch.colorMode === "single") {
+      next.colorMode = patch.colorMode;
+      touchesColor = true;
     }
-    if (patch && LINE_TYPES.indexOf(patch.lineType) >= 0) next.lineType = patch.lineType;
-    if (patch && patch.lineWidth != null && Number.isFinite(Number(patch.lineWidth))) {
-      next.lineWidth = clamp(Number(patch.lineWidth), LINE_WIDTH_MIN, LINE_WIDTH_MAX);
+    if (patch.paletteId && (patch.paletteId === "high-contrast" || FIXED_PALETTES[patch.paletteId])) {
+      next.paletteId = patch.paletteId;
+      touchesColor = touchesColor || next.colorMode === "palette";
     }
+    var hex = patch.color ? normalizeHexColor(patch.color) : null;
+    if (hex) {
+      next.color = hex;
+      touchesColor = touchesColor || next.colorMode === "single";
+    }
+    if (touchesColor && next.colorMode === "single" && !next.color) touchesColor = false;
+    var touchesType = LINE_TYPES.indexOf(patch.lineType) >= 0;
+    if (touchesType) next.lineType = patch.lineType;
+    var touchesWidth = patch.lineWidth != null && patch.lineWidth !== "" && Number.isFinite(Number(patch.lineWidth));
+    if (touchesWidth) next.lineWidth = clamp(Number(patch.lineWidth), LINE_WIDTH_MIN, LINE_WIDTH_MAX);
     plot.groupStyles[datasetId] = next;
     var index = 0;
     (plot.seriesRefs || []).forEach(function (ref) {
       var series = findSeries(project, ref.seriesId);
       if (!series || series.datasetId !== datasetId) return;
-      ref.styleOverrides = {};
-      var color = next.colorMode === "palette" ? paletteColor(next.paletteId, index) : next.color;
+      var slot = index;
       index += 1;
+      if (!ref.styleOverrides) ref.styleOverrides = {};
       var stylePatch = {};
-      if (color) stylePatch.color = color;
-      if (next.lineType) stylePatch.lineType = next.lineType;
-      if (next.lineWidth != null) stylePatch.lineWidth = next.lineWidth;
+      if (touchesColor) {
+        stylePatch.color = next.colorMode === "palette" ? paletteColor(next.paletteId, slot) : next.color;
+        delete ref.styleOverrides.color;
+      }
+      if (touchesType) {
+        stylePatch.lineType = next.lineType;
+        delete ref.styleOverrides.lineType;
+      }
+      if (touchesWidth) {
+        stylePatch.lineWidth = next.lineWidth;
+        delete ref.styleOverrides.lineWidth;
+      }
       ref.style = patchStyleObject(ref.style, stylePatch, ref.color);
       ref.color = ref.style.color || ref.color;
     });
     return next;
+  }
+
+  // Single entry for every series style editor. target is { datasetId } (whole
+  // data group in this plot) or { seriesIds } (only those refs in this plot).
+  function updateSeriesStyle(project, plot, target, patch) {
+    if (!plot || !target || !patch) return [];
+    if (target.datasetId) {
+      applyGroupStyle(project, plot, target.datasetId, patch);
+      return (plot.seriesRefs || []).filter(function (ref) {
+        var series = findSeries(project, ref.seriesId);
+        return series && series.datasetId === target.datasetId;
+      }).map(function (ref) { return ref.seriesId; });
+    }
+    var ids = target.seriesIds || [];
+    applySeriesStyle(plot, ids, patch);
+    return ids;
   }
 
   function setGroupStyle(plot, datasetId, patch) {
@@ -1996,6 +2038,106 @@
     return clampZoom(Math.min(availableWidth / width, availableHeight / height));
   }
 
+  // Scroll surface for a zoomed stage: the stage (world * zoom) sits inside equal
+  // gutters, and is centered when smaller than the visible viewport. Every
+  // world <-> viewport conversion goes through offsetX/offsetY from here.
+  function viewportLayout(viewWidth, viewHeight, worldWidth, worldHeight, zoom, gutter) {
+    var z = clampZoom(zoom);
+    var g = gutter == null ? VIEWPORT_GUTTER : Math.max(0, Number(gutter) || 0);
+    var vw = Math.max(1, Number(viewWidth) || 1);
+    var vh = Math.max(1, Number(viewHeight) || 1);
+    var cw = Math.max(1, Number(worldWidth) || 1) * z;
+    var ch = Math.max(1, Number(worldHeight) || 1) * z;
+    var sw = cw + 2 * g > vw + 0.5 ? Math.ceil(cw + 2 * g) : vw;
+    var sh = ch + 2 * g > vh + 0.5 ? Math.ceil(ch + 2 * g) : vh;
+    return {
+      zoom: z,
+      viewWidth: vw,
+      viewHeight: vh,
+      contentWidth: cw,
+      contentHeight: ch,
+      surfaceWidth: sw,
+      surfaceHeight: sh,
+      offsetX: (sw - cw) / 2,
+      offsetY: (sh - ch) / 2,
+      maxScrollLeft: Math.max(0, sw - vw),
+      maxScrollTop: Math.max(0, sh - vh)
+    };
+  }
+
+  function viewportWorldAt(layout, scrollLeft, scrollTop, viewX, viewY) {
+    return {
+      x: (Number(scrollLeft) + Number(viewX) - layout.offsetX) / layout.zoom,
+      y: (Number(scrollTop) + Number(viewY) - layout.offsetY) / layout.zoom
+    };
+  }
+
+  // Scroll that puts world point (worldX, worldY) under viewport point (viewX, viewY).
+  function viewportScrollFor(layout, worldX, worldY, viewX, viewY) {
+    return {
+      left: clamp(layout.offsetX + Number(worldX) * layout.zoom - Number(viewX), 0, layout.maxScrollLeft),
+      top: clamp(layout.offsetY + Number(worldY) * layout.zoom - Number(viewY), 0, layout.maxScrollTop)
+    };
+  }
+
+  function viewportCenterScroll(layout) {
+    return { left: layout.maxScrollLeft / 2, top: layout.maxScrollTop / 2 };
+  }
+
+  // Continuous zoom for wheel / trackpad input. deltaMode 1 = lines, 2 = pages.
+  // Pinch (ctrlKey wheel) deltas are small and frequent; mouse wheel notches are
+  // large, so each kind gets its own gain and the per-event change is capped.
+  function wheelZoomFactor(deltaY, deltaMode, isPinch) {
+    var dy = Number(deltaY) || 0;
+    if (deltaMode === 1) dy *= 16;
+    else if (deltaMode === 2) dy *= 400;
+    var gain = isPinch ? PINCH_ZOOM_GAIN : WHEEL_ZOOM_GAIN;
+    var step = clamp(-dy * gain, -WHEEL_ZOOM_MAX_STEP, WHEEL_ZOOM_MAX_STEP);
+    return Math.exp(step);
+  }
+
+  // Viewport-safe placement for menus, tooltips and popovers.
+  // anchor: { left, top, right, bottom } in viewport px (a point when left === right).
+  // placement: "top" | "bottom" (centered on anchor for "top", start-aligned for "bottom") | "point".
+  // Flips to the side with more room, shifts back inside the margin, and caps
+  // maxHeight when neither side fits so the content scrolls instead of being cut.
+  function computeOverlayPosition(opts) {
+    var vw = Math.max(1, Number(opts.viewportWidth) || 1);
+    var vh = Math.max(1, Number(opts.viewportHeight) || 1);
+    var m = opts.margin == null ? 8 : Number(opts.margin);
+    var gap = opts.gap == null ? (opts.placement === "point" ? 2 : 6) : Number(opts.gap);
+    var a = opts.anchor;
+    var w = Math.min(Number(opts.width) || 0, vw - 2 * m);
+    var h = Number(opts.height) || 0;
+    var placement = opts.placement || "bottom";
+    var left;
+    if (placement === "top") left = (a.left + a.right) / 2 - w / 2;
+    else if (placement === "point") left = a.left + w + m <= vw ? a.left : a.left - w;
+    else left = a.left;
+    left = clamp(left, m, Math.max(m, vw - w - m));
+    var roomAbove = a.top - gap - m;
+    var roomBelow = vh - a.bottom - gap - m;
+    var wantAbove = placement === "top";
+    var above = wantAbove ? (h <= roomAbove || roomAbove >= roomBelow) : (h > roomBelow && roomAbove > roomBelow);
+    var room = Math.max(0, above ? roomAbove : roomBelow);
+    var maxHeight = null;
+    if (h > room) {
+      if (h <= vh - 2 * m) room = h;
+      else maxHeight = vh - 2 * m;
+    }
+    var shown = maxHeight == null ? h : maxHeight;
+    var top = above ? a.top - gap - shown : a.bottom + gap;
+    top = clamp(top, m, Math.max(m, vh - shown - m));
+    return { left: left, top: top, maxHeight: maxHeight, side: above ? "top" : "bottom" };
+  }
+
+  // Toolbar / keyboard zoom: next 10% mark, so 123% goes to 130% or 120%.
+  function steppedZoom(zoom, direction) {
+    var tenths = Number(zoom) * 10;
+    var next = direction > 0 ? Math.floor(tenths + 1e-6) + 1 : Math.ceil(tenths - 1e-6) - 1;
+    return clampZoom(next / 10);
+  }
+
   function fitWidthScale(contentWidth, viewportWidth, padding) {
     var pad = padding == null ? 24 : padding;
     var availableWidth = Math.max(1, Number(viewportWidth) || 1) - pad * 2;
@@ -2103,23 +2245,59 @@
     var xMax = -Infinity;
     var count = 0;
     var missing = 0;
+    var minPoints = Infinity;
+    var maxPoints = -Infinity;
+    var yUnits = [];
     series.forEach(function (item) {
       count += item.count;
       missing += item.missing;
+      minPoints = Math.min(minPoints, item.count);
+      maxPoints = Math.max(maxPoints, item.count);
+      if (item.yUnit && yUnits.indexOf(item.yUnit) < 0) yUnits.push(item.yUnit);
       if (item.xMin != null) xMin = Math.min(xMin, item.xMin);
       if (item.xMax != null) xMax = Math.max(xMax, item.xMax);
     });
     return {
       datasetId: String(source.id || ""),
       name: String(source.name || ""),
+      sourceFilename: String(source.sourceFilename || ""),
+      importedAt: String(source.importedAt || ""),
       seriesCount: series.length,
       count: count,
       missing: missing,
+      minPoints: series.length ? minPoints : 0,
+      maxPoints: series.length ? maxPoints : 0,
+      uniformPoints: !series.length || minPoints === maxPoints,
+      yUnits: yUnits,
       xMin: xMin === Infinity ? null : xMin,
       xMax: xMax === -Infinity ? null : xMax,
       xName: source.xName ? String(source.xName) : "X",
       xUnit: datasetXUnit(source),
       series: series
+    };
+  }
+
+  // Live membership counts for one data group. selectedIds is the left-panel
+  // temporary selection; plot membership is read from plot windows, never cached.
+  function datasetUsage(project, dataset, selectedIds, currentPlotId) {
+    var own = {};
+    ((dataset && dataset.series) || []).forEach(function (series) { own[series.id] = true; });
+    var selected = {};
+    (selectedIds || []).forEach(function (id) { if (own[id]) selected[id] = true; });
+    var inAny = {};
+    var inCurrent = {};
+    plotWindows(project).forEach(function (plot) {
+      (plot.seriesRefs || []).forEach(function (ref) {
+        if (!own[ref.seriesId]) return;
+        inAny[ref.seriesId] = true;
+        if (plot.id === currentPlotId) inCurrent[ref.seriesId] = true;
+      });
+    });
+    return {
+      total: Object.keys(own).length,
+      selected: Object.keys(selected).length,
+      inAnyPlot: Object.keys(inAny).length,
+      inCurrentPlot: Object.keys(inCurrent).length
     };
   }
 
@@ -4343,6 +4521,7 @@
     applyStyleToSeries: applyStyleToSeries,
     applyStyleToDataset: applyStyleToDataset,
     applyGroupStyle: applyGroupStyle,
+    updateSeriesStyle: updateSeriesStyle,
     resolveSeriesStyle: resolveSeriesStyle,
     normalizeGroupStyles: normalizeGroupStyles,
     LINE_WIDTH_MIN: LINE_WIDTH_MIN,
@@ -4468,6 +4647,15 @@
     fitViewZoom: fitViewZoom,
     fitContentScale: fitContentScale,
     fitWidthScale: fitWidthScale,
+    VIEWPORT_GUTTER: VIEWPORT_GUTTER,
+    viewportLayout: viewportLayout,
+    viewportWorldAt: viewportWorldAt,
+    viewportScrollFor: viewportScrollFor,
+    viewportCenterScroll: viewportCenterScroll,
+    wheelZoomFactor: wheelZoomFactor,
+    steppedZoom: steppedZoom,
+    computeOverlayPosition: computeOverlayPosition,
+    datasetUsage: datasetUsage,
     mmToPx: mmToPx,
     pxToMm: pxToMm,
     applyFigureColumn: applyFigureColumn,
