@@ -4,7 +4,7 @@
 
   var APP_INFO = Object.freeze({
     name: "Visualizer",
-    version: "0.6.0",
+    version: "0.6.1",
     repositoryOwner: "aidisen975-cmd",
     repositoryName: "Visualizer",
     updateChannel: "stable"
@@ -25,7 +25,8 @@
   var TIME_LABELS = { ms: "ms", s: "s", min: "min", h: "h" };
   var MAX_MAJOR_TICKS = 500;
   var ZOOM_MIN = 0.25;
-  var ZOOM_MAX = 3;
+  var ZOOM_MAX = 8;
+  var PX_PER_MM = 96 / 25.4;
   var ZOOM_STEP = 0.1;
   var SNAP_SCREEN_PX = 8;
   var DEFAULT_FIGURE_WIDTH = 1280;
@@ -1983,6 +1984,143 @@
       (Math.max(1, viewportHeight) - pad * 2) / box.height
     );
     return clampZoom(zoom);
+  }
+
+  function fitContentScale(contentWidth, contentHeight, viewportWidth, viewportHeight, padding) {
+    var pad = padding == null ? 24 : padding;
+    var availableWidth = Math.max(1, Number(viewportWidth) || 1) - pad * 2;
+    var availableHeight = Math.max(1, Number(viewportHeight) || 1) - pad * 2;
+    var width = Number(contentWidth);
+    var height = Number(contentHeight);
+    if (!(width > 0) || !(height > 0) || !(availableWidth > 0) || !(availableHeight > 0)) return 1;
+    return clampZoom(Math.min(availableWidth / width, availableHeight / height));
+  }
+
+  function fitWidthScale(contentWidth, viewportWidth, padding) {
+    var pad = padding == null ? 24 : padding;
+    var availableWidth = Math.max(1, Number(viewportWidth) || 1) - pad * 2;
+    var width = Number(contentWidth);
+    if (!(width > 0) || !(availableWidth > 0)) return 1;
+    return clampZoom(availableWidth / width);
+  }
+
+  function mmToPx(mm) {
+    var value = Number(mm);
+    if (!Number.isFinite(value)) return 0;
+    return Math.round(value * PX_PER_MM);
+  }
+
+  function pxToMm(px) {
+    var value = Number(px);
+    if (!Number.isFinite(value)) return 0;
+    return Math.round((value / PX_PER_MM) * 10) / 10;
+  }
+
+  function applyFigureColumn(plot, mm) {
+    if (!plot || !plot.layout) return plot;
+    var width = mmToPx(mm);
+    if (!(width > 0)) return plot;
+    var height = plot.layout.height;
+    plot.layout.width = Math.max(240, width);
+    plot.layout.height = height;
+    if (plot.lockAspect) plot.aspectRatio = height ? plot.layout.width / height : plot.aspectRatio;
+    return plot;
+  }
+
+  function datasetXUnit(dataset) {
+    if (!dataset) return "";
+    if (dataset.xUnit) return String(dataset.xUnit);
+    if (dataset.xIsTime && dataset.timeUnit) return String(dataset.timeUnit);
+    return "";
+  }
+
+  function overviewSample(points, count) {
+    if (!points.length) return [];
+    if (points.length <= count) {
+      return points.map(function (point) { return { x: point.x, y: point.y }; });
+    }
+    var rows = [];
+    var last = -1;
+    var steps = count - 1;
+    for (var i = 0; i < count; i += 1) {
+      var index = Math.round(i * (points.length - 1) / steps);
+      if (index === last) continue;
+      last = index;
+      rows.push({ x: points[index].x, y: points[index].y });
+    }
+    return rows;
+  }
+
+  function summarizeSeries(series, dataset) {
+    var source = series || {};
+    var xs = source.x || [];
+    var ys = source.y || [];
+    var n = Math.min(xs.length, ys.length);
+    var finite = [];
+    var missing = 0;
+    var minX = Infinity;
+    var maxX = -Infinity;
+    var minY = Infinity;
+    var maxY = -Infinity;
+    var sumY = 0;
+    for (var i = 0; i < n; i += 1) {
+      var x = xs[i] == null || xs[i] === "" ? NaN : Number(xs[i]);
+      var y = ys[i] == null || ys[i] === "" ? NaN : Number(ys[i]);
+      if (!Number.isFinite(y)) missing += 1;
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      finite.push({ x: x, y: y });
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+      sumY += y;
+    }
+    var sample = overviewSample(finite, 5);
+    return {
+      seriesId: String(source.id || ""),
+      datasetId: String(source.datasetId || (dataset && dataset.id) || ""),
+      name: seriesDisplayName(source),
+      count: finite.length,
+      missing: missing,
+      xMin: finite.length ? minX : null,
+      xMax: finite.length ? maxX : null,
+      yMin: finite.length ? minY : null,
+      yMax: finite.length ? maxY : null,
+      yMean: finite.length ? sumY / finite.length : null,
+      xName: dataset && dataset.xName ? String(dataset.xName) : "X",
+      yName: seriesDisplayName(source),
+      xUnit: datasetXUnit(dataset),
+      yUnit: String(source.unit || ""),
+      sample: sample,
+      sampled: finite.length > sample.length
+    };
+  }
+
+  function summarizeDataset(dataset) {
+    var source = dataset || { series: [] };
+    var series = (source.series || []).map(function (item) { return summarizeSeries(item, source); });
+    var xMin = Infinity;
+    var xMax = -Infinity;
+    var count = 0;
+    var missing = 0;
+    series.forEach(function (item) {
+      count += item.count;
+      missing += item.missing;
+      if (item.xMin != null) xMin = Math.min(xMin, item.xMin);
+      if (item.xMax != null) xMax = Math.max(xMax, item.xMax);
+    });
+    return {
+      datasetId: String(source.id || ""),
+      name: String(source.name || ""),
+      seriesCount: series.length,
+      count: count,
+      missing: missing,
+      xMin: xMin === Infinity ? null : xMin,
+      xMax: xMax === -Infinity ? null : xMax,
+      xName: source.xName ? String(source.xName) : "X",
+      xUnit: datasetXUnit(source),
+      series: series
+    };
   }
 
   function syncCanvasToPlots(project) {
@@ -4328,6 +4466,13 @@
     worldToScreen: worldToScreen,
     plotsBoundingBox: plotsBoundingBox,
     fitViewZoom: fitViewZoom,
+    fitContentScale: fitContentScale,
+    fitWidthScale: fitWidthScale,
+    mmToPx: mmToPx,
+    pxToMm: pxToMm,
+    applyFigureColumn: applyFigureColumn,
+    summarizeSeries: summarizeSeries,
+    summarizeDataset: summarizeDataset,
     syncCanvasToPlots: syncCanvasToPlots,
     setPlotSize: setPlotSize,
     layoutSlots: layoutSlots,

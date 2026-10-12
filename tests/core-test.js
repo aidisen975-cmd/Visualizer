@@ -265,7 +265,7 @@ assert(replaced[0].after === "Cell Voltage", "查找替换");
 var coord = core.screenToWorld(500, 400, 0.5);
 assert(coord.x === 1000 && coord.y === 800, "screenToWorld 使用 zoom");
 assert(core.worldToScreen(1000, 800, 0.5).x === 500, "worldToScreen 反向");
-assert(core.clampZoom(0.05) === 0.25 && core.clampZoom(9) === 3, "zoom 限制 25%–300%");
+assert(core.clampZoom(0.05) === 0.25 && core.clampZoom(12) === 8, "zoom 限制 25%–800%");
 
 var layoutPlots = [
   { layout: { x: 0, y: 0, width: 1280, height: 800 } },
@@ -296,6 +296,37 @@ var fit = core.fitViewZoom([
   { layout: { x: 1300, y: 820, width: 1280, height: 800 } }
 ], 1000, 700, 40);
 assert(fit < 1 && fit >= 0.25, "Fit View 缩小以容纳四图");
+var fitted = core.fitContentScale(336, 227, 1200, 800, 24);
+assert(fitted > 1, "小图窗适应窗口时允许放大");
+assert(Math.abs(fitted - Math.min((1200 - 48) / 336, (800 - 48) / 227)) < 1e-9, "适应窗口取宽高中较小的比例");
+assert(Math.abs(core.fitContentScale(1000, 200, 500, 800, 0) - 0.5) < 1e-9, "宽图适应窗口受宽度限制");
+assert(Math.abs(core.fitWidthScale(1000, 500, 0) - 0.5) < 1e-9, "适应宽度不看高度");
+assert(core.fitWidthScale(200, 800, 0) > 1, "窄图适应宽度可以放大");
+assert(core.mmToPx(89) === 336 && core.mmToPx(183) === 692, "单栏 89 mm、双栏 183 mm 对应既有像素");
+var columnPlot = { layout: { width: 400, height: 260 }, lockAspect: true, aspectRatio: 400 / 260 };
+core.applyFigureColumn(columnPlot, 183);
+assert(columnPlot.layout.width === 692 && columnPlot.layout.height === 260, "单双栏只改宽度");
+var cell = core.summarizeSeries({
+  id: "series-a",
+  datasetId: "ds-a",
+  displayName: "T1",
+  unit: "°C",
+  x: [0, 20, 40, 60],
+  y: [24.8, 39.2, null, 48.6]
+}, { id: "ds-a", name: "电芯表面", xName: "Time", xUnit: "min", xIsTime: true, timeUnit: "min" });
+assert(cell.count === 3 && cell.missing === 1, "概览计入有效点与缺失值");
+assert(cell.xMin === 0 && cell.xMax === 60 && cell.xUnit === "min", "概览沿用数据自己的 X 单位");
+assert(cell.yUnit === "°C" && cell.yMin === 24.8 && cell.yMax === 48.6, "概览 Y 范围来自该系列");
+assert(cell.sampled === false && cell.sample.length === 3, "点数很少时不把抽样说成更多");
+var sameName = core.summarizeSeries({ id: "series-b", datasetId: "ds-b", displayName: "T1", unit: "V", x: [0, 1], y: [9, 8] }, { id: "ds-b", xName: "t", xUnit: "s" });
+assert(cell.seriesId !== sameName.seriesId && sameName.yMax === 9 && sameName.yUnit === "V", "同名系列按 ID 分开摘要");
+var longSeries = { id: "long", displayName: "I", unit: "A", x: [], y: [] };
+for (var sampleI = 0; sampleI < 20; sampleI += 1) {
+  longSeries.x.push(sampleI);
+  longSeries.y.push(sampleI);
+}
+var sampled = core.summarizeSeries(longSeries, { id: "ds-c", xName: "t", xUnit: "s" });
+assert(sampled.sampled && sampled.sample.length === 5 && sampled.sample[0].x === 0 && sampled.sample[4].x === 19, "长序列等间隔抽样");
 
 var moving = { layout: { x: 102, y: 40, width: 200, height: 100 } };
 var snapped = core.snapPlotMove(moving, [{ layout: { x: 40, y: 40, width: 200, height: 100 } }], { width: 2000, height: 1000 }, 1);
@@ -308,7 +339,7 @@ assert(legend.columns >= 2, "大量图例自动多列");
 assert(legend.placed.length >= 20, "多列后尽量保留图例项");
 
 var v021 = core.parseProject(core.serializeProject(elecProject));
-assert(v021.softwareVersion === "0.6.0", "新工程写入 0.6.0");
+assert(v021.softwareVersion === "0.6.1", "新工程写入 0.6.1");
 assert(v021.schemaVersion === 2, "新工程写入 schemaVersion 2");
 assert(v021.plots[0].legend.visible === true, "legend 随工程保存");
 assert(v021.ui.leftPanelWidth >= 220, "ui layout 随工程保存");
@@ -442,7 +473,7 @@ var oldMigrated = core.parseProject(readFixture("TESTDATA_v010.tvproj.json"));
 assert(oldMigrated.plots[0].seriesRefs[0].style && oldMigrated.plots[0].seriesRefs[0].style.lineWidth === 1.5, "旧工程补齐 series.style");
 assert(oldMigrated.plots[0].xAxis.time && oldMigrated.plots[0].xAxis.time.displayUnit, "旧工程补齐 per-chart time");
 assert(oldMigrated.plots[0].textStyles && oldMigrated.plots[0].textStyles.title.fontSize === 14, "旧工程补齐 textStyles");
-assert(oldMigrated.softwareVersion === "0.6.0", "打开后 working copy 版本为 0.6.0，源文件未改");
+assert(oldMigrated.softwareVersion === "0.6.1", "打开后 working copy 版本为 0.6.1，源文件未改");
 assert(oldMigrated.plots[0].type === "normal" && oldMigrated.plots[0].topEdge.showLine === false, "旧工程补上普通图和默认关闭的上边轴");
 assert(oldMigrated.plots[0].xAxis.showLine === true && oldMigrated.plots[0].xAxis.showTickLabels === true && oldMigrated.plots[0].xAxis.tickDirection === "out", "旧工程底轴默认轴线、刻度标签和向外刻度");
 assert(oldMigrated.plots[0].showTitle === true && oldMigrated.plots[0].title !== "未命名图", "旧工程有标题时显示标题，不回写成未命名图");
@@ -552,7 +583,7 @@ assert(huge.grown, "文字过大时允许增大 Figure");
 assert(huge.plotArea.width >= core.FIGURE_LAYOUT.minPlotWidth, "Plot Area 不低于最小宽度");
 assert(huge.plotArea.height >= core.FIGURE_LAYOUT.minPlotHeight, "Plot Area 不低于最小高度");
 
-assert(core.APP_INFO.version === "0.6.0", "APP version 为 0.6.0");
+assert(core.APP_INFO.version === "0.6.1", "APP version 为 0.6.1");
 assert(core.SOFTWARE_VERSION === core.APP_INFO.version, "SOFTWARE_VERSION 与 APP_INFO.version 相同");
 assert(core.PROJECT_FORMAT_VERSION === "1.1", "工程格式为 1.1");
 assert(core.APP_INFO.version !== core.PROJECT_FORMAT_VERSION, "软件版本与工程格式分离");

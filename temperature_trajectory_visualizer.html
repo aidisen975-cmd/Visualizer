@@ -76,10 +76,15 @@
     button { color: inherit; cursor: pointer; }
     .tv-app {
       display: grid;
-      grid-template-rows: 52px auto minmax(0, 1fr) auto;
+      grid-template-rows: 52px auto minmax(0, 1fr);
+      grid-auto-rows: 0;
       height: 100%;
       min-width: 760px;
       background: var(--frame);
+    }
+    .tv-app.is-dock-pinned {
+      grid-template-rows: 52px auto minmax(0, 1fr) auto;
+      grid-auto-rows: auto;
     }
     .tv-topbar {
       display: grid;
@@ -310,11 +315,14 @@
     .tv-zoombar {
       display: flex;
       align-items: center;
-      gap: 12px;
-      padding: 12px 16px 0;
+      gap: 8px;
+      min-width: 0;
+      overflow-x: auto;
+      padding: 8px 12px 0;
       border: 0;
       background: transparent;
     }
+    .tv-zoombar .tv-button--tiny { white-space: nowrap; flex: none; }
     .tv-statusline {
       display: flex;
       align-items: center;
@@ -379,11 +387,11 @@
     .tv-annotate-menu button { text-align: left; }
     .tv-inspector {
       position: absolute;
-      z-index: 8;
-      width: 260px;
-      max-height: 300px;
-      overflow: auto;
-      padding: 8px 10px;
+      z-index: 46;
+      width: 280px;
+      max-height: none;
+      overflow: hidden;
+      padding: 8px;
       background: var(--frame);
       border: 1px solid var(--rule);
       border-radius: 10px;
@@ -391,11 +399,29 @@
       color: var(--ui);
       pointer-events: auto;
     }
+    .tv-inspector-list {
+      max-height: min(320px, 46vh);
+      overflow: auto;
+    }
+    .tv-inspector-filter { height: 28px; margin: 0 0 6px; }
+    .tv-inspector-row {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .tv-inspector-row:hover,
     .tv-inspector-row.is-nearest {
       background: color-mix(in srgb, var(--focus) 16%, transparent);
-      font-weight: 680;
     }
-    .tv-inspector-row.is-nearest span:first-child::before { content: "▶ "; }
+    .tv-inspector-row.is-nearest { font-weight: 680; }
+    .tv-inspector-swatch {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      align-self: center;
+    }
     .tv-cursor-marker {
       position: absolute;
       width: 7px;
@@ -417,10 +443,11 @@
     .tv-inspector-x { font-weight: 680; margin-bottom: 6px; }
     .tv-inspector-row, .tv-inspector-delta {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-columns: auto minmax(0, 1fr) auto;
       gap: 8px;
+      align-items: center;
       margin: 0;
-      padding: 2px 0;
+      padding: 3px 4px;
     }
     .tv-inspector-row span:first-child, .tv-inspector-delta span:first-child {
       overflow: hidden;
@@ -753,9 +780,14 @@
     .tv-canvas-scroll {
       min-width: 0;
       overflow: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       background: transparent;
       padding: 8px 28px 12px;
     }
+    .tv-canvas-scroll.is-overflow-x { justify-content: flex-start; }
+    .tv-canvas-scroll.is-overflow-y { align-items: flex-start; }
     [data-theme="dark"] .tv-canvas-scroll { background: transparent; }
     [data-theme="dark"] .tv-tools { background: #242a2e; }
     [data-theme="dark"] .tv-tools button.is-on,
@@ -1250,21 +1282,45 @@
     }
     .tv-modebar {
       display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 8px;
-      margin: 8px 12px 0;
-      padding: 12px 16px;
-      background: #fafafa;
-      border: 1px solid #e2e2e2;
-      border-radius: 14px;
-      color: #262626;
+      align-items: center;
+      gap: 12px;
+      height: 48px;
+      min-height: 48px;
+      margin: 6px 12px 0;
+      padding: 0 10px 0 12px;
+      background: var(--frame);
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+      color: var(--ui);
     }
-    .tv-crumbs { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; }
+    .tv-mode-switch { margin-left: auto; flex: none; }
+    .tv-mode-help { position: relative; flex: none; }
+    .tv-mode-pop {
+      position: absolute;
+      z-index: 30;
+      top: calc(100% + 6px);
+      right: 0;
+      width: 260px;
+      margin: 0;
+      padding: 8px 10px;
+      background: var(--frame);
+      border: 1px solid var(--rule);
+      border-radius: 8px;
+      box-shadow: var(--chrome-shadow);
+      color: var(--secondary);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .tv-crumbs { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; overflow: hidden; font-size: 14px; }
     .tv-crumbs button {
       display: inline-flex;
       align-items: center;
       gap: 6px;
+      min-width: 0;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
       border: 0;
       background: transparent;
       padding: 0;
@@ -1273,8 +1329,7 @@
     }
     .tv-crumb-icon { display: block; flex: none; }
     .tv-crumbs .is-muted { color: #737373; }
-    .tv-mode-hint { margin: 0; color: #737373; font-size: 12px; line-height: 1.45; }
-    .tv-mode-switch { display: inline-flex; padding: 3px; border-radius: 999px; background: #efefef; }
+    .tv-mode-switch { display: inline-flex; padding: 3px; border-radius: 999px; background: #efe8dc; }
     .tv-mode-switch button {
       border: 0;
       background: transparent;
@@ -1286,11 +1341,27 @@
     .tv-mode-switch button[aria-pressed="true"] { background: #fff; color: #262626; }
     .tv-dock {
       margin: 8px 12px 12px;
-      padding: 12px 16px 14px;
-      background: #fafafa;
-      border: 1px solid #e2e2e2;
-      border-radius: 16px;
-      color: #262626;
+      padding: 8px 12px 10px;
+      background: var(--frame);
+      border: 1px solid var(--rule);
+      border-radius: 14px;
+      color: var(--ui);
+      box-shadow: var(--chrome-shadow);
+    }
+    .tv-dock.is-floating {
+      position: fixed;
+      left: 12px;
+      right: 12px;
+      bottom: 8px;
+      z-index: 36;
+      margin: 0;
+      transform: translateY(calc(100% + 16px));
+      transition: transform 200ms ease;
+      pointer-events: none;
+    }
+    .tv-app.is-dock-open .tv-dock.is-floating {
+      transform: translateY(0);
+      pointer-events: auto;
     }
     .tv-dock-head, .tv-dock-row { display: flex; align-items: center; }
     .tv-dock-head { justify-content: space-between; gap: 12px; }
@@ -1298,30 +1369,146 @@
     .tv-dock-count, .tv-dock-name { color: #737373; }
     .tv-dock-count { font-size: 13px; }
     .tv-dock-tools { display: flex; align-items: center; gap: 8px; }
-    .tv-dock-row { gap: 12px; overflow-x: auto; align-items: flex-end; padding-top: 10px; }
+    .tv-dock-row { gap: 8px; overflow-x: auto; align-items: flex-end; padding-top: 8px; }
+    .tv-dock.is-expanded .tv-dock-row { gap: 12px; }
     .tv-dock-card {
+      position: relative;
       flex: none;
-      width: 112px;
+      width: 46px;
       border: 0;
       background: transparent;
       padding: 0;
       text-align: center;
-      color: #262626;
+      color: var(--ui);
       cursor: pointer;
     }
-    .tv-dock.is-expanded .tv-dock-card { width: 156px; }
+    .tv-dock.is-expanded .tv-dock-card { width: 168px; }
     .tv-dock-thumb {
-      height: 72px;
-      border-radius: 12px;
+      height: 46px;
+      border-radius: 10px;
       border: 1px solid transparent;
       overflow: hidden;
       display: grid;
       place-items: center;
     }
-    .tv-dock.is-expanded .tv-dock-thumb { height: 104px; }
-    .tv-dock-card.is-selected .tv-dock-thumb { border-color: #638dbb; }
+    .tv-dock.is-expanded .tv-dock-thumb { height: 112px; border-radius: 12px; }
+    .tv-dock-card.is-selected .tv-dock-thumb { box-shadow: inset 0 0 0 2px #35597a; }
     .tv-dock-card.is-on { outline: 1px dashed #638dbb; outline-offset: 2px; }
-    .tv-dock-name { display: block; margin-top: 6px; font-size: 12px; color: #262626; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tv-dock.is-compact .tv-dock-name {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: 0;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+    }
+    .tv-dock-name { display: block; margin-top: 6px; max-width: 100%; font-size: 12px; color: var(--ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tv-dock.is-compact .tv-dock-head { min-height: 0; }
+    .tv-dock.is-compact .tv-dock-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    .tv-hover-preview {
+      position: fixed;
+      z-index: 52;
+      width: 300px;
+      padding: 8px;
+      background: var(--frame);
+      border: 1px solid var(--rule);
+      border-radius: 12px;
+      box-shadow: var(--chrome-shadow);
+      color: var(--ui);
+      pointer-events: auto;
+    }
+    .tv-hover-preview[hidden] { display: none; }
+    .tv-hover-preview strong {
+      display: block;
+      margin: 0 0 6px;
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+    .tv-hover-preview .tv-hover-stage {
+      overflow: hidden;
+      border-radius: 8px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+    }
+    .tv-hover-preview svg { width: 100%; height: 100%; display: block; }
+    .tv-switch {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 28px;
+      font-size: 13px;
+    }
+    .tv-switch input {
+      appearance: none;
+      width: 32px;
+      height: 18px;
+      margin: 0;
+      border: 0;
+      border-radius: 999px;
+      background: #d7d0c4;
+      position: relative;
+      flex: none;
+      cursor: pointer;
+    }
+    .tv-switch input::after {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #fff;
+      transition: transform 140ms ease;
+    }
+    .tv-switch input:checked { background: #3a3228; }
+    .tv-switch input:checked::after { transform: translateX(14px); }
+    .tv-switch input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+    .tv-switch input:disabled { opacity: .45; }
+    .tv-segment { display: flex; gap: 2px; padding: 3px; border-radius: 9px; background: #efe8dc; }
+    .tv-segment button {
+      flex: 1;
+      min-height: 28px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--secondary);
+      cursor: pointer;
+    }
+    .tv-segment button[aria-pressed="true"] { background: var(--surface); color: var(--ui); }
+    .tv-segment button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+    .tv-metric {
+      display: grid;
+      grid-template-columns: 3.2em minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      min-height: 28px;
+    }
+    .tv-metric .tv-field { height: 28px; }
+    .tv-metric-unit { color: var(--secondary); font-size: 12px; }
+    .tv-size-stack { display: grid; gap: 8px; }
+    [data-theme="dark"] .tv-switch input { background: #354045; }
+    [data-theme="dark"] .tv-switch input:checked { background: var(--focus); }
+    [data-theme="dark"] .tv-segment,
+    [data-theme="dark"] .tv-mode-switch { background: #242a2e; }
+    [data-theme="dark"] .tv-mode-switch button[aria-pressed="true"],
+    [data-theme="dark"] .tv-segment button[aria-pressed="true"] { background: var(--surface); color: var(--ui); }
+    .tv-overview {
+      margin: 8px 10px 0;
+      padding: 8px;
+      border: 1px solid var(--rule);
+      border-radius: 8px;
+      background: var(--surface);
+      font-size: 12px;
+    }
+    .tv-overview p { margin: 0 0 4px; }
+    .tv-overview table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+    .tv-overview th, .tv-overview td { padding: 2px 4px; text-align: right; font-variant-numeric: tabular-nums; }
+    .tv-overview th:first-child, .tv-overview td:first-child { text-align: left; }
+    .tv-overview caption { caption-side: bottom; padding-top: 4px; color: var(--secondary); text-align: left; }
     .tv-dock-split { width: 1px; align-self: stretch; background: #e2e2e2; margin: 0 2px 22px; flex: none; }
     .tv-dock-plus .tv-dock-thumb { background: #fff; border-color: #e2e2e2; color: #737373; font-size: 28px; line-height: 1; }
     .tv-dock-thumb svg { width: 100%; height: 100%; display: block; }
@@ -1351,7 +1538,7 @@
     .tv-dock-popover button:hover, .tv-context button:hover { background: #eef3f8; }
     .tv-context {
       position: fixed;
-      z-index: 40;
+      z-index: 60;
       min-width: 168px;
       padding: 6px;
       background: #fafafa;
@@ -1368,10 +1555,13 @@
     }
     .tv-series-preview p { margin: 0 0 6px; }
     .tv-series-preview svg { width: 100%; height: 36px; display: block; }
+    @media (max-width: 1500px) {
+      .tv-tools span { display: none; }
+    }
     @media (max-width: 980px) {
       .tv-brand { margin-right: 8px; font-size: 18px; }
       .tv-modebar, .tv-dock { margin-left: 8px; margin-right: 8px; }
-      .tv-tools span { display: none; }
+      .tv-tools span, .tv-tools kbd { display: none; }
     }
   </style>
 </head>
@@ -1424,10 +1614,13 @@
     <div class="tv-modebar" id="tvModebar">
       <div class="tv-crumbs" id="tvCrumbs"></div>
       <div class="tv-mode-switch" role="group" aria-label="工作模式">
-        <button type="button" id="tvModeCanvas" aria-pressed="true">排版模式</button>
-        <button type="button" id="tvModePlot" aria-pressed="false">绘图模式</button>
+        <button type="button" id="tvModeCanvas" aria-pressed="true">排版</button>
+        <button type="button" id="tvModePlot" aria-pressed="false">绘图</button>
       </div>
-      <p class="tv-mode-hint">双击画布中的图进入独立绘图模式，返回上一级则继续排版。Dock 可直接切换图窗。</p>
+      <div class="tv-mode-help">
+        <button type="button" class="tv-button tv-button--tiny" id="tvModeHelp" aria-expanded="false" title="双击画布中的图进入独立绘图模式。点击画布名称返回排版。鼠标移到屏幕底部可呼出 Dock。">说明</button>
+        <p class="tv-mode-pop" id="tvModePop" hidden>双击画布中的图进入独立绘图模式。点击画布名称返回排版。鼠标移到屏幕底部可呼出 Dock。</p>
+      </div>
     </div>
     <div class="tv-workspace" id="tvWorkspace">
       <aside class="tv-side" id="tvLeftPanel" aria-label="数据">
@@ -1462,6 +1655,7 @@
           <div class="tv-zoombar-label" id="tvZoomLabel">100%</div>
           <button type="button" class="tv-button tv-button--tiny" id="tvZoomIn">+</button>
           <button type="button" class="tv-button tv-button--tiny" id="tvZoomFit">适应窗口</button>
+          <button type="button" class="tv-button tv-button--tiny" id="tvZoomWidth">适应宽度</button>
           <button type="button" class="tv-button tv-button--tiny" id="tvZoom100">100%</button>
         </div>
         <div class="tv-canvas-scroll" id="tvCanvasScroll" aria-label="画布" tabindex="0">
@@ -1488,8 +1682,9 @@
         <div class="tv-side-body" id="tvLayerPanel" hidden></div>
       </aside>
     </div>
-    <footer class="tv-dock" id="tvDock" aria-label="图窗 Dock"></footer>
+    <footer class="tv-dock is-floating is-compact" id="tvDock" aria-label="图窗 Dock"></footer>
   </div>
+  <div id="tvDockPreview" class="tv-hover-preview" hidden></div>
   <div class="tv-context" id="tvContext" hidden></div>
   <dialog class="tv-preview" id="tvPreviewDialog" aria-label="画布预览">
     <div class="tv-preview-bar">
@@ -1590,6 +1785,25 @@
     var workspaceFocus = null;
     var selectedInstanceIds = [];
     var thumbCache = {};
+    var previewCache = {};
+    var dockPrefs = { pinned: false, expanded: false };
+    var dockOpen = false;
+    var dockHideTimer = null;
+    var dockPreviewTimer = null;
+    var dockPreviewHideTimer = null;
+    var dockPreviewId = "";
+    var plotViewport = { mode: "auto-fit", plotId: "", zoom: 1 };
+    var viewportApplying = false;
+    var inspectorLocked = false;
+    var inspectorFilter = "";
+    var overviewOpen = {};
+    try {
+      var storedDock = JSON.parse(localStorage.getItem("visualizer.workspace.dock") || "");
+      if (storedDock && typeof storedDock === "object") {
+        dockPrefs.pinned = !!storedDock.pinned;
+        dockPrefs.expanded = !!storedDock.expanded;
+      }
+    } catch (error) { /* ponytail: private mode keeps the default auto-hide dock */ }
     var panDrag = null;
     var dockDrag = null;
     var instanceMarquee = null;
@@ -1740,7 +1954,28 @@
     }
 
     function canvasZoom() {
+      if (workspaceMode() === "plot") return core.clampZoom(plotViewport.zoom || 1);
       return core.clampZoom(uiState().canvasZoom);
+    }
+
+    function writeDisplayZoom(zoom) {
+      var next = core.clampZoom(zoom);
+      if (workspaceMode() === "plot") plotViewport.zoom = next;
+      else {
+        uiState().canvasZoom = next;
+        if (project.canvas) project.canvas.zoom = next;
+      }
+      return next;
+    }
+
+    function viewportContentBox() {
+      var style = getComputedStyle(canvasScroll);
+      var padX = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+      var padY = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
+      return {
+        width: Math.max(1, canvasScroll.clientWidth - padX),
+        height: Math.max(1, canvasScroll.clientHeight - padY)
+      };
     }
 
     function applyPanelLayout() {
@@ -1758,12 +1993,24 @@
     }
 
     function applyCanvasZoom(keepPoint) {
+      if (workspaceMode() === "plot" && plotViewport.mode !== "manual" && !keepPoint) {
+        if (canvasScroll.clientWidth > 40 && canvasScroll.clientHeight > 40) {
+          var view = viewportContentBox();
+          var stage = plotStageBox();
+          plotViewport.zoom = plotViewport.mode === "fit-width"
+            ? core.fitWidthScale(stage.width, view.width, 16)
+            : core.fitContentScale(stage.width, stage.height, view.width, view.height, 16);
+        }
+      }
       var zoom = canvasZoom();
       var metrics = stageMetrics();
       var width = metrics.width;
       var height = metrics.height;
-      canvasZoomEl.style.width = (width * zoom) + "px";
-      canvasZoomEl.style.height = (height * zoom) + "px";
+      var contentW = width * zoom;
+      var contentH = height * zoom;
+      var viewBox = viewportContentBox();
+      canvasZoomEl.style.width = contentW + "px";
+      canvasZoomEl.style.height = contentH + "px";
       paper.style.width = width + "px";
       paper.style.height = height + "px";
       paper.style.transform = "scale(" + zoom + ")";
@@ -1773,13 +2020,23 @@
       guidesEl.style.transform = "scale(" + zoom + ")";
       guidesEl.style.transformOrigin = "0 0";
       document.getElementById("tvZoomLabel").textContent = Math.round(zoom * 100) + "%";
-      if (keepPoint) {
-        canvasScroll.scrollLeft = keepPoint.worldX * zoom - keepPoint.offsetX;
-        canvasScroll.scrollTop = keepPoint.worldY * zoom - keepPoint.offsetY;
+      canvasScroll.classList.toggle("is-overflow-x", contentW > viewBox.width + 1);
+      canvasScroll.classList.toggle("is-overflow-y", contentH > viewBox.height + 1);
+      if (keepPoint || (workspaceMode() === "plot" && plotViewport.mode !== "manual")) {
+        viewportApplying = true;
+        if (keepPoint) {
+          canvasScroll.scrollLeft = keepPoint.worldX * zoom - keepPoint.offsetX;
+          canvasScroll.scrollTop = keepPoint.worldY * zoom - keepPoint.offsetY;
+        } else {
+          canvasScroll.scrollLeft = 0;
+          canvasScroll.scrollTop = 0;
+        }
+        setTimeout(function () { viewportApplying = false; }, 0);
       }
     }
 
     function setCanvasZoom(nextZoom, originEvent) {
+      if (workspaceMode() === "plot") plotViewport.mode = "manual";
       var oldZoom = canvasZoom();
       var zoom = core.clampZoom(nextZoom);
       var rect = canvasScroll.getBoundingClientRect();
@@ -1787,19 +2044,24 @@
       var offsetY = originEvent ? (originEvent.clientY - rect.top) : canvasScroll.clientHeight / 2;
       var worldX = (canvasScroll.scrollLeft + offsetX) / oldZoom;
       var worldY = (canvasScroll.scrollTop + offsetY) / oldZoom;
-      uiState().canvasZoom = zoom;
-      if (project.canvas) project.canvas.zoom = zoom;
+      writeDisplayZoom(zoom);
       applyCanvasZoom({ worldX: worldX, worldY: worldY, offsetX: offsetX, offsetY: offsetY });
     }
 
-    function fitCanvasView() {
-      var zoom = core.fitViewZoom(project.plots, canvasScroll.clientWidth, canvasScroll.clientHeight, 40);
-      uiState().canvasZoom = zoom;
-      project.canvas.zoom = zoom;
+    function fitCanvasView(kind) {
+      if (workspaceMode() === "plot") {
+        plotViewport.mode = kind === "width" ? "fit-width" : "auto-fit";
+        plotViewport.plotId = selectedPlotId || "";
+        applyCanvasZoom();
+        return;
+      }
+      var view = viewportContentBox();
+      var metrics = stageMetrics();
+      var zoom = kind === "width"
+        ? core.fitWidthScale(metrics.width, view.width, 16)
+        : core.fitContentScale(metrics.width, metrics.height, view.width, view.height, 16);
+      writeDisplayZoom(zoom);
       applyCanvasZoom();
-      var box = core.plotsBoundingBox(project.plots);
-      canvasScroll.scrollLeft = Math.max(0, box.minX * zoom - 40);
-      canvasScroll.scrollTop = Math.max(0, box.minY * zoom - 40);
     }
 
     function showGuides(lines) {
@@ -1830,10 +2092,69 @@
       var heightInput = document.getElementById("tvFigHeight");
       var xInput = document.getElementById("tvFigX");
       var yInput = document.getElementById("tvFigY");
-      if (widthInput) widthInput.value = plot.layout.width;
-      if (heightInput) heightInput.value = plot.layout.height;
+      if (widthInput && document.activeElement !== widthInput) widthInput.value = formatFigureMm(plot.layout.width);
+      if (heightInput && document.activeElement !== heightInput) heightInput.value = formatFigureMm(plot.layout.height);
       if (xInput) xInput.value = plot.layout.x;
       if (yInput) yInput.value = plot.layout.y;
+    }
+
+    function formatOverviewNumber(value) {
+      if (value == null || !Number.isFinite(Number(value))) return "—";
+      return String(Math.round(Number(value) * 1000) / 1000);
+    }
+
+    function formatFigureMm(px) {
+      if (px === core.mmToPx(89)) return "89";
+      if (px === core.mmToPx(183)) return "183";
+      return String(core.pxToMm(px));
+    }
+
+    function overviewRange(min, max, unit) {
+      var text = formatOverviewNumber(min) + "–" + formatOverviewNumber(max);
+      return unit ? text + " " + unit : text;
+    }
+
+    function overviewTable(summary) {
+      var table = document.createElement("table");
+      var caption = document.createElement("caption");
+      caption.textContent = summary.sampled ? "等间隔抽样，不是完整数据。" : "全部有效点。";
+      var headRow = document.createElement("tr");
+      [summary.xName + (summary.xUnit ? "/" + summary.xUnit : ""), (summary.yName || "Y") + (summary.yUnit ? "/" + summary.yUnit : "")].forEach(function (text) {
+        var cell = document.createElement("th");
+        cell.textContent = text;
+        headRow.appendChild(cell);
+      });
+      table.append(caption, headRow);
+      (summary.sample || []).forEach(function (point) {
+        var tr = document.createElement("tr");
+        [point.x, point.y].forEach(function (value) {
+          var cell = document.createElement("td");
+          cell.textContent = formatOverviewNumber(value);
+          tr.appendChild(cell);
+        });
+        table.appendChild(tr);
+      });
+      return table;
+    }
+
+    function overviewBlock(summary, datasetLevel) {
+      var box = document.createElement("div");
+      box.className = "tv-overview";
+      function line(text) {
+        var p = document.createElement("p");
+        p.textContent = text;
+        box.appendChild(p);
+      }
+      line(summary.name || "未命名");
+      if (datasetLevel) line("系列  " + summary.seriesCount);
+      line("点数  " + summary.count + (summary.missing ? "，缺失 " + summary.missing : ""));
+      line((summary.xName || "X") + "  " + overviewRange(summary.xMin, summary.xMax, summary.xUnit));
+      if (!datasetLevel) {
+        line((summary.yName || "Y") + "  " + overviewRange(summary.yMin, summary.yMax, summary.yUnit));
+        if (summary.yMean != null) line("均值  " + formatOverviewNumber(summary.yMean) + (summary.yUnit ? " " + summary.yUnit : ""));
+        box.appendChild(overviewTable(summary));
+      }
+      return box;
     }
 
     function selectedCount(dataset) {
@@ -2723,8 +3044,20 @@
         }
         head.addEventListener("click", toggleCollapsed);
         head.addEventListener("mousedown", function () { activeDatasetId = dataset.id; });
-        head.append(toggle, name, count, remove);
+        var overview = document.createElement("button");
+        overview.type = "button";
+        overview.className = "tv-button tv-button--tiny";
+        overview.textContent = "概览";
+        overview.addEventListener("click", function (event) {
+          event.stopPropagation();
+          var key = "dataset:" + dataset.id;
+          if (overviewOpen[key]) delete overviewOpen[key];
+          else overviewOpen[key] = true;
+          renderData();
+        });
+        head.append(toggle, name, count, overview, remove);
         box.appendChild(head);
+        if (overviewOpen["dataset:" + dataset.id]) box.appendChild(overviewBlock(core.summarizeDataset(dataset), true));
         if (!collapsed) {
           var tools = document.createElement("div");
           tools.className = "tv-dataset-tools";
@@ -2793,8 +3126,22 @@
             copy.title = core.seriesDisplayName(series);
             var meta = document.createElement("small");
             meta.textContent = series.x.length + " pts";
-            row.append(check, dot, copy, meta);
+            var seriesInfo = document.createElement("button");
+            seriesInfo.type = "button";
+            seriesInfo.className = "tv-button tv-button--tiny";
+            seriesInfo.textContent = "概览";
+            seriesInfo.addEventListener("pointerdown", function (event) { event.stopPropagation(); });
+            seriesInfo.addEventListener("click", function (event) {
+              event.preventDefault();
+              event.stopPropagation();
+              var key = "series:" + series.id;
+              if (overviewOpen[key]) delete overviewOpen[key];
+              else overviewOpen[key] = true;
+              renderData();
+            });
+            row.append(check, dot, copy, meta, seriesInfo);
             list.appendChild(row);
+            if (overviewOpen["series:" + series.id]) list.appendChild(overviewBlock(core.summarizeSeries(series, dataset), false));
           });
           box.appendChild(list);
         }
@@ -3518,13 +3865,58 @@
       cursorHover = null;
     }
 
+    function focusReadoutSeries(seriesId) {
+      if (!readoutCursor) return;
+      readoutCursor.nearestSeriesId = seriesId || "";
+      var host = document.getElementById("tvInspector");
+      var list = host.querySelector(".tv-inspector-list");
+      host.querySelectorAll(".tv-inspector-row").forEach(function (row) {
+        var on = row.dataset.seriesId === readoutCursor.nearestSeriesId;
+        row.classList.toggle("is-nearest", on);
+        if (!on || !list) return;
+        var edge = row.offsetTop;
+        var bottom = edge + row.offsetHeight;
+        if (edge < list.scrollTop) list.scrollTop = edge;
+        else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight;
+      });
+      var plot = project.plots.find(function (item) { return item.id === readoutCursor.plotId; });
+      var box = plot && paper.querySelector('.tv-plot[data-plot-id="' + plot.id + '"]');
+      if (box && plot) updateOverlay(box, plot);
+    }
+
+    function moveReadoutSelection(delta) {
+      var rows = Array.prototype.filter.call(document.querySelectorAll("#tvInspector .tv-inspector-row"), function (row) {
+        return !row.hidden;
+      });
+      if (!rows.length || !readoutCursor) return;
+      var index = 0;
+      rows.forEach(function (row, i) {
+        if (row.dataset.seriesId === readoutCursor.nearestSeriesId) index = i;
+      });
+      focusReadoutSeries(rows[Math.max(0, Math.min(rows.length - 1, index + delta))].dataset.seriesId);
+    }
+
+    function applyInspectorFilter() {
+      var query = inspectorFilter.trim().toLowerCase();
+      document.querySelectorAll("#tvInspector .tv-inspector-row").forEach(function (row) {
+        var name = (row.dataset.name || "").toLowerCase();
+        row.hidden = !!query && name.indexOf(query) < 0;
+      });
+    }
+
     function showInspector(plot, dataX, clientX, clientY, nearestSeriesId) {
+      if (inspectorLocked) return;
       var host = document.getElementById("tvInspector");
       var column = host.parentElement.getBoundingClientRect();
+      var rows = core.readPlotAtX(project, plot, dataX, cursorReadMode);
+      var width = 280;
+      var estimated = Math.min(360, 72 + Math.min(rows.length, 12) * 24);
       var left = clientX - column.left + 16;
       var top = clientY - column.top + 16;
-      if (left + 230 > column.width) left = Math.max(8, clientX - column.left - 236);
-      if (top + 160 > column.height) top = Math.max(8, top - 180);
+      if (clientX + 20 + width > window.innerWidth - 8) left = clientX - column.left - width - 12;
+      if (clientY + 20 + estimated > window.innerHeight - 12) top = clientY - column.top - estimated - 12;
+      left = Math.max(8, Math.min(left, Math.max(8, column.width - width - 8)));
+      top = Math.max(8, top);
       host.style.left = left + "px";
       host.style.top = top + "px";
       host.hidden = false;
@@ -3533,28 +3925,66 @@
       xRow.className = "tv-inspector-x";
       xRow.textContent = "X = " + formatReading(dataX);
       host.appendChild(xRow);
-      var rows = core.readPlotAtX(project, plot, dataX, cursorReadMode);
+      if (rows.length > 8) {
+        var filter = document.createElement("input");
+        filter.className = "tv-field tv-inspector-filter";
+        filter.type = "search";
+        filter.placeholder = "筛选系列";
+        filter.value = inspectorFilter;
+        filter.setAttribute("aria-label", "筛选系列");
+        filter.addEventListener("input", function () {
+          inspectorFilter = filter.value;
+          applyInspectorFilter();
+        });
+        filter.addEventListener("keydown", function (event) { event.stopPropagation(); });
+        host.appendChild(filter);
+      }
+      var list = document.createElement("div");
+      list.className = "tv-inspector-list";
       if (!rows.length) {
         var empty = document.createElement("p");
         empty.className = "tv-hint";
         empty.textContent = "此图没有可见曲线。";
-        host.appendChild(empty);
+        list.appendChild(empty);
       }
       var nearestRow = null;
       rows.forEach(function (row) {
-        var line = inspectorRow(row.name, formatReading(row.y) + (row.unit ? " " + row.unit : ""));
-        line.title = row.name;
+        var line = document.createElement("button");
+        line.type = "button";
+        line.className = "tv-inspector-row";
+        line.dataset.seriesId = row.seriesId || "";
+        line.dataset.name = row.name || "";
+        line.title = row.name || "";
+        var swatch = document.createElement("span");
+        swatch.className = "tv-inspector-swatch";
+        swatch.style.background = row.color || "#35597a";
+        var label = document.createElement("span");
+        label.textContent = row.name;
+        var reading = document.createElement("span");
+        reading.className = "tv-inspector-y";
+        reading.textContent = formatReading(row.y) + (row.unit ? " " + row.unit : "");
+        line.append(swatch, label, reading);
         if (row.seriesId && row.seriesId === nearestSeriesId) {
           line.classList.add("is-nearest");
           nearestRow = line;
         }
-        host.appendChild(line);
+        line.addEventListener("pointerenter", function () { focusReadoutSeries(row.seriesId); });
+        line.addEventListener("click", function (event) {
+          event.stopPropagation();
+          if (!readoutCursor || readoutCursor.plotId !== plot.id) {
+            readoutCursor = { plotId: plot.id, x: dataX, nearestSeriesId: row.seriesId || "" };
+          } else readoutCursor.x = dataX;
+          focusReadoutSeries(row.seriesId);
+        });
+        list.appendChild(line);
       });
+      host.appendChild(list);
+      applyInspectorFilter();
       if (nearestRow) {
-        var top = nearestRow.offsetTop;
-        var bottom = top + nearestRow.offsetHeight;
-        if (top < host.scrollTop) host.scrollTop = top;
-        else if (bottom > host.scrollTop + host.clientHeight) host.scrollTop = bottom - host.clientHeight;
+        var edge = nearestRow.offsetTop;
+        var bottom = edge + nearestRow.offsetHeight;
+        if (edge < list.scrollTop) list.scrollTop = edge;
+        else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight;
       }
       var cursors = plot.fixedCursors || [];
       var cursorA = cursors.find(function (item) { return item.id === "A"; });
@@ -3573,13 +4003,14 @@
 
     function inspectorRow(name, value, delta) {
       var row = document.createElement("p");
-      row.className = delta ? "tv-inspector-delta" : "tv-inspector-row";
+      row.className = "tv-inspector-delta";
+      var swatch = document.createElement("span");
       var label = document.createElement("span");
       label.textContent = name;
       var reading = document.createElement("span");
       reading.className = "tv-inspector-y";
       reading.textContent = value;
-      row.append(label, reading);
+      row.append(swatch, label, reading);
       return row;
     }
 
@@ -3771,7 +4202,7 @@
       });
       box.addEventListener("pointermove", function (event) {
         var point = figurePoint(box, event);
-        if (interactionMode === "cursor" && (!drag || drag.box !== box)) {
+        if (interactionMode === "cursor" && (!drag || drag.box !== box) && !inspectorLocked) {
           var svg = box.querySelector("svg");
           var info = svg && svg.__inspection;
           if (info && point.x >= info.plotArea.x && point.y >= info.plotArea.y && point.x <= info.plotArea.x + info.plotArea.width && point.y <= info.plotArea.y + info.plotArea.height) {
@@ -4604,10 +5035,10 @@
       selectedInstanceIds = [];
       workspaceFocus = { type: "plot", id: plot.id, plotId: plot.id };
       setSelectedObject({ type: "plot", figureId: plot.id, objectId: plot.id });
+      plotViewport.mode = "auto-fit";
+      plotViewport.plotId = plot.id;
       rememberWorkspace();
       renderAll();
-      canvasScroll.scrollLeft = 0;
-      canvasScroll.scrollTop = 0;
     }
 
     function closeContextMenu() {
@@ -4899,11 +5330,130 @@
       document.getElementById("tvModePlot").setAttribute("aria-pressed", workspaceMode() === "plot" ? "true" : "false");
     }
 
+    function writeDockPrefs() {
+      try {
+        localStorage.setItem("visualizer.workspace.dock", JSON.stringify({
+          pinned: !!dockPrefs.pinned,
+          expanded: !!dockPrefs.expanded
+        }));
+      } catch (error) { /* ponytail: private mode keeps the session preference only */ }
+    }
+
+    function applyDockChrome() {
+      var dock = document.getElementById("tvDock");
+      app.classList.toggle("is-dock-pinned", !!dockPrefs.pinned);
+      app.classList.toggle("is-dock-open", !!dockPrefs.pinned || !!dockOpen);
+      if (!dock) return;
+      dock.classList.toggle("is-expanded", !!dockPrefs.expanded);
+      dock.classList.toggle("is-compact", !dockPrefs.expanded);
+      dock.classList.toggle("is-floating", !dockPrefs.pinned);
+    }
+
+    function hideDockPreview() {
+      dockPreviewId = "";
+      var preview = document.getElementById("tvDockPreview");
+      if (!preview) return;
+      preview.hidden = true;
+      preview.replaceChildren();
+    }
+
+    function cancelDockHide() {
+      if (dockHideTimer) {
+        clearTimeout(dockHideTimer);
+        dockHideTimer = null;
+      }
+      if (!dockOpen) {
+        dockOpen = true;
+        applyDockChrome();
+      }
+    }
+
+    function scheduleDockHide() {
+      if (dockPrefs.pinned || !dockOpen || dockHideTimer) return;
+      dockHideTimer = setTimeout(function () {
+        dockHideTimer = null;
+        dockOpen = false;
+        applyDockChrome();
+        hideDockPreview();
+      }, 300);
+    }
+
+    function cachedPlotPreview(plot) {
+      var series = core.resolvePlotSeries(project, plot).filter(function (item) {
+        return item.visible !== false && item.series && item.series.x && item.series.x.length > 1;
+      });
+      var key = [
+        plot.layout.width, plot.layout.height, plot.showTitle !== false, plot.title || "",
+        plot.legend && plot.legend.visible !== false, series.map(thumbSignature).join(",")
+      ].join("|");
+      if (previewCache[plot.id] && previewCache[plot.id].key === key) return previewCache[plot.id].node.cloneNode(true);
+      var svg = buildPlotSvg(plot, plot.layout.width, plot.layout.height, false);
+      svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+      svg.setAttribute("width", "100%");
+      svg.setAttribute("height", "100%");
+      svg.style.pointerEvents = "none";
+      previewCache[plot.id] = { key: key, node: svg };
+      return svg.cloneNode(true);
+    }
+
+    function showDockPreview(plot, anchor) {
+      if (dockPrefs.expanded || dockDrag) return;
+      var preview = document.getElementById("tvDockPreview");
+      if (!preview) return;
+      dockPreviewId = plot.id;
+      preview.replaceChildren();
+      var title = document.createElement("strong");
+      title.textContent = core.plotEditorName(plot);
+      var stage = document.createElement("div");
+      stage.className = "tv-hover-stage";
+      var ratio = plot.layout && plot.layout.width ? plot.layout.height / plot.layout.width : 0.7;
+      var width = Math.max(240, Math.min(340, window.innerWidth * 0.24));
+      var height = Math.max(120, Math.min(220, Math.round(width * ratio)));
+      stage.style.height = height + "px";
+      stage.appendChild(cachedPlotPreview(plot));
+      preview.append(title, stage);
+      preview.hidden = false;
+      preview.style.width = width + "px";
+      var rect = anchor.getBoundingClientRect();
+      var left = rect.left + rect.width / 2 - width / 2;
+      left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
+      var top = rect.top - (height + 46);
+      if (top < 8) top = Math.min(window.innerHeight - height - 16, rect.bottom + 8);
+      preview.style.left = left + "px";
+      preview.style.top = Math.max(8, top) + "px";
+    }
+
+    function scheduleDockPreview(plot, anchor) {
+      clearTimeout(dockPreviewTimer);
+      clearTimeout(dockPreviewHideTimer);
+      if (dockPreviewId && dockPreviewId !== plot.id) hideDockPreview();
+      dockPreviewTimer = setTimeout(function () { showDockPreview(plot, anchor); }, 280);
+    }
+
+    function scheduleDockPreviewHide() {
+      clearTimeout(dockPreviewTimer);
+      clearTimeout(dockPreviewHideTimer);
+      dockPreviewHideTimer = setTimeout(hideDockPreview, 160);
+    }
+
+    function bindDockCardHover(card, plot) {
+      card.addEventListener("pointerenter", function () {
+        cancelDockHide();
+        if (!plot || dockPrefs.expanded) {
+          clearTimeout(dockPreviewTimer);
+          hideDockPreview();
+          return;
+        }
+        scheduleDockPreview(plot, card);
+      });
+      card.addEventListener("pointerleave", scheduleDockPreviewHide);
+    }
+
     function renderDock() {
       var dock = document.getElementById("tvDock");
       if (!dock) return;
       rememberWorkspace();
-      dock.classList.toggle("is-expanded", !!project.ui.dockExpanded);
+      applyDockChrome();
       dock.replaceChildren();
       var head = document.createElement("div");
       head.className = "tv-dock-head";
@@ -4920,12 +5470,31 @@
       var toggle = document.createElement("button");
       toggle.type = "button";
       toggle.className = "tv-button tv-button--tiny";
-      toggle.textContent = project.ui.dockExpanded ? "紧凑" : "展开";
+      toggle.textContent = dockPrefs.expanded ? "紧凑" : "展开";
+      toggle.setAttribute("aria-pressed", dockPrefs.expanded ? "true" : "false");
       toggle.addEventListener("click", function () {
-        project.ui.dockExpanded = !project.ui.dockExpanded;
+        dockPrefs.expanded = !dockPrefs.expanded;
+        writeDockPrefs();
+        hideDockPreview();
         renderDock();
       });
-      tools.append(count, toggle);
+      var pin = document.createElement("button");
+      pin.type = "button";
+      pin.className = "tv-button tv-button--tiny";
+      pin.textContent = dockPrefs.pinned ? "固定" : "自动隐藏";
+      pin.title = dockPrefs.pinned ? "改回自动隐藏" : "固定在页面底部";
+      pin.setAttribute("aria-pressed", dockPrefs.pinned ? "true" : "false");
+      pin.addEventListener("click", function () {
+        dockPrefs.pinned = !dockPrefs.pinned;
+        if (!dockPrefs.pinned) dockOpen = false;
+        writeDockPrefs();
+        applyDockChrome();
+        renderDock();
+        if (workspaceMode() === "plot" && plotViewport.mode !== "manual") {
+          requestAnimationFrame(function () { applyCanvasZoom(); });
+        }
+      });
+      tools.append(count, toggle, pin);
       head.append(title, tools);
       var row = document.createElement("div");
       row.className = "tv-dock-row";
@@ -4933,6 +5502,7 @@
         var card = dockCard(canvas.name, canvas.accentColor || core.CANVAS_DOCK_COLOR, workspaceMode() === "canvas" && activeCanvas() && activeCanvas().id === canvas.id);
         card.querySelector(".tv-dock-thumb").innerHTML = "<svg viewBox='0 0 64 40' aria-hidden='true'><rect x='14' y='8' width='14' height='10' rx='2' fill='none' stroke='#35597a' stroke-width='1.6'/><rect x='32' y='8' width='14' height='10' rx='2' fill='none' stroke='#35597a' stroke-width='1.6'/><rect x='14' y='22' width='14' height='10' rx='2' fill='none' stroke='#35597a' stroke-width='1.6'/><rect x='32' y='22' width='14' height='10' rx='2' fill='none' stroke='#35597a' stroke-width='1.6'/></svg>";
         card.addEventListener("click", function () { enterCanvasMode(canvas.id); });
+        bindDockCardHover(card, null);
         card.addEventListener("contextmenu", function (event) {
           event.preventDefault();
           openContextMenu(event.clientX, event.clientY, [
@@ -4966,8 +5536,10 @@
       windows.forEach(function (plot) {
         var card = dockCard(core.plotEditorName(plot), plot.accentColor || core.PLOT_ACCENT_COLORS[0], workspaceMode() === "plot" && plot.id === selectedPlotId, plotThumb(plot));
         card.dataset.plotId = plot.id;
+        bindDockCardHover(card, plot);
         card.addEventListener("pointerdown", function (event) {
           if (event.button !== 0) return;
+          hideDockPreview();
           dockDrag = { plotId: plot.id, x: event.clientX, y: event.clientY, moved: false, pointerId: event.pointerId };
           card.setPointerCapture(event.pointerId);
         });
@@ -5282,7 +5854,7 @@
         var empty = document.createElement("div");
         empty.className = "tv-canvas-empty";
         empty.innerHTML = workspaceMode() === "canvas"
-          ? "<div><strong>这块画布还没有图窗</strong><p>从下方 Dock 把图窗拖进来，或新建图窗后再放置。</p></div>"
+          ? "<div><strong>这块画布还没有图窗</strong><p>把鼠标移到屏幕底部打开 Dock，把图窗拖进来，或新建图窗后再放置。</p></div>"
           : "<div><strong>没有正在编辑的图窗</strong><p>从 Dock 点一个图窗进入绘图模式。</p></div>";
         paper.appendChild(empty);
         return;
@@ -5299,6 +5871,37 @@
       if (overflowPlot && (overflowPlot.seriesRefs.length > 30)) {
         setStatus("图例内容较多，建议使用批量重命名或调整图例布局。", "");
       }
+    }
+
+    function switchControl(labelText, checked) {
+      var wrap = document.createElement("label");
+      wrap.className = "tv-switch";
+      var text = document.createElement("span");
+      text.textContent = labelText;
+      var input = document.createElement("input");
+      input.type = "checkbox";
+      input.checked = !!checked;
+      wrap.append(text, input);
+      return { wrap: wrap, input: input };
+    }
+
+    function metricField(labelText, mmText) {
+      var wrap = document.createElement("label");
+      wrap.className = "tv-metric";
+      var caption = document.createElement("span");
+      caption.className = "tv-prop-label";
+      caption.textContent = labelText;
+      var input = document.createElement("input");
+      input.className = "tv-field";
+      input.type = "text";
+      input.inputMode = "decimal";
+      input.autocomplete = "off";
+      input.value = mmText;
+      var unit = document.createElement("span");
+      unit.className = "tv-metric-unit";
+      unit.textContent = "mm";
+      wrap.append(caption, input, unit);
+      return { wrap: wrap, input: input };
     }
 
     function fieldControl(labelText, value, tag) {
@@ -5604,16 +6207,12 @@
       wrap.style.display = "grid";
       wrap.style.gap = "4px";
       [["showLine", "显示轴线"], ["showMajorTicks", "显示主刻度"], ["showMinorTicks", "显示副刻度"], ["showTickLabels", "显示刻度标签"]].forEach(function (pair) {
-        var label = document.createElement("label");
-        var box = document.createElement("input");
-        box.type = "checkbox";
-        box.checked = edge[pair[0]] !== false;
-        label.append(box, document.createTextNode(" " + pair[1]));
-        box.addEventListener("change", function () {
-          edge[pair[0]] = box.checked;
+        var toggle = switchControl(pair[1], edge[pair[0]] !== false);
+        toggle.input.addEventListener("change", function () {
+          edge[pair[0]] = toggle.input.checked;
           onChange();
         });
-        wrap.appendChild(label);
+        wrap.appendChild(toggle.wrap);
       });
       var direction = selectControl("刻度方向", edge.tickDirection === "in" ? "in" : "out", [["out", "向外"], ["in", "向内"]]);
       direction.input.addEventListener("change", function () {
@@ -5761,11 +6360,9 @@
       decimals.input.addEventListener("change", commit);
       lineColor.input.addEventListener("change", commit);
       lineWidth.input.addEventListener("change", commit);
-      var showAxisTitle = document.createElement("label");
-      var showAxisTitleBox = document.createElement("input");
-      showAxisTitleBox.type = "checkbox";
-      showAxisTitleBox.checked = axis.showTitle !== false;
-      showAxisTitle.append(showAxisTitleBox, document.createTextNode(" 显示轴标题"));
+      var axisTitleSwitch = switchControl("显示轴标题", axis.showTitle !== false);
+      var showAxisTitle = axisTitleSwitch.wrap;
+      var showAxisTitleBox = axisTitleSwitch.input;
       showAxisTitleBox.addEventListener("change", function () {
         axis.showTitle = showAxisTitleBox.checked;
         setDirty(true);
@@ -6010,11 +6607,9 @@
       }
       rangeEditor("X Range", inset.xAxis);
       rangeEditor("Y Range", inset.yAxis);
-      var legend = document.createElement("label");
-      var legendBox = document.createElement("input");
-      legendBox.type = "checkbox";
-      legendBox.checked = !!inset.showLegend;
-      legend.append(legendBox, document.createTextNode(" 显示图例"));
+      var insetLegend = switchControl("显示图例", !!inset.showLegend);
+      var legend = insetLegend.wrap;
+      var legendBox = insetLegend.input;
       var connector = document.createElement("label");
       var connectorBox = document.createElement("input");
       connectorBox.type = "checkbox";
@@ -6879,11 +7474,9 @@
       exportSec.body.appendChild(exportCursors);
 
       var legendSec = section("图例", false, "legend");
-      var legendVisible = document.createElement("label");
-      var legendCheck = document.createElement("input");
-      legendCheck.type = "checkbox";
-      legendCheck.checked = plot.legend.visible !== false;
-      legendVisible.append(legendCheck, document.createTextNode(" 显示图例"));
+      var legendSwitch = switchControl("显示图例", plot.legend.visible !== false);
+      var legendVisible = legendSwitch.wrap;
+      var legendCheck = legendSwitch.input;
       legendCheck.addEventListener("change", function () {
         plot.legend.visible = legendCheck.checked;
         plot.legendVisible = plot.legend.visible;
@@ -7009,40 +7602,77 @@
       var chart = section("图表", true, "chart");
       var titleSec = section(plot.type === "detail" ? "标题" : "图标题", false, plot.type === "detail" ? "title" : "chart.title");
       var figureName = fieldControl("名称", core.plotEditorName(plot));
-      var showTitleLabel = document.createElement("label");
-      var showTitleBox = document.createElement("input");
-      showTitleBox.type = "checkbox";
-      showTitleBox.checked = plot.showTitle !== false;
-      showTitleLabel.append(showTitleBox, document.createTextNode(" 显示标题"));
+      var titleSwitch = switchControl("显示标题", plot.showTitle !== false);
+      var showTitleLabel = titleSwitch.wrap;
+      var showTitleBox = titleSwitch.input;
       var title = fieldControl("标题内容", plot.showTitle === false ? (plot.title || "") : (plot.title || ""));
       title.input.dataset.editFocus = "title";
       var subtitle = fieldControl("副标题", plot.subtitle);
       var note = fieldControl("备注", plot.note, "textarea");
       var size = document.createElement("div");
-      size.className = "tv-inline";
-      var width = fieldControl("宽度 (px)", plot.layout.width);
-      var height = fieldControl("高度 (px)", plot.layout.height);
+      size.className = "tv-size-stack";
+      var width = metricField("宽度", formatFigureMm(plot.layout.width));
+      var height = metricField("高度", formatFigureMm(plot.layout.height));
       width.input.id = "tvFigWidth";
       height.input.id = "tvFigHeight";
-      width.input.type = "number";
-      height.input.type = "number";
-      width.input.min = "240";
-      height.input.min = "180";
+      var column = document.createElement("div");
+      column.className = "tv-segment";
+      column.setAttribute("role", "group");
+      column.setAttribute("aria-label", "栏宽");
+      function paintColumn() {
+        column.querySelectorAll("button").forEach(function (item) {
+          item.setAttribute("aria-pressed", plot.layout.width === core.mmToPx(Number(item.dataset.mm)) ? "true" : "false");
+        });
+      }
+      function columnButton(label, mm) {
+        var button = document.createElement("button");
+        button.type = "button";
+        button.textContent = label;
+        button.dataset.mm = String(mm);
+        button.addEventListener("click", function () {
+          core.applyFigureColumn(plot, mm);
+          width.input.value = formatFigureMm(plot.layout.width);
+          height.input.value = formatFigureMm(plot.layout.height);
+          paintColumn();
+          core.syncCanvasToPlots(project);
+          setDirty(true);
+          renderCanvas();
+        });
+        return button;
+      }
+      column.append(columnButton("单栏 89 mm", 89), columnButton("双栏 183 mm", 183));
+      paintColumn();
       var lock = document.createElement("label");
       var lockBox = document.createElement("input");
       lockBox.type = "checkbox";
       lockBox.checked = !!plot.lockAspect;
       lock.append(lockBox, document.createTextNode(" 锁定宽高比"));
-      function commitSize(from) {
-        core.setPlotSize(plot, Number(width.input.value), Number(height.input.value), from);
-        width.input.value = plot.layout.width;
-        height.input.value = plot.layout.height;
+      function commitMm(input, from) {
+        var mm = Number(String(input.value).replace(",", "."));
+        if (!Number.isFinite(mm) || mm <= 0) {
+          input.value = formatFigureMm(from === "width" ? plot.layout.width : plot.layout.height);
+          setStatus("请输入正数。", "error");
+          return;
+        }
+        var px = core.mmToPx(mm);
+        if (px < 240 || px > 4000) {
+          input.value = formatFigureMm(from === "width" ? plot.layout.width : plot.layout.height);
+          setStatus("尺寸超出可编辑范围。", "error");
+          return;
+        }
+        if (from === "width") core.setPlotSize(plot, px, plot.layout.height, "width");
+        else core.setPlotSize(plot, plot.layout.width, px, "height");
+        width.input.value = formatFigureMm(plot.layout.width);
+        height.input.value = formatFigureMm(plot.layout.height);
+        paintColumn();
         core.syncCanvasToPlots(project);
         setDirty(true);
         renderCanvas();
       }
-      width.input.addEventListener("change", function () { commitSize("width"); });
-      height.input.addEventListener("change", function () { commitSize("height"); });
+      width.input.addEventListener("change", function () { commitMm(width.input, "width"); });
+      height.input.addEventListener("change", function () { commitMm(height.input, "height"); });
+      width.input.addEventListener("keydown", function (event) { if (event.key === "Enter") width.input.blur(); });
+      height.input.addEventListener("keydown", function (event) { if (event.key === "Enter") height.input.blur(); });
       lockBox.addEventListener("change", function () {
         plot.lockAspect = lockBox.checked;
         if (plot.lockAspect) plot.aspectRatio = plot.layout.height ? plot.layout.width / plot.layout.height : plot.aspectRatio;
@@ -7103,7 +7733,7 @@
       var originNote = document.createElement("p");
       originNote.className = "tv-hint";
       originNote.textContent = "原点属于图窗本身。画布里的位置和大小在排版模式的实例属性里改，两边互不影响。";
-      size.append(width.wrap, height.wrap);
+      size.append(column, width.wrap, height.wrap);
       var titleAlign = selectControl("标题对齐", plot.textStyles.title.align || "left", [
         ["left", "左"],
         ["center", "居中"],
@@ -7236,6 +7866,9 @@
       if (!project.plots.some(function (item) { return item.id === selectedPlotId; })) {
         selectedPlotId = project.plots[0] ? project.plots[0].id : null;
       }
+      delete thumbCache[id];
+      delete previewCache[id];
+      if (dockPreviewId === id) hideDockPreview();
       setDirty(true);
       setStatus("已删除图。", "ok");
       renderAll();
@@ -7432,6 +8065,10 @@
       if (openedCanvas) core.mirrorCanvas(next, openedCanvas.id);
       selectedInstanceIds = [];
       thumbCache = {};
+      previewCache = {};
+      plotViewport = { mode: "auto-fit", plotId: "", zoom: 1 };
+      inspectorLocked = false;
+      inspectorFilter = "";
       workspaceFocus = openedCanvas ? { type: "canvas", id: openedCanvas.id } : null;
       selectedRefIndex = 0;
       lastSelectedSeriesId = {};
@@ -8227,7 +8864,63 @@
     document.getElementById("tvZoomIn").addEventListener("click", function () { setCanvasZoom(canvasZoom() + core.ZOOM_STEP); });
     document.getElementById("tvZoomOut").addEventListener("click", function () { setCanvasZoom(canvasZoom() - core.ZOOM_STEP); });
     document.getElementById("tvZoom100").addEventListener("click", function () { setCanvasZoom(1); });
-    document.getElementById("tvZoomFit").addEventListener("click", fitCanvasView);
+    document.getElementById("tvZoomFit").addEventListener("click", function () { fitCanvasView("window"); });
+    document.getElementById("tvZoomWidth").addEventListener("click", function () { fitCanvasView("width"); });
+    document.getElementById("tvModeHelp").addEventListener("click", function (event) {
+      event.stopPropagation();
+      var pop = document.getElementById("tvModePop");
+      var show = pop.hidden;
+      pop.hidden = !show;
+      event.currentTarget.setAttribute("aria-expanded", show ? "true" : "false");
+    });
+    document.addEventListener("click", function (event) {
+      var help = document.getElementById("tvModeHelp");
+      var pop = document.getElementById("tvModePop");
+      if (!pop || pop.hidden) return;
+      if (event.target === help || pop.contains(event.target)) return;
+      pop.hidden = true;
+      if (help) help.setAttribute("aria-expanded", "false");
+    });
+    var dockPreviewEl = document.getElementById("tvDockPreview");
+    dockPreviewEl.addEventListener("pointerenter", function () {
+      cancelDockHide();
+      clearTimeout(dockPreviewHideTimer);
+    });
+    dockPreviewEl.addEventListener("pointerleave", function () {
+      scheduleDockPreviewHide();
+      scheduleDockHide();
+    });
+    document.addEventListener("pointermove", function (event) {
+      if (dockPrefs.pinned || document.querySelector("dialog[open]")) return;
+      var node = event.target;
+      var overDock = node && node.closest && (node.closest("#tvDock") || node.closest("#tvDockPreview"));
+      if (overDock || event.clientY >= window.innerHeight - 12) cancelDockHide();
+      else scheduleDockHide();
+    });
+    if (typeof ResizeObserver === "function") {
+      var viewportObserver = new ResizeObserver(function () {
+        if (viewportApplying) return;
+        if (workspaceMode() === "plot" && plotViewport.mode !== "manual") applyCanvasZoom();
+      });
+      viewportObserver.observe(canvasScroll);
+    }
+    canvasScroll.addEventListener("scroll", function () {
+      if (viewportApplying) return;
+      if (workspaceMode() === "plot" && plotViewport.mode !== "manual") plotViewport.mode = "manual";
+    });
+    var inspectorHost = document.getElementById("tvInspector");
+    inspectorHost.addEventListener("pointerenter", function () { inspectorLocked = true; });
+    inspectorHost.addEventListener("pointerleave", function () { inspectorLocked = false; });
+    inspectorHost.addEventListener("keydown", function (event) {
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp" && event.key !== "Enter" && event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") moveReadoutSelection(event.key === "ArrowDown" ? 1 : -1);
+      if (event.key === "Escape") {
+        inspectorLocked = false;
+        setInteractionMode("pointer");
+      }
+    });
     document.getElementById("tvCollapseLeft").addEventListener("click", function () {
       uiState().leftPanelCollapsed = !uiState().leftPanelCollapsed;
       applyPanelLayout();
@@ -8349,6 +9042,12 @@
       dataPanelActive = false;
     });
     document.addEventListener("keydown", function (event) {
+      var readoutOpen = interactionMode === "cursor" && !document.getElementById("tvInspector").hidden;
+      if (readoutOpen && !isTextEntry(document.activeElement) && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+        event.preventDefault();
+        moveReadoutSelection(event.key === "ArrowDown" ? 1 : -1);
+        return;
+      }
       if (!isTextEntry(document.activeElement) && !event.metaKey && !event.ctrlKey && !event.altKey) {
         var toolKey = event.key.toLowerCase();
         if (toolKey === "v" || toolKey === "m" || toolKey === "r" || toolKey === "h") {

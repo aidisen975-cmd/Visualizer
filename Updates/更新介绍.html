@@ -8,10 +8,10 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>Visualizer · 0.6.0 更新日志</title>
+<title>Visualizer · 0.6.1 更新日志</title>
 <meta name="author" content="{{作者}}">
-<meta name="description" content="Visualizer 0.6.0 把图窗和画布分开，同一张图可以放进多张画布。">
-<meta name="keywords" content="Visualizer, 图窗, 画布, 导出, 旧工程">
+<meta name="description" content="Visualizer 0.6.1 把更多位置留给图，Dock 默认藏在屏幕底部。">
+<meta name="keywords" content="Visualizer, Dock, 绘图, 读数, 图窗">
 <meta name="generator" content="Kami">
 <style>
   /* Regular weight */
@@ -198,26 +198,26 @@
 <div class="header">
   <div class="title-block">
     <div class="eyebrow">更新日志</div>
-    <h1>Visualizer 0.6.0</h1>
-    <div class="subtitle">图窗可以单独编辑，也可以摆进多张画布。</div>
+    <h1>Visualizer 0.6.1</h1>
+    <div class="subtitle">屏幕上更多的是图，Dock 默认藏在底部。</div>
   </div>
-  <div class="meta">2026-10-10</div>
+  <div class="meta">2026-10-12</div>
 </div>
 
 <h2>新功能</h2>
 <ol class="changes">
-  <li><strong>图窗 Dock</strong>：底部增加图窗 Dock，可以新建和切换画布与图窗。</li>
-  <li><strong>排版和绘图</strong>：双击画布中的图进入绘图，返回后继续排版。</li>
-  <li><strong>一张图多张画布</strong>：同一张图可以放进多张画布，位置和大小各自保留。</li>
-  <li><strong>分开导出</strong>：可以只导出当前图窗，也可以导出整张画布。</li>
-  <li><strong>旧工程</strong>：旧工程打开后，原来的图出现在 Dock 里，曲线还在。</li>
-  <li><strong>删除前提示</strong>：删除还被画布使用的图时，会先写出那些画布的名字。</li>
+  <li><strong>自动隐藏 Dock</strong>：Dock 默认藏在屏幕底部，鼠标移过去才出现。</li>
+  <li><strong>图窗图标</strong>：图窗收成小图标，悬停可以看到这张图。</li>
+  <li><strong>进入即放大</strong>：进入绘图后按当前窗口放大。适应窗口、适应宽度和 100% 各不相同。</li>
+  <li><strong>读数点选</strong>：读数框里可以直接点选一条曲线。</li>
+  <li><strong>数据概览</strong>：数据簇里可以查看点数、范围和抽样。</li>
+  <li><strong>毫米尺寸</strong>：图的宽高用毫米填写。单栏和双栏只改宽度。</li>
 </ol>
 
 <h2>修复</h2>
 <ol class="changes">
-  <li><strong>图层</strong>：点图层名字只选中，不再打乱叠放顺序。</li>
-  <li><strong>新建图窗</strong>：之后新建的图窗不会自动堆到当前画布上。</li>
+  <li><strong>绘图区高度</strong>：隐藏 Dock 后，中间绘图区会变高。</li>
+  <li><strong>顶部导航</strong>：顶部导航收成一行。</li>
 </ol>
 
 <div class="changelog-footer">
