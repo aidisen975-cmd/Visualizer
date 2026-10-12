@@ -1085,3 +1085,16 @@ Edge、多图窗压力、系统保存框往返、网格线开关。本机没有 
 真机触控板手感、Edge、保存框往返。注释菜单、模式说明和顶部下拉仍是 CSS 定位。
 
 `Updates/更新介绍.pdf` 本机没有 weasyprint，改用 Chrome headless 从同目录 HTML 打印，单页。
+
+---
+
+## 2026-10-12 发布 v0.6.2
+
+- 软件版本：`0.6.2`
+- 工程格式：`projectFormatVersion: "1.1"`
+- tag：`v0.6.2`（提交 `d0c9a66`）
+- 页面：https://github.com/aidisen975-cmd/Visualizer/releases/tag/v0.6.2
+
+正式版，不是 Draft，也不是 Pre-release。附件 `Visualizer-v0.6.2.zip`（html + `visualizer-core.js` + `README.md`，三个文件在压缩包根目录）。v0.6.1 没有单独发布，改动随 v0.6.2 一起进入正式版。
+
+发布后取 `releases/latest`（匿名请求返回 403，改用 `gh api` 取同一份 JSON），交给 `0.6.0` 的更新判断：状态为发现新版本，最新版 `0.6.2`。本地 `0.6.2` 的状态是当前已是最新。
