@@ -8,10 +8,10 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>Visualizer · 0.6.2 更新日志</title>
+<title>Visualizer · 0.6.3 更新日志</title>
 <meta name="author" content="{{作者}}">
-<meta name="description" content="Visualizer 0.6.2 修好簇样式、适应窗口和浮层位置，数据面板更简洁。">
-<meta name="keywords" content="Visualizer, Dock, 绘图, 读数, 图窗">
+<meta name="description" content="Visualizer 0.6.3 补齐属性栏一级图标，图层能认出是哪张图。">
+<meta name="keywords" content="Visualizer、图标、属性栏、图层、画布">
 <meta name="generator" content="Kami">
 <style>
   /* Regular weight */
@@ -198,26 +198,33 @@
 <div class="header">
   <div class="title-block">
     <div class="eyebrow">更新日志</div>
-    <h1>Visualizer 0.6.2</h1>
-    <div class="subtitle">改样式立即生效，缩放和菜单都不再跑偏。</div>
+    <h1>Visualizer 0.6.3</h1>
+    <div class="subtitle">属性栏一级菜单都有图标，画布图层能认出是哪张图。</div>
   </div>
-  <div class="meta">2026-10-12</div>
+  <div class="meta">2026-10-19</div>
 </div>
 
 <h2>新功能</h2>
 <ol class="changes">
-  <li><strong>数据簇概览</strong>：概览移到数据簇上，显示已选、已加入图窗、点数和单位。</li>
-  <li><strong>系列行更简洁</strong>：每行只剩勾选、颜色、名称和点数，悬停看详情。</li>
-  <li><strong>直接输入缩放</strong>：缩放百分比可以直接填写。</li>
+  <li><strong>一级图标</strong>：属性栏一级菜单全部带 28px 图标，补上图标题、背景与尺寸、导出设置。</li>
+  <li><strong>菜单层级</strong>：轴线与刻度作为一级，X Axis 和 Y Axis 收到二级。</li>
+  <li><strong>顶栏按钮</strong>：新建、打开、保存、导入等按钮带上图标。</li>
+  <li><strong>属性与图层</strong>：改成可点的 Tab，图层每一项是独立卡片。</li>
+  <li><strong>画布识别</strong>：点中的图显示真实图名，图层能区分主图、局部图、引导线和标注。</li>
 </ol>
 
 <h2>修复</h2>
 <ol class="changes">
+  <li><strong>窄窗口顶栏</strong>：窗口变窄时顶栏收成图标，不把画布挤出屏幕。</li>
+</ol>
+
+<h2>0.6.2</h2>
+<ol class="changes">
+  <li><strong>数据簇概览</strong>：概览移到数据簇上，显示已选、已加入图窗、点数和单位。</li>
+  <li><strong>系列行更简洁</strong>：每行只剩勾选、颜色、名称和点数，悬停看详情。</li>
+  <li><strong>直接输入缩放</strong>：缩放百分比可以直接填写。</li>
   <li><strong>簇样式</strong>：改线宽、线型或颜色立即生效，不会把其他项重置。</li>
-  <li><strong>选中系列样式</strong>：只改选中的曲线，不影响其他图。</li>
   <li><strong>适应窗口</strong>：图居中，四周留边，放大后能平移到每一边。</li>
-  <li><strong>触控板缩放</strong>：捏合不再一下跳好几档，以指针位置为中心。</li>
-  <li><strong>菜单位置</strong>：右键菜单、Dock 提示和新建菜单不再超出屏幕。</li>
 </ol>
 
 <div class="changelog-footer">

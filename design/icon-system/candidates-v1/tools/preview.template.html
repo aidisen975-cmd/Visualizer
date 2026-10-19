@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ICON-001 · B/C 图标候选审批画廊</title>
+<style>
+  :root { --page:#f3efe8; --card:#faf8f5; --ink:#222; --mute:#666; --line:#e2dccf; --dark:#1f272b; --darkfg:#e6e9ea; --warn:#b4531c; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--page); color:var(--ink); font:14px/1.5 -apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif; }
+  header.top { position:sticky; top:0; z-index:5; background:var(--page); border-bottom:1px solid var(--line); padding:12px 28px; display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
+  header.top h1 { font-size:17px; margin:0; }
+  .banner { background:#fff3e6; border:1px solid #f0cfa8; color:#7a4a14; padding:2px 10px; border-radius:99px; font-size:12px; }
+  .spacer { flex:1; }
+  button, select, textarea { font:inherit; }
+  .btn { border:1px solid #bbb; background:#fff; border-radius:6px; padding:4px 12px; cursor:pointer; }
+  .btn:hover { background:#f6f6f6; }
+  main { max-width:1180px; margin:0 auto; padding:20px 28px 80px; }
+  h2 { font-size:16px; margin:34px 0 4px; }
+  p.sub { margin:0 0 14px; color:var(--mute); font-size:13px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; margin-bottom:18px; }
+  .head { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+  .head h3 { margin:0; font-size:16px; }
+  .tag { font-size:11px; padding:1px 8px; border-radius:99px; border:1px solid var(--line); background:#fff; color:var(--mute); }
+  .tag.status { background:#fff3e6; border-color:#f0cfa8; color:#7a4a14; font-weight:600; }
+  .tag.warn { background:#fdeceb; border-color:#f1c2bd; color:#9a2c20; }
+  .grid { display:grid; grid-template-columns: 170px 1fr 1fr; gap:16px; margin-top:14px; align-items:start; }
+  .big { height:170px; border:1px dashed var(--line); border-radius:10px; display:flex; align-items:center; justify-content:center; background:#fff; color:#222; }
+  .big svg { width:128px; height:128px; }
+  .panel { border-radius:10px; padding:10px 12px; }
+  .panel.light { background:#fff; color:#2b3438; border:1px solid var(--line); }
+  .panel.dark { background:var(--dark); color:var(--darkfg); }
+  .panel .cap { font-size:11px; opacity:.65; margin-bottom:6px; }
+  .row { display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap; }
+  .row figure { margin:0; text-align:center; font-size:10px; opacity:.85; }
+  .row figure > span { display:flex; align-items:center; justify-content:center; }
+  .px { image-rendering:pixelated; display:block; margin:0 auto 2px; border:1px solid rgba(128,128,128,.35); }
+  dl.meta { display:grid; grid-template-columns:84px 1fr; gap:4px 10px; margin:14px 0 0; font-size:13px; }
+  dl.meta dt { color:var(--mute); } dl.meta dd { margin:0; }
+  dl.meta code { font-size:12px; background:#efe9dc; padding:0 4px; border-radius:3px; }
+  .review { margin-top:14px; padding-top:12px; border-top:1px dashed var(--line); display:flex; gap:12px; flex-wrap:wrap; align-items:flex-start; }
+  .review label { cursor:pointer; margin-right:8px; }
+  .review textarea { flex:1; min-width:220px; height:44px; padding:6px 8px; border:1px solid #ccc; border-radius:6px; resize:vertical; }
+  .hint { font-size:12px; color:var(--mute); }
+  table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden; font-size:13px; }
+  th, td { text-align:left; padding:8px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { background:#efe9dc; font-weight:600; }
+  .reuse { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:12px; }
+  .reuse .item { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+  .reuse .item b { font-size:13px; } .reuse .item .u { font-size:11px; color:var(--mute); margin-bottom:6px; }
+  .mock { display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:10px 12px; border-radius:10px; margin-bottom:10px; }
+  .mock.light { background:#f5f5f4; color:#2b3438; border:1px solid var(--line); }
+  .mock.dark { background:var(--dark); color:var(--darkfg); }
+  .mock .tb { display:inline-flex; align-items:center; gap:5px; height:26px; padding:0 9px; border-radius:6px; border:1px solid rgba(128,128,128,.4); background:rgba(255,255,255,.05); font-size:12px; }
+  .mock .tb svg { width:16px; height:16px; flex:none; }
+  .mock.light .tb { background:#fff; }
+  .acc { display:flex; align-items:center; gap:8px; padding:8px 12px; width:260px; border-radius:8px; border:1px solid rgba(128,128,128,.3); font-size:13px; font-weight:600; }
+  .acc svg { width:24px; height:24px; flex:none; }
+  .mock.light .acc { background:#fff; } .mock.dark .acc { background:#2a343a; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>ICON-001 · B/C 图标候选审批画廊</h1>
+  <span class="banner">全部 PENDING_REVIEW · 仅候选 · 未接入 Visualizer UI</span>
+  <span class="spacer"></span>
+  <span class="hint" id="count"></span>
+  <button class="btn" id="exportBtn">导出我的审批意见 JSON</button>
+  <button class="btn" id="clearBtn">清除本地批注</button>
+</header>
+<main>
+  <p class="sub">基线：Visualizer v0.6.2。下方“决定”和“批注”只保存在本浏览器 localStorage，用于你线下审阅；<b>不会</b>改写 manifest.json，也不会让任何图标变成 APPROVED。</p>
+
+  <h2>B 级候选（24px 分组标题图标）</h2>
+  <p class="sub">手绘风格、24px 简化版：每个主体都是纸色封闭卡片，彩色块只在轮廓外探出，深色背景下墨线也有纸底托着。</p>
+  <div id="bList"></div>
+
+  <h2>C 级候选（16–20px 操作按钮图标）</h2>
+  <p class="sub">单色 currentColor 线性，沿用真实 UI 的 16px 约定（viewBox 16、线宽 1.4、圆端点）。</p>
+  <div id="cList"></div>
+
+  <h2>上下文模拟（静态模拟，不是真实界面）</h2>
+  <p class="sub">用来感受候选图标放在真实位置旁边的比例；字号与间距为近似值。</p>
+  <div id="mocks"></div>
+
+  <h2>C 级现有图标对照（真实 UI 内联 SVG，只读）</h2>
+  <p class="sub">这四个已在缩放栏上方工具条中使用，不做重画。fit-view 需要与它们风格对齐。</p>
+  <div id="existingC" class="reuse"></div>
+
+  <h2>B 级复用图标 24px 可读性对照（沿用已确认 A 级，只读）</h2>
+  <p class="sub">这些是 tmp/handdrawn-icons 里的已有 100×100 原图，原样缩放，不重画；用来判断它们在 24px 和深色背景下是否可读。</p>
+  <div id="reuse" class="reuse"></div>
+
+  <h2>未生成 / 取消 / 重复项</h2>
+  <table id="skipTable"><thead><tr><th>语义</th><th>规划等级</th><th>结论</th><th>理由</th><th>真实 UI 依据</th></tr></thead><tbody></tbody></table>
+</main>
+
+<script id="data" type="application/json">__DATA__</script>
+<script>
+(function () {
+  "use strict";
+  var D = JSON.parse(document.getElementById("data").textContent);
+  var KEY = "visualizer.iconreview.v1";
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) { saved = {}; }
+  function persist() { try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {} updateCount(); }
+  function updateCount() {
+    var n = Object.keys(saved).filter(function (k) { return saved[k].decision || saved[k].note; }).length;
+    document.getElementById("count").textContent = "本地已标记 " + n + " / " + D.icons.length;
+  }
+  function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
+  function sized(svg, px) { return svg.replace(/(<svg[^>]*?)\swidth="[^"]*"\sheight="[^"]*"/, '$1 width="' + px + '" height="' + px + '"'); }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  // rasterise at true pixel size, then magnify without smoothing
+  function pixelZoom(svg, px, theme, scale) {
+    var fg = theme === "dark" ? "#e6e9ea" : "#2b3438", bg = theme === "dark" ? "#1f272b" : "#ffffff";
+    var src = sized(svg, px).replace(/currentColor/g, fg);
+    var c = document.createElement("canvas"); c.width = c.height = px; c.className = "px";
+    c.style.width = c.style.height = (px * scale) + "px";
+    var img = new Image();
+    img.onload = function () { var x = c.getContext("2d"); x.fillStyle = bg; x.fillRect(0, 0, px, px); x.drawImage(img, 0, 0, px, px); };
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(src);
+    return c;
+  }
+  function sizeRow(svg, sizes, theme) {
+    var row = el("div", "row");
+    sizes.forEach(function (s) { row.appendChild(el("figure", "", "<span style='width:" + s + "px;height:" + s + "px'>" + sized(svg, s) + "</span>" + s)); });
+    return row;
+  }
+  function panel(theme, cap, node) { var p = el("div", "panel " + theme); p.appendChild(el("div", "cap", cap)); p.appendChild(node); return p; }
+
+  function card(i) {
+    var c = el("section", "card");
+    c.id = i.semantic_id;
+    var head = el("div", "head");
+    head.innerHTML = "<h3>" + esc(i.semantic_id) + " · " + esc(i.label_zh) + "</h3><span class='tag'>" + i.tier + " 级</span><span class='tag status'>" + i.status + "</span>" +
+      (i.duplicate_of ? "<span class='tag warn'>重复：" + esc(i.duplicate_of) + "</span>" : "<span class='tag'>与现有图标不重复</span>") +
+      (i.source_skill.indexOf("NONE") === 0 ? "<span class='tag warn'>非 Skill 产出（Skill 无 C 级）</span>" : "");
+    c.appendChild(head);
+    var g = el("div", "grid");
+    var big = el("div", "big"); big.innerHTML = i.svg; big.querySelector("svg").setAttribute("width", 128); big.querySelector("svg").setAttribute("height", 128);
+    if (i.tier === "C") big.style.color = "#2b3438";
+    g.appendChild(big);
+    var sizes = [16, 20, 24, 32, 40];
+    ["light", "dark"].forEach(function (t) {
+      var wrap = el("div");
+      wrap.appendChild(sizeRow(i.svg, sizes, t));
+      var zoom = el("div", "row"); zoom.style.marginTop = "12px";
+      (i.tier === "B" ? [20, 24] : [16, 20]).forEach(function (s) {
+        var f = el("figure"); f.appendChild(pixelZoom(i.svg, s, t, i.tier === "B" ? 6 : 8)); f.appendChild(document.createTextNode(s + "px 像素放大")); zoom.appendChild(f);
+      });
+      wrap.appendChild(zoom);
+      g.appendChild(panel(t, (t === "light" ? "亮色" : "深色") + "背景 · 实际像素尺寸 16/20/24/32/40", wrap));
+    });
+    c.appendChild(g);
+    var m = el("dl", "meta");
+    m.innerHTML = "<dt>功能语义</dt><dd>" + esc(i.function) + "</dd><dt>预期位置</dt><dd>" + esc(i.usage) + "</dd><dt>代码依据</dt><dd><code>" + esc(i.ui_anchor) + "</code></dd>" +
+      "<dt>重复检查</dt><dd>" + esc(i.note) + "</dd><dt>SVG 路径</dt><dd><code>" + esc(i.svg_path) + "</code></dd><dt>自动检查</dt><dd>" +
+      Object.keys(i.validation).map(function (k) { return (i.validation[k] ? "✓ " : "✗ ") + k; }).join(" · ") + "</dd><dt>来源</dt><dd>" + esc(i.source_skill) + "</dd>";
+    c.appendChild(m);
+    var r = el("div", "review");
+    var cur = saved[i.semantic_id] || {};
+    var opts = [["", "待审（PENDING_REVIEW）"], ["APPROVED", "APPROVED"], ["REVISE", "REVISE"], ["REJECT", "REJECT"]];
+    var rg = el("div");
+    rg.innerHTML = "<b>我的决定：</b>" + opts.map(function (o) { return "<label><input type='radio' name='d-" + i.semantic_id + "' value='" + o[0] + "'" + ((cur.decision || "") === o[0] ? " checked" : "") + "> " + o[1] + "</label>"; }).join("");
+    var ta = el("textarea"); ta.placeholder = "批注（例如：卡片太满 / 色块偏大 / 与 canvas 太像…）"; ta.value = cur.note || "";
+    function save() {
+      var d = rg.querySelector("input:checked"); saved[i.semantic_id] = { decision: d ? d.value : "", note: ta.value }; persist();
+    }
+    rg.addEventListener("change", save); ta.addEventListener("input", save);
+    r.append(rg, ta, el("span", "hint", "仅本地草稿，不写入 manifest"));
+    c.appendChild(r);
+    return c;
+  }
+  D.icons.forEach(function (i) { document.getElementById(i.tier === "B" ? "bList" : "cList").appendChild(card(i)); });
+
+  // reference grids
+  function refItem(title, usage, svg, sizes, tierC) {
+    var it = el("div", "item");
+    it.innerHTML = "<b>" + esc(title) + "</b><div class='u'>" + esc(usage) + "</div>";
+    ["light", "dark"].forEach(function (t) {
+      var p = el("div", "panel " + t); p.style.marginTop = "6px"; p.style.padding = "8px 10px";
+      p.appendChild(sizeRow(svg, sizes, t)); it.appendChild(p);
+    });
+    return it;
+  }
+  D.existing_c.forEach(function (x) { document.getElementById("existingC").appendChild(refItem(x.id, x.label, x.svg, [16, 20], true)); });
+  D.reuse.forEach(function (x) { document.getElementById("reuse").appendChild(refItem(x.id, x.usage, x.svg, [24, 32], false)); });
+
+  // static context mocks
+  var byId = {}; D.icons.forEach(function (i) { byId[i.semantic_id] = i; });
+  var mocks = document.getElementById("mocks");
+  ["light", "dark"].forEach(function (t) {
+    var m = el("div", "mock " + t);
+    var tools = D.existing_c.map(function (x) { return "<span class='tb'>" + x.svg + x.label.split(" ")[0] + "</span>"; }).join("");
+    m.innerHTML = tools + "<span class='tb'>−</span><span class='tb'>100%</span><span class='tb'>+</span>" +
+      "<span class='tb'>" + byId["fit-view"].svg + "适应窗口</span><span class='tb'>适应宽度</span><span class='tb'>100%</span><span class='hint' style='margin-left:8px'>← 缩放栏模拟（fit-view 候选在“适应窗口”前）</span>";
+    mocks.appendChild(m);
+    var a = el("div", "mock " + t);
+    [["series-style", "数据系列"], ["axes", "X Axis"], ["axes", "Y Axis"], ["legend", "图例"], ["layout", "位置与尺寸"]].forEach(function (p) {
+      a.appendChild(el("div", "acc", sized(byId[p[0]].svg, 24) + "<span>" + p[1] + "</span>"));
+    });
+    mocks.appendChild(a);
+  });
+
+  var tb = document.querySelector("#skipTable tbody");
+  D.not_generated.forEach(function (n) {
+    var tr = el("tr", "", "<td><b>" + esc(n.semantic_id) + "</b></td><td>" + esc(n.tier) + "</td><td>" + esc(n.result) + "</td><td>" + esc(n.reason) + "</td><td><code>" + esc(n.ref) + "</code></td>");
+    tb.appendChild(tr);
+  });
+
+  document.getElementById("exportBtn").addEventListener("click", function () {
+    var out = D.icons.map(function (i) { var s = saved[i.semantic_id] || {}; return { semantic_id: i.semantic_id, tier: i.tier, manifest_status: i.status, my_decision: s.decision || "PENDING_REVIEW", note: s.note || "" }; });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify({ task: "ICON-001", exported: new Date().toISOString(), decisions: out }, null, 2)], { type: "application/json" }));
+    a.download = "icon-review-decisions.json"; a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  });
+  document.getElementById("clearBtn").addEventListener("click", function () {
+    if (!confirm("清除本页保存的所有决定和批注？")) return;
+    saved = {}; persist(); location.reload();
+  });
+  updateCount();
+})();
+</script>
+</body>
+</html>

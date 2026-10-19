@@ -1098,3 +1098,90 @@ Edge、多图窗压力、系统保存框往返、网格线开关。本机没有 
 正式版，不是 Draft，也不是 Pre-release。附件 `Visualizer-v0.6.2.zip`（html + `visualizer-core.js` + `README.md`，三个文件在压缩包根目录）。v0.6.1 没有单独发布，改动随 v0.6.2 一起进入正式版。
 
 发布后取 `releases/latest`（匿名请求返回 403，改用 `gh api` 取同一份 JSON），交给 `0.6.0` 的更新判断：状态为发现新版本，最新版 `0.6.2`。本地 `0.6.2` 的状态是当前已是最新。
+
+---
+
+## 2026-10-17 ICON-002 已审批图标接入
+
+软件版本保持 `0.6.2`。工程格式保持 `1.1`。没有提交、没有 tag、没有 GitHub Release。
+
+用户已人工批准 ICON-001 实际生成的 5 个 SVG：`series-style`、`axes`、`legend`、`layout`、`fit-view`。本轮只把这些文件和既有 A 级 SVG 嵌进 `temperature_trajectory_visualizer.html`，没有重画，没有改 `visualizer-core.js`。
+
+接入位置：左栏「数据」标题和未导入空状态用 `dataset`；Dock 画布卡用 `canvas`，图窗卡仍是曲线缩略图；属性栏「X Axis」「Y Axis」共用 `axes`，「图例」用 `legend`，「数据系列」用 `series-style`，「局部视图」用 `inset`，「标注」用 `annotation`，局部图「位置与尺寸」用 `layout`，画布节用 `canvas`，图窗实例用 `trajectory`；图层列表标题用 `layers`；图表模板对话框和空列表用 `template`；「适应窗口」用 `fit-view` 并保留文字。框选和读数沿用原 16px 线性图标。参数行、系列行、菜单项、导出设置、图表和标题节不加图标。
+
+深色底上的 `#222` 墨线靠图标容器的 `#FAF8F5` 纸色底板，不用 CSS 滤镜。B 级在属性栏里显示为 20px，源文件仍是 24px 设计。
+
+验证：`node --check visualizer-core.js`、`node tests/core-test.js`、`node tests/icon-slot-test.js` 通过。Chrome 里导入样例 CSV、加入曲线、把线宽改到 4 并立即反映到图上、适应窗口、缩放、创建局部视图、拖动图窗实例、Dock 右键菜单、760×480 与约 1440/1920 视口。没有跑 Edge、真机触控板和系统保存框。
+
+---
+
+## 2026-10-17 ICON-003 Inspector 样板
+
+软件版本仍是 `0.6.2`，工程格式仍是 `1.1`。没有提交、没有 tag、没有 Release。只改了属性栏里的 X Axis 和图例，Y Axis、数据系列、Dock 和已批准 SVG 都没动。
+
+X Axis 和图例的一级标题改成卡片：展开 62px、折叠 54px，B 级图标显示 24px，模块间距 10px。X Axis 里原有的二级行（轴线与刻度、轴标题、范围与缩放、时间单位、上边）行高 42px。图例把「显示图例 / 位置 / 排列方式」做成同样高度的选项行，列数、字体、间距和背景仍是缩进后的参数，没有再加一层折叠。仓库里没有和这些二级语义对得上的现成线性图标，所以二级保持文字。属性栏宽度仍是 300px。
+
+验证：`node --check visualizer-core.js`、`node tests/core-test.js`、`node tests/icon-slot-test.js` 通过。Chrome 导入 `tests/fixtures/TESTDATA_temperature.csv`，把 T1、T2 加入图窗 1。轴线宽度改到 3.2 后图上立即变化，折叠再展开仍是 3.2；新建图窗 2 仍是 1.1，从 Dock 回到图窗 1 后 3.2 还在。图例位置改到左下。系列线宽改到 4 后曲线立即变粗。Enter 能折叠一级模块。1920×1080 与 760×480 没有横向溢出，绘图区宽度与改前相同。深色用现有 `data-theme="dark"` 看过，当前顶栏没有单独的主题开关。没有跑 Edge、真机触控板和系统保存框。截图在 `design/icon-system/inspector-prototype-v1/screenshots/`。
+
+---
+
+## 2026-10-19 ICON-004 Inspector 三级菜单与工作台收尾
+
+软件版本仍是 `0.6.2`，工程格式仍是 `1.1`。没有提交、没有 tag、没有 Release。没有改 `visualizer-core.js`，没有重画已审批 SVG。
+
+主图属性栏不再把 X Axis 当作一级卡片。一级是「图标题、背景与尺寸、轴线与刻度、图例、数据系列、局部视图、标注与引导线、导出设置」，外加虚线边框的全局画布。X Axis 和 Y Axis 收到「轴线与刻度」下面，原来的轴线、轴标题、范围、时间单位、上边、右边仍是三级文字分组。局部图的范围与缩放、来源框与引导线、位置与尺寸也用同一套一级卡片。「删除此图」保持独立危险按钮。
+
+二级补了 16px 单色线性图标：X/Y Axis、系列、样式、图例的显示/位置/排列，以及顶栏新建、打开、保存、导入、添加图、布局、预览、导出。这些不是已审批手绘资产。`fit-view` 仍只在「适应窗口」。上边和右边不加图标。属性栏宽度仍是 300px。
+
+顶栏按钮是图标加文字、浅底和细边框。添加图略强调，导出保持深色。窄于 1180px 时收成图标，文字仍在按钮里供读屏。属性 / 图层改成可辨认的 Tab。图层行是独立圆角卡片，选中、拖动、显隐和排序函数没改。
+
+验证：`node --check visualizer-core.js`、`node tests/core-test.js`、`node tests/icon-slot-test.js` 通过。Chrome 1920×1080 导入温度样例，三条曲线加入图窗 1。X 轴线宽改到 3.2 并画进 SVG，折叠后输入仍是 3.2。图例改到左下。选中一条系列后线宽改到 4，SVG 出现 stroke-width 4。760×480 顶栏不横向溢出，导出菜单右缘在 752px。图层卡片可选中。Dock 仍在 DOM 中，类名随本机偏好为展开。没有跑 Edge、真机触控板和系统保存框。截图在 `design/icon-system/icon-004/screenshots/`。
+
+---
+
+## 2026-10-19 ICON-005 28px 一级图标、画布对象识别与字体核查
+
+软件版本仍是 `0.6.2`，工程格式仍是 `1.1`。没有提交、没有 tag、没有 Release。没有改 `visualizer-core.js`，没有重画已审批 SVG。
+
+一级 Inspector 图标显示尺寸改为 CSS 变量 `--l1-icon-size: 28px`。已批准的 B/A 级 SVG 等比例缩放，viewBox 和路径未改。二级线性图标实测仍是 18px。Dock 入口尺寸没有改。
+
+缺图标的一级卡片没有塞进未审批素材。`图标题`、`背景与尺寸`、`导出设置` 在已批准清单里没有可复用且不撞语义的 SVG：`layout` 已用于局部图「位置与尺寸」，`canvas` 是画布页，`axes` 是轴线。隔离候选在 `design/icon-system/candidates-icon005/`，状态 `PENDING_REVIEW`，没有写入 `ICON_SVG`。局部图才出现的「范围与缩放」「来源框与引导线」同样只有待审候选。
+
+画布里点中图窗后，属性标题用图的自定义标题；没有自定义标题时用稳定图窗名。副标题才写「画布对象 · 图窗实例」或「局部图 · 来源 …」。图层卡片主名称是图标题、局部图名、引导线序号或标注文字，副标题写类型和来源。点选图层不改 `zOrder`，只有上移、下移、置顶、置底会改。一级「轴线与刻度」和三级「轴线样式」不再同名。
+
+Claude 字体没有替换。2026-10-19 在 `https://claude.ai/login` 读到界面西文是 Anthropic Sans / Anthropic Serif，文件在 `assets-proxy.anthropic.com`，没有可再分发许可。同一页的汉字实际由 PingFang SC 绘制。记录在 `design/icon-system/icon-005/claude-font-2026-10-19.md`。`--ui-font` 和图内字体都没动。
+
+验证：`node --check visualizer-core.js`、`node tests/core-test.js`、`node tests/icon-slot-test.js` 通过。Chrome 1920×1080 导入 `tests/fixtures/TESTDATA_temperature.csv`，三条曲线加入图窗 1，标题改为 T1-T3，加了自由文本和局部视图，并从 Dock 放下标题为 T1-T7 的图窗 2。图层五条名称是 T1-T7、T1-T3、局部视图 1、引导线 1、文本。点「局部视图 1」后两个实例的 zOrder 仍是 1 和 2；再对 T1-T3 点置顶后变为 2 和 1。已有图标的一级卡片 computed width/height 为 28px。760×480 时 `documentElement.scrollWidth` 为 760，没有横向溢出。没有跑 Edge、真机触控板和系统保存框。截图在 `design/icon-system/icon-005/screenshots/`。
+
+---
+
+## 2026-10-19 ICON-005-FOLLOWUP-02 获批一级图标接入
+
+软件版本仍是 `0.6.2`，工程格式仍是 `1.1`。没有提交、没有 tag、没有 Release。没有改 `visualizer-core.js`，没有重画 SVG，没有改配色和比例。Claude 字体仍 BLOCKED，`--ui-font` 没动。
+
+用户审批标识 `USER_APPROVAL_ICON005_20261019`。`design/icon-system/candidates-icon005/` 的原始 SVG 字节未改。`manifest.json` 与 `ICON_REVIEW.md` 写成 APPROVED，原 PENDING_REVIEW 历史保留在 `manifest.pending-review.json` 和 `ICON_REVIEW.pending.md`。五个 SHA-256 与源文件一致。
+
+`ICON_SVG` 写入 `figure-title`、`frame`、`export-settings`、`range`、`source-link`。主图一级：图标题、背景与尺寸、导出设置。局部图一级才用 range →「范围与缩放」、source-link →「来源框与引导线」。三级 Axis「范围与缩放」仍无图标。没有新建虚假菜单。显示仍走 `--l1-icon-size: 28px`。
+
+主图实际一级全部有 28px SVG：图标题、背景与尺寸、轴线与刻度、图例、数据系列、局部视图、标注与引导线、导出设置、画布。局部图另有范围与缩放、来源框与引导线、标题、位置与尺寸、标注。
+
+验证：`node --check visualizer-core.js` PASS；`node tests/core-test.js` PASS；`node tests/icon-slot-test.js` PASS，含 Chrome headless 对三个必装 Icon 的真实 DOM 断言（label、可渲染 SVG、slot 与 SVG computed 28×28）。Chrome 1920×1080 与 760×480 导入温度样例后绘图，Inspector 展开/收起正常。1920 与 760 的 `documentElement.scrollWidth` 分别是 1920 和 760，无横向溢出。页面无远程资源请求。Cursor 浏览器拦截 `file://`，离线依据是内联 SVG 加本地 http。Edge、真机触控板、系统保存框 NOT RUN。截图在 `design/icon-system/icon-005/screenshots/followup-02-*`。
+
+---
+
+## v0.6.3
+
+软件版本改为 `0.6.3`。`projectFormatVersion` 仍是 `1.1`，没有新的工程字段。
+
+把 ICON-002 到 ICON-005 已经完成、用户已批准的界面发出去：
+
+- 属性栏一级 28px 图标全覆盖，补上图标题、背景与尺寸、导出设置。
+- Inspector 三级菜单：轴线与刻度作为一级，X Axis / Y Axis 在二级。
+- 顶栏按钮带图标；窄窗口收成图标。
+- 属性 / 图层 Tab，图层独立卡片。
+- 画布对象标题与图层识别：点中的图显示真实图名，图层能区分主图、局部图、引导线和标注。
+- 五枚已审批 SVG：`figure-title`、`frame`、`export-settings`、`range`、`source-link`。
+
+明确不包含 FONT-001（Claude 字体，仍无离线许可）和 DOCK-001（独立 Dock 优化）。
+
+验证：`node --check visualizer-core.js` PASS；`node tests/core-test.js` PASS（`APP_INFO.version` 为 `0.6.3`）；`node tests/icon-slot-test.js` PASS。Chrome 1920×1080 一级图标 28px、五条图层可识别、工程文本保存再打开、SVG/PNG 导出、关于面板 v0.6.3。Chrome 760×480 无横向溢出。离线产品脚本无远程依赖。Edge、真机触控板、系统保存框 NOT RUN。

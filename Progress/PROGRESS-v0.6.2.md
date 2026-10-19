@@ -45,6 +45,26 @@
 - 注释菜单、模式说明弹层和顶部下拉菜单仍是 CSS 定位，没有接入统一定位函数；它们贴着顶栏或工具栏展开，目前没有出界。
 - 本机没有 weasyprint，`Updates/更新介绍.pdf` 改用 Chrome headless 从 `更新介绍.html` 打印，单页，已目视核对。
 
+## 图标集成（未升版本，2026-10-17）
+
+ICON-002 把已批准图标接进现有工作台，软件版本仍是 `0.6.2`。属性栏一级模块、数据标题、空状态、Dock 画布卡、图层标题和「适应窗口」使用这些图标。系列行、参数行和普通菜单没有加图标。Dock 仍是底部自动隐藏，图窗卡仍显示曲线缩略图。详细位置和截图在 `design/icon-system/integration-v1/ICON_INTEGRATION_REPORT.md`。
+
+## Inspector 样板（未升版本，2026-10-17）
+
+ICON-003 只改了属性栏的 X Axis 和图例。一级标题更舒展，二级行大约 42px，参数仍是文字。Y Axis、数据系列和 Dock 保持 ICON-002 的样子。已批准 SVG 没有重画。说明和截图在 `design/icon-system/inspector-prototype-v1/INSPECTOR_REVIEW.md`。这一步等人工看界面，不代表整套 Inspector 已经替换。
+
+## Inspector 收尾（未发布，2026-10-19）
+
+ICON-004 把一级卡片铺到真实属性分组，并把 X/Y Axis 收进「轴线与刻度」。二级补了离线线性图标，顶栏改为图标加文字，属性/图层改成 Tab，图层行改成圆角卡片。软件版本仍是 `0.6.2`，不属于已发布的 v0.6.2 更新介绍。说明和截图在 `design/icon-system/icon-004/ICON004_REVIEW.md`。等人工看界面，不要据此发 v0.6.3。
+
+## ICON-005（未发布，2026-10-19）
+
+一级图标显示尺寸是 28px。画布里点中的图窗，属性标题用图名（例如 T1-T3），图层卡片能区分主图、局部图、引导线和标注。`USER_APPROVAL_ICON005_20261019` 后，`figure-title` / `frame` / `export-settings` 已装进图标题、背景与尺寸、导出设置；`range` / `source-link` 只装在局部图一级「范围与缩放」「来源框与引导线」。软件版本仍是 `0.6.2`。Claude 官方字体没有可离线分发的许可，界面字体没有改成它。说明在 `design/icon-system/icon-005/claude-font-2026-10-19.md`。等用户看 Inspector 截图，不要据此发版。
+
 ## 下一步
 
-在真机触控板上调 `PINCH_ZOOM_GAIN` 手感；有 Edge 时补一轮回归；保存框可用时补保存后打开的往返。
+等用户看 ICON-005-FOLLOWUP-02 的一级图标接入。字体替换在取得可离线分发的授权之前不要做。通过之前不要升版本。真机触控板、Edge、系统保存框仍未在本轮重测。
+
+## 后续发布
+
+2026-10-19 用户批准将 ICON-002 至 ICON-005 的已完成界面作为 v0.6.3 正式发布。详见 `Progress/PROGRESS-v0.6.3.md`。FONT-001 与 DOCK-001 仍不在那一版里。

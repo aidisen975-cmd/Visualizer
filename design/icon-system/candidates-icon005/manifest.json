@@ -1,0 +1,64 @@
+{
+  "status": "APPROVED",
+  "approved": true,
+  "approval": "USER_APPROVAL_ICON005_20261019",
+  "approved_at": "2026-10-19",
+  "history": "Original PENDING_REVIEW snapshot kept in manifest.pending-review.json and ICON_REVIEW.pending.md. Source SVG bytes were not regenerated.",
+  "icons": [
+    {
+      "semantic_id": "figure-title",
+      "status": "APPROVED",
+      "decision": "APPROVED",
+      "tier": "B",
+      "display_px": 28,
+      "ui_anchor": "Inspector L1 「图标题」/ 局部图「标题」",
+      "note": "图标题。卡片里三条长短不同的文字线，没有图例圆点。",
+      "sha256": "9e0ee78b6566735ebdab7ebda3da5297e7ba8a5e67908520eae6c09ea8e5348c",
+      "approval": "USER_APPROVAL_ICON005_20261019"
+    },
+    {
+      "semantic_id": "frame",
+      "status": "APPROVED",
+      "decision": "APPROVED",
+      "tier": "B",
+      "display_px": 28,
+      "ui_anchor": "Inspector L1 「背景与尺寸」",
+      "note": "背景与尺寸。一个窗口加角上的尺寸线，不是 layout 的一大两小。",
+      "sha256": "14f76fa7a6668ac83d492d2ecc9e70a42f2082a7dc6ae3c9df45dd1c5a9b6f46",
+      "approval": "USER_APPROVAL_ICON005_20261019"
+    },
+    {
+      "semantic_id": "export-settings",
+      "status": "APPROVED",
+      "decision": "APPROVED",
+      "tier": "B",
+      "display_px": 28,
+      "ui_anchor": "Inspector L1 「导出设置」",
+      "note": "导出设置。页面里一支向上的箭头。",
+      "sha256": "49a1bb44d12c5f01560f77889a1a48442e8dc50e4e1d4bd4ddb56a1234db53b8",
+      "approval": "USER_APPROVAL_ICON005_20261019"
+    },
+    {
+      "semantic_id": "range",
+      "status": "APPROVED",
+      "decision": "APPROVED",
+      "tier": "B",
+      "display_px": 28,
+      "ui_anchor": "Inspector L1 「范围与缩放」（仅局部图；三级 Axis 范围不加图标）",
+      "note": "范围与缩放。一条轴和两端括号，不是已批准的 axes。",
+      "sha256": "e4c5891e48564926c1d65b22e4ac3b0ce21dec26f7a9715a7f9f163b1522a941",
+      "approval": "USER_APPROVAL_ICON005_20261019"
+    },
+    {
+      "semantic_id": "source-link",
+      "status": "APPROVED",
+      "decision": "APPROVED",
+      "tier": "B",
+      "display_px": 28,
+      "ui_anchor": "Inspector L1 「来源框与引导线」（仅局部图）",
+      "note": "来源框与引导线。两个框和一条连线，不是 inset 的放大窗口。",
+      "sha256": "f298527122a5d65bca24efcc4b5ab07d21aaff31fe49f0664a0e65d16e000324",
+      "approval": "USER_APPROVAL_ICON005_20261019"
+    }
+  ]
+}

@@ -1,0 +1,1525 @@
+{
+  "1920-light-both-closed": {
+    "propsW": 300,
+    "canvasW": 1342,
+    "panelClient": 299,
+    "panelScroll": 299,
+    "overflowX": false,
+    "rightOverflow": false,
+    "gapXY": 0,
+    "gapYL": 0,
+    "rows": [
+      {
+        "label": "图表",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "X Axis",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "轴线与刻度",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "轴标题",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "范围与缩放",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "时间单位",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "上边",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "Y Axis",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "轴线与刻度",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "轴标题",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "范围与缩放",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "图例",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "数据系列",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      }
+    ],
+    "options": []
+  },
+  "1920-light-x-open": {
+    "propsW": 300,
+    "canvasW": 1342,
+    "panelClient": 299,
+    "panelScroll": 299,
+    "overflowX": false,
+    "rightOverflow": false,
+    "gapXY": 0,
+    "gapYL": 0,
+    "rows": [
+      {
+        "label": "图表",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "X Axis",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "轴线与刻度",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "轴标题",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "范围与缩放",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "时间单位",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "上边",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "Y Axis",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "轴线与刻度",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "轴标题",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "范围与缩放",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "图例",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "数据系列",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      }
+    ],
+    "options": []
+  },
+  "1920-light-legend-open": {
+    "propsW": 300,
+    "canvasW": 1342,
+    "panelClient": 299,
+    "panelScroll": 299,
+    "overflowX": false,
+    "rightOverflow": false,
+    "gapXY": 0,
+    "gapYL": 0,
+    "rows": [
+      {
+        "label": "图表",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "X Axis",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "轴线与刻度",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "轴标题",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "范围与缩放",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "时间单位",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "上边",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "Y Axis",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "轴线与刻度",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "轴标题",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "范围与缩放",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "图例",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "数据系列",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      }
+    ],
+    "options": []
+  },
+  "1920-light-both-open": {
+    "propsW": 300,
+    "canvasW": 1342,
+    "panelClient": 299,
+    "panelScroll": 299,
+    "overflowX": false,
+    "rightOverflow": false,
+    "gapXY": 0,
+    "gapYL": 0,
+    "rows": [
+      {
+        "label": "图表",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "X Axis",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "轴线与刻度",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "轴标题",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "范围与缩放",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "时间单位",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "上边",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "Y Axis",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "轴线与刻度",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "轴标题",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "范围与缩放",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "图例",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "数据系列",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      }
+    ],
+    "options": []
+  },
+  "1920-light-x-card": {
+    "propsW": 300,
+    "canvasW": 1342,
+    "panelClient": 299,
+    "panelScroll": 299,
+    "overflowX": false,
+    "rightOverflow": false,
+    "gapXY": 0,
+    "gapYL": 0,
+    "rows": [
+      {
+        "label": "图表",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "X Axis",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "轴线与刻度",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "轴标题",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "范围与缩放",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "时间单位",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "上边",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "Y Axis",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "轴线与刻度",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "轴标题",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "范围与缩放",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "图例",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "数据系列",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      }
+    ],
+    "options": []
+  },
+  "1920-dark-both-open": {
+    "propsW": 300,
+    "canvasW": 1342,
+    "panelClient": 299,
+    "panelScroll": 299,
+    "overflowX": false,
+    "rightOverflow": false,
+    "gapXY": 0,
+    "gapYL": 0,
+    "rows": [
+      {
+        "label": "图表",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "X Axis",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "轴线与刻度",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "轴标题",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "范围与缩放",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "时间单位",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "上边",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "Y Axis",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "轴线与刻度",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "轴标题",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "范围与缩放",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "图例",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "数据系列",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      }
+    ],
+    "options": []
+  },
+  "1920-light-legend-top": {
+    "propsW": 300,
+    "canvasW": 1342,
+    "panelClient": 299,
+    "panelScroll": 299,
+    "overflowX": false,
+    "rightOverflow": false,
+    "gapXY": 0,
+    "gapYL": 0,
+    "rows": [
+      {
+        "label": "图表",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "X Axis",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "轴线与刻度",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "轴标题",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "范围与缩放",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "时间单位",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "上边",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "Y Axis",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "轴线与刻度",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "轴标题",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "范围与缩放",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "图例",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "数据系列",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      }
+    ],
+    "options": []
+  },
+  "1920-dark-legend-top": {
+    "propsW": 300,
+    "canvasW": 1342,
+    "panelClient": 299,
+    "panelScroll": 299,
+    "overflowX": false,
+    "rightOverflow": false,
+    "gapXY": 0,
+    "gapYL": 0,
+    "rows": [
+      {
+        "label": "图表",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "X Axis",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "轴线与刻度",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "轴标题",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "范围与缩放",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "时间单位",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "上边",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "Y Axis",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "轴线与刻度",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "轴标题",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "范围与缩放",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "图例",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "数据系列",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      }
+    ],
+    "options": []
+  },
+  "1920-errors": [],
+  "760-light-both-closed": {
+    "propsW": 300,
+    "canvasW": 182,
+    "panelClient": 299,
+    "panelScroll": 299,
+    "overflowX": false,
+    "rightOverflow": false,
+    "gapXY": 0,
+    "gapYL": 0,
+    "rows": [
+      {
+        "label": "图表",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "X Axis",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "轴线与刻度",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "轴标题",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "范围与缩放",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "时间单位",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "上边",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "Y Axis",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "轴线与刻度",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "轴标题",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "范围与缩放",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "图例",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "数据系列",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      }
+    ],
+    "options": []
+  },
+  "760-light-x-open": {
+    "propsW": 300,
+    "canvasW": 182,
+    "panelClient": 299,
+    "panelScroll": 299,
+    "overflowX": false,
+    "rightOverflow": false,
+    "gapXY": 0,
+    "gapYL": 0,
+    "rows": [
+      {
+        "label": "图表",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "X Axis",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "轴线与刻度",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "轴标题",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "范围与缩放",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "时间单位",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "上边",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "Y Axis",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "轴线与刻度",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "轴标题",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "范围与缩放",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "图例",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "数据系列",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      }
+    ],
+    "options": []
+  },
+  "760-light-legend-open": {
+    "propsW": 300,
+    "canvasW": 182,
+    "panelClient": 299,
+    "panelScroll": 299,
+    "overflowX": false,
+    "rightOverflow": false,
+    "gapXY": 0,
+    "gapYL": 0,
+    "rows": [
+      {
+        "label": "图表",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "X Axis",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "轴线与刻度",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "轴标题",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "范围与缩放",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "时间单位",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "上边",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "Y Axis",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "轴线与刻度",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "轴标题",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "范围与缩放",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "图例",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "数据系列",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      }
+    ],
+    "options": []
+  },
+  "760-light-both-open": {
+    "propsW": 300,
+    "canvasW": 182,
+    "panelClient": 299,
+    "panelScroll": 299,
+    "overflowX": false,
+    "rightOverflow": false,
+    "gapXY": 0,
+    "gapYL": 0,
+    "rows": [
+      {
+        "label": "图表",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "X Axis",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "轴线与刻度",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "轴标题",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "范围与缩放",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "时间单位",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "上边",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "Y Axis",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "轴线与刻度",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "轴标题",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "范围与缩放",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "图例",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "数据系列",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      }
+    ],
+    "options": []
+  },
+  "760-light-x-card": {
+    "propsW": 300,
+    "canvasW": 182,
+    "panelClient": 299,
+    "panelScroll": 299,
+    "overflowX": false,
+    "rightOverflow": false,
+    "gapXY": 0,
+    "gapYL": 0,
+    "rows": [
+      {
+        "label": "图表",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "X Axis",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "轴线与刻度",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "轴标题",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "范围与缩放",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "时间单位",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "上边",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "Y Axis",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "轴线与刻度",
+        "open": true,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "轴标题",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "范围与缩放",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 31.4,
+        "icon": null,
+        "proto": false
+      },
+      {
+        "label": "图例",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      },
+      {
+        "label": "数据系列",
+        "open": false,
+        "className": "tv-accordion",
+        "summaryH": 28,
+        "icon": 20,
+        "proto": false
+      }
+    ],
+    "options": []
+  },
+  "760-errors": []
+}

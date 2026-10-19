@@ -1,0 +1,198 @@
+{
+  "task": "ICON-001",
+  "app_version_baseline": "0.6.2",
+  "generated_by": "tools/build.py",
+  "git_head": "bba90a1d11722c7eefc5d58a6ccdc3ed3d6b635c",
+  "skill_files": {
+    "skill_md_sha256": "f706e9dbe1fd3f8be827bfc968d98270ad35590c4219465becb53d2f8c2af0a9",
+    "gen_py_sha256": "f1d48a217184e7d04379b1dc351f344b04c81ac9d7193783056accb9bb4c2d2e",
+    "modified": false
+  },
+  "global_status": "CANDIDATES_READY / PENDING_REVIEW",
+  "icons": [
+    {
+      "semantic_id": "series-style",
+      "tier": "B",
+      "label_zh": "曲线样式",
+      "svg_path": "icons/b/series-style.svg",
+      "function": "设置数据系列的线型、颜色、线宽（实线 + 虚线两条曲线）",
+      "usage": "属性栏一级标题「数据系列」（含「样式」子节），24px 标题图标",
+      "ui_anchor": "temperature_trajectory_visualizer.html: section(\"数据系列\") / section(\"样式\", key series.style)",
+      "source_skill": "handdrawn-icons (helpers: wob/rr/circ/block/palette from gen.py; B variant renderer in tools/build.py)",
+      "source_skill_version": "gen.py sha256:f1d48a217184 / SKILL.md sha256:f706e9dbe1fd",
+      "status": "PENDING_REVIEW",
+      "decision": null,
+      "duplicate_of": null,
+      "validation": {
+        "xml": true,
+        "no_external_ref": true,
+        "closed_silhouettes_paper_filled": true,
+        "pastel_only_in_bg": true,
+        "no_filter_no_gradient": true
+      },
+      "note": "与 A 级 trajectory（L 轴+单曲线）区分：本图是卡片内两条不同线型曲线。",
+      "sizes_checked": [
+        20,
+        24,
+        32
+      ]
+    },
+    {
+      "semantic_id": "axes",
+      "tier": "B",
+      "label_zh": "坐标轴",
+      "svg_path": "icons/b/axes.svg",
+      "function": "X/Y 坐标轴及刻度设置（L 形轴 + 双向主刻度，无数据曲线）",
+      "usage": "属性栏一级标题「X Axis」「Y Axis」（两处共用同一图标）",
+      "ui_anchor": "buildAxisSection(): section(\"X Axis\") / section(\"Y Axis\")",
+      "source_skill": "handdrawn-icons (helpers: wob/rr/circ/block/palette from gen.py; B variant renderer in tools/build.py)",
+      "source_skill_version": "gen.py sha256:f1d48a217184 / SKILL.md sha256:f706e9dbe1fd",
+      "status": "PENDING_REVIEW",
+      "decision": null,
+      "duplicate_of": null,
+      "validation": {
+        "xml": true,
+        "no_external_ref": true,
+        "closed_silhouettes_paper_filled": true,
+        "pastel_only_in_bg": true,
+        "no_filter_no_gradient": true
+      },
+      "note": "与 trajectory 区分：无数据曲线，两轴均有刻度。X/Y 共用一个图标是否合适需用户确认。",
+      "sizes_checked": [
+        20,
+        24,
+        32
+      ]
+    },
+    {
+      "semantic_id": "legend",
+      "tier": "B",
+      "label_zh": "图例",
+      "svg_path": "icons/b/legend.svg",
+      "function": "图例条目：线型标记 + 文字条，共三行",
+      "usage": "属性栏一级标题「图例」",
+      "ui_anchor": "section(\"图例\", key legend)",
+      "source_skill": "handdrawn-icons (helpers: wob/rr/circ/block/palette from gen.py; B variant renderer in tools/build.py)",
+      "source_skill_version": "gen.py sha256:f1d48a217184 / SKILL.md sha256:f706e9dbe1fd",
+      "status": "PENDING_REVIEW",
+      "decision": null,
+      "duplicate_of": null,
+      "validation": {
+        "xml": true,
+        "no_external_ref": true,
+        "closed_silhouettes_paper_filled": true,
+        "pastel_only_in_bg": true,
+        "no_filter_no_gradient": true
+      },
+      "note": "与 dataset（表格网格）区分：行内含线段+圆点标记，无网格线。",
+      "sizes_checked": [
+        20,
+        24,
+        32
+      ]
+    },
+    {
+      "semantic_id": "layout",
+      "tier": "B",
+      "label_zh": "图窗布局",
+      "svg_path": "icons/b/layout.svg",
+      "function": "图窗位置与尺寸：一大两小窗口排列",
+      "usage": "局部图属性栏一级标题「位置与尺寸」；主图仅有「图表」混合节，尚无同名一级标题",
+      "ui_anchor": "section(\"位置与尺寸\", key place)（仅 detail 图）",
+      "source_skill": "handdrawn-icons (helpers: wob/rr/circ/block/palette from gen.py; B variant renderer in tools/build.py)",
+      "source_skill_version": "gen.py sha256:f1d48a217184 / SKILL.md sha256:f706e9dbe1fd",
+      "status": "PENDING_REVIEW",
+      "decision": null,
+      "duplicate_of": null,
+      "validation": {
+        "xml": true,
+        "no_external_ref": true,
+        "closed_silhouettes_paper_filled": true,
+        "pastel_only_in_bg": true,
+        "no_filter_no_gradient": true
+      },
+      "note": "位置待用户确认：主图无独立“布局”一级标题。与 A 级 canvas 构图相近风险，已用分离窗口+大间距区分，需人工判断。",
+      "sizes_checked": [
+        20,
+        24,
+        32
+      ]
+    },
+    {
+      "semantic_id": "fit-view",
+      "tier": "C",
+      "label_zh": "适应窗口",
+      "svg_path": "icons/c/fit-view.svg",
+      "function": "让图窗内容适应可见区域（四角括号 + 内部曲线）；与 zoom-out（放大镜+减号）区分",
+      "usage": "画布缩放栏「适应窗口」按钮（图标 + 文字）。「适应宽度」「100%」语义不同，本轮不配图标",
+      "ui_anchor": "#tvZoomFit（现为纯文字按钮）",
+      "source_skill": "NONE — skill has no C tier; hand-authored to Notion C spec",
+      "source_skill_version": "n/a",
+      "status": "PENDING_REVIEW",
+      "decision": null,
+      "duplicate_of": null,
+      "validation": {
+        "xml": true,
+        "no_external_ref": true,
+        "uses_currentColor": true,
+        "viewBox16": true
+      },
+      "note": "Skill 无 C 级支持：按 Notion C 规范与现有 UI 16px 线性约定（viewBox 16, 1.4, round, currentColor）手写，非 Skill 产出。",
+      "sizes_checked": [
+        16,
+        20
+      ]
+    }
+  ],
+  "not_generated": [
+    {
+      "semantic_id": "region-select",
+      "tier": "C",
+      "result": "DUPLICATE_REUSE",
+      "reason": "真实 UI 已有 16px 框选图标（虚线矩形，data-tool=range-select, 快捷键 M）。",
+      "ref": "temperature_trajectory_visualizer.html L1662"
+    },
+    {
+      "semantic_id": "readout-probe",
+      "tier": "C",
+      "result": "DUPLICATE_REUSE",
+      "reason": "真实 UI 已有 16px 读数图标（十字+圆，data-tool=cursor, 快捷键 R）。",
+      "ref": "temperature_trajectory_visualizer.html L1663"
+    },
+    {
+      "semantic_id": "region-zoom",
+      "tier": "C 条件",
+      "result": "CANCELLED",
+      "reason": "无独立工具；「放大到此范围」仅是框选后弹出的逐行菜单项（规划表：逐行菜单项不加图标）。",
+      "ref": "temperature_trajectory_visualizer.html L3730"
+    },
+    {
+      "semantic_id": "inset-region",
+      "tier": "C 条件",
+      "result": "CANCELLED",
+      "reason": "「创建局部视图」同为框选后菜单项；局部图语义已由 A/B 级 inset 覆盖。",
+      "ref": "L3730 / section(\"局部视图\")"
+    },
+    {
+      "semantic_id": "layer-order",
+      "tier": "C 条件",
+      "result": "CANCELLED",
+      "reason": "图层面板是上移/下移/置顶/置底四个文字按钮，单个图标无法区分四种动作，文字已足够；强行配图属于凑数。",
+      "ref": "temperature_trajectory_visualizer.html L8151"
+    },
+    {
+      "semantic_id": "grid-ticks",
+      "tier": "B 条件",
+      "result": "CANCELLED",
+      "reason": "无独立网格/刻度一级模块：刻度在 X/Y Axis 的子节「轴线与刻度」内，且没有网格控件。",
+      "ref": "buildAxisSection L6604-6608"
+    },
+    {
+      "semantic_id": "typography",
+      "tier": "B 条件",
+      "result": "CANCELLED",
+      "reason": "无独立「标题/字体」一级模块：「图标题」是「图表」下的子节，字体控件分散在各对象内。",
+      "ref": "L7760 / L7957"
+    }
+  ]
+}

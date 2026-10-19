@@ -1,0 +1,67 @@
+[
+  {
+    "name": "import and add series",
+    "ok": true,
+    "detail": "已将 2 条曲线加入「图窗 1」。"
+  },
+  {
+    "name": "axis width writes the plot",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "axis width stays after collapse",
+    "ok": true,
+    "detail": "3.2"
+  },
+  {
+    "name": "axis visibility changes the drawing",
+    "ok": true,
+    "detail": "8353 -> 8215"
+  },
+  {
+    "name": "legend position control",
+    "ok": true,
+    "detail": "bottom-left"
+  },
+  {
+    "name": "new figure x axis is still the sample",
+    "ok": true,
+    "detail": "{\"x\":true,\"y\":false,\"yIcon\":20}"
+  },
+  {
+    "name": "new figure y axis is unchanged",
+    "ok": true,
+    "detail": "{\"x\":true,\"y\":false,\"yIcon\":20}"
+  },
+  {
+    "name": "new figure does not copy the edited width",
+    "ok": true,
+    "detail": "1.1"
+  },
+  {
+    "name": "switching figures keeps the first axis width",
+    "ok": true,
+    "detail": "3.2"
+  },
+  {
+    "name": "series line width still paints",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "keyboard toggles the module",
+    "ok": true,
+    "detail": "true -> false"
+  },
+  {
+    "name": "narrow inspector has no horizontal overflow",
+    "ok": true,
+    "detail": "{\"panel\":false,\"right\":false,\"props\":300}"
+  },
+  {
+    "name": "no page errors",
+    "ok": true,
+    "detail": ""
+  }
+]
