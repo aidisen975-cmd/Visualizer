@@ -1185,3 +1185,18 @@ Claude 字体没有替换。2026-10-19 在 `https://claude.ai/login` 读到界�
 明确不包含 FONT-001（Claude 字体，仍无离线许可）和 DOCK-001（独立 Dock 优化）。
 
 验证：`node --check visualizer-core.js` PASS；`node tests/core-test.js` PASS（`APP_INFO.version` 为 `0.6.3`）；`node tests/icon-slot-test.js` PASS。Chrome 1920×1080 一级图标 28px、五条图层可识别、工程文本保存再打开、SVG/PNG 导出、关于面板 v0.6.3。Chrome 760×480 无横向溢出。离线产品脚本无远程依赖。Edge、真机触控板、系统保存框 NOT RUN。
+
+---
+
+## 2026-10-19 发布 v0.6.3
+
+- 软件版本：`0.6.3`
+- 工程格式：`projectFormatVersion: "1.1"`
+- 分支：`feat/v0.1.0`
+- 提交：`dc9b643198c0e70af3bdf3e3554448afb16cbfcb`
+- tag：`v0.6.3` 指向该提交
+- 页面：https://github.com/aidisen975-cmd/Visualizer/releases/tag/v0.6.3
+
+正式版，不是 Draft，也不是 Pre-release。附件 `Visualizer-v0.6.3.zip`（html + `visualizer-core.js` + `README.md`，三个文件在压缩包根目录）。SHA256 `c48340ba144f04da35bae9fba9cffb06aab93c11f0615755a5dd0cc976be98d3`。远端下载后校验一致。
+
+FONT-001 与 DOCK-001 不在这一版。发布后取 `releases/latest`：`0.6.2` 判断为发现新版本 `0.6.3` 且带 zip 下载地址；本地 `0.6.3` 判断为当前已是最新。
