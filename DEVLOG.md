@@ -1243,3 +1243,22 @@ FONT-001 与 DOCK-001 不在这一版。发布后取 `releases/latest`：`0.6.2`
 界面只改了两处说明：公式编辑器不再写「不同采样会拒绝」；计算信息里显示对齐方式和 Δt。没有做 Results，也没有重做工作台。
 
 验证：`node --check visualizer-core.js` PASS；`node tests/core-test.js` PASS。固定夹具 A=(0,10),(1,12),(2,14),(3,16)，B=(0,11),(2,15),(4,19)。线性对齐后 B 为 11,13,15,17，误差为 1,1,1,1。比较用 atol = 1e-9、rtol = 1e-9。另有 Δt=±9.081 无重叠、Δt=±1 的方向、Exact、Nearest 容差 0.4 和 1、窗口、缺口、单位、工程往返。Edge、真机触控板、系统保存框 NOT RUN。MAE/RMSE/Results 仍是 V070-C，本轮未做。
+
+---
+
+## 2026-10-23 V070-C 误差分析与 Results（未升版本）
+
+在 `0.6.3` / 工程格式 `1.1` 上实现 V070-C。不改 `APP_INFO.version`，不打 tag，不发 Release。基线是 V070-B 的 `a8a2f5e`。
+
+核心：
+
+- Project 增加 `analyses[]`。AnalysisRecord 用 B 阶段 `alignSeries` 算误差，不另写一套对齐。`e = prediction − reference`。指标 MAE、RMSE、MaxAE、Bias、有效 N 和排除原因。N=0 拒绝提交，不输出伪零。
+- 显示精度与 CSV 精度分开。Dirty 不能导出。删源后分析标 Invalid。旧工程缺 `analyses` 仍可打开，不升 `projectFormatVersion`。
+- 误差曲线是 `role: analysis-error` 的派生 Series 加独立图窗。用户点「生成误差曲线」才创建，不自动进入画布。重复点击复用同一 Series 与图窗。
+
+界面：
+
+- 公式编辑器补齐 AlignmentConfig：对齐模式、参考序列、Δt、有效时间窗口、Nearest 容差、最大插值缺口。草稿 / 应用 / 取消。分析向导共用同一套字段，隐藏重复的参考序列下拉。
+- 独立浮动 Results 工具窗口，不进 Plot/Canvas 图层，也不进图窗 Dock。可开关、移动、收起；关闭不删记录。指标卡、重命名、编辑、重算、复制、摘要 CSV、逐点 CSV。
+
+验证：`node --check visualizer-core.js` PASS；`node tests/core-test.js` PASS（SPEC-070 MAE=RMSE=MaxAE=Bias=1、N=4；e=[1,-2,3] MAE=2、RMSE=sqrt(14/3)、MaxAE=3、Bias=2/3）；`node tests/icon-slot-test.js` PASS。Chrome 8771 导入 `tests/fixtures/spec070-A.csv` 与 `spec070-B.csv`，分析向导选参考 A / 预测 B / 线性插值后计算，Results 显示 MAE/RMSE/MaxAE/Bias=1、N=4。生成误差曲线两次：第一次「未放入当前画布」，第二次定位现有 `Analysis_001_error`，画布实例仍为 1。工程 `serializeProject` / `openProjectText` 往返恢复指标。公式编辑器最近邻显示容差。图层只有图窗 1 主图实例。SVG 不含 MAE。Inspector、图窗 Dock、模板菜单、PNG/SVG 按钮仍在。Edge、真机触控板、系统保存框 NOT RUN。V070-D 未做。

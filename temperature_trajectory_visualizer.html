@@ -967,9 +967,94 @@
       text-align: right;
     }
     .tv-formula-preview th:first-child, .tv-formula-preview td:first-child { text-align: left; }
-    .tv-about.tv-formula-dialog { width: min(92vw, 520px); }
+    .tv-about.tv-formula-dialog { width: min(92vw, 580px); }
     .tv-formula-error { color: var(--danger); margin: 0 0 10px; }
     .tv-formula-create { margin-top: 8px; width: 100%; }
+    .tv-align-fields {
+      display: grid;
+      gap: 8px;
+      margin: 0 0 12px;
+      padding: 10px 0 2px;
+      border-top: 1px solid var(--rule);
+    }
+    .tv-align-fields > .tv-prop-label { margin: 0; }
+    .tv-align-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .tv-results {
+      position: fixed;
+      z-index: 42;
+      width: min(92vw, 420px);
+      max-height: min(72vh, 680px);
+      display: flex;
+      flex-direction: column;
+      background: var(--frame);
+      color: var(--ui);
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+      box-shadow: var(--chrome-shadow);
+    }
+    .tv-results[hidden] { display: none; }
+    .tv-results.is-collapsed { max-height: none; }
+    .tv-results-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 40px;
+      padding: 6px 10px;
+      border-bottom: 1px solid var(--rule);
+      cursor: grab;
+    }
+    .tv-results-bar strong { flex: 1; font-weight: 600; }
+    .tv-results-bar button { min-height: 28px; }
+    .tv-results-body {
+      overflow: auto;
+      padding: 10px 12px 14px;
+    }
+    .tv-results.is-collapsed .tv-results-body { display: none; }
+    .tv-result-card {
+      margin: 0 0 10px;
+      padding: 10px;
+      border: 1px solid var(--rule);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+    .tv-result-card.is-active { outline: 1px solid var(--focus); }
+    .tv-result-head {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin: 0 0 8px;
+    }
+    .tv-result-head strong { flex: 1; }
+    .tv-result-status {
+      color: var(--secondary);
+      font-size: 12px;
+    }
+    .tv-result-status.is-dirty, .tv-result-status.is-error, .tv-result-status.is-invalid { color: var(--danger); }
+    .tv-result-status.is-ready { color: var(--ok); }
+    .tv-metric-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px 10px;
+      margin: 0 0 8px;
+    }
+    .tv-metric {
+      min-width: 0;
+    }
+    .tv-metric span {
+      display: block;
+      color: var(--secondary);
+      font-size: 12px;
+    }
+    .tv-metric strong {
+      display: block;
+      font-variant-numeric: tabular-nums;
+      font-weight: 650;
+    }
+    .tv-result-actions { display: flex; flex-wrap: wrap; gap: 6px; }
     .tv-series-dot {
       width: 8px;
       height: 8px;
@@ -1969,6 +2054,8 @@
           </details>
         </div>
         <input id="tvTemplateImport" type="file" accept=".tvtemplate.json,.json,application/json" hidden>
+        <button type="button" class="tv-button" id="tvAnalyze">分析</button>
+        <button type="button" class="tv-button" id="tvResultsToggle">Results</button>
         <button type="button" class="tv-button" id="tvLayout">布局</button>
         <button type="button" class="tv-button" id="tvPreview">预览</button>
         <details class="tv-menu">
@@ -2129,6 +2216,21 @@
     </div>
     <div class="tv-about-body" id="tvDeleteImpactBody"></div>
   </dialog>
+  <dialog class="tv-about tv-formula-dialog" id="tvAnalysisDialog" aria-label="误差分析">
+    <div class="tv-preview-bar">
+      <strong id="tvAnalysisTitle">误差分析</strong>
+      <button type="button" class="tv-button" id="tvAnalysisCancel">取消</button>
+    </div>
+    <div class="tv-about-body" id="tvAnalysisBody"></div>
+  </dialog>
+  <div id="tvResultsDock" class="tv-results" hidden>
+    <div class="tv-results-bar" id="tvResultsDrag">
+      <strong>Results</strong>
+      <button type="button" class="tv-button tv-button--tiny" id="tvResultsCollapse">收起</button>
+      <button type="button" class="tv-button tv-button--tiny" id="tvResultsClose">关闭</button>
+    </div>
+    <div class="tv-results-body" id="tvResultsBody"></div>
+  </div>
   <script src="visualizer-core.js"></script>
   <script>
   (function () {
@@ -2306,10 +2408,25 @@
     var inspectorSeriesIds = [];
     var inspectorAnchor = "";
     var formulaDraft = null;
+    var analysisDraft = null;
+    var activeAnalysisId = "";
+    var resultsPrefs = { open: false, collapsed: false, x: 24, y: 72 };
+    try {
+      var storedResults = JSON.parse(localStorage.getItem("visualizer.workspace.results") || "");
+      if (storedResults && typeof storedResults === "object") {
+        resultsPrefs.open = !!storedResults.open;
+        resultsPrefs.collapsed = !!storedResults.collapsed;
+        if (Number.isFinite(Number(storedResults.x))) resultsPrefs.x = Number(storedResults.x);
+        if (Number.isFinite(Number(storedResults.y))) resultsPrefs.y = Number(storedResults.y);
+      }
+    } catch (error) { /* ponytail: private mode keeps Results closed */ }
     var formulaDialog = document.getElementById("tvFormulaDialog");
     var formulaBody = document.getElementById("tvFormulaBody");
     var depsDialog = document.getElementById("tvFormulaDepsDialog");
     var deleteImpactDialog = document.getElementById("tvDeleteImpactDialog");
+    var analysisDialog = document.getElementById("tvAnalysisDialog");
+    var analysisBody = document.getElementById("tvAnalysisBody");
+    var resultsDock = document.getElementById("tvResultsDock");
     var collapsedDatasets = new Set();
     var expandedFigureGroups = {};
     var openGroupStyleKey = null;
@@ -3758,6 +3875,113 @@
       }
     }
 
+    function readOptionalNumber(input) {
+      var text = String(input.value || "").trim();
+      if (!text) return null;
+      var value = Number(text);
+      return Number.isFinite(value) ? value : null;
+    }
+
+    function paintAlignmentConfig(host, draft, options) {
+      options = options || {};
+      if (!draft.alignment) draft.alignment = core.normalizeAlignmentConfig({});
+      var align = draft.alignment;
+      host.replaceChildren();
+      host.className = "tv-align-fields";
+      var cap = document.createElement("span");
+      cap.className = "tv-prop-label";
+      cap.textContent = "对齐";
+      host.appendChild(cap);
+      var mode = selectControl("对齐模式", align.mode || "linear", [
+        ["linear", "线性插值"],
+        ["exact", "精确匹配"],
+        ["nearest", "最近邻"]
+      ]);
+      mode.input.setAttribute("aria-label", "对齐模式");
+      mode.input.addEventListener("change", function () {
+        align.mode = mode.input.value;
+        paintAlignmentConfig(host, draft, options);
+        if (options.onChange) options.onChange();
+      });
+      var referenceWrap = null;
+      if (!options.hideReference) {
+        var seriesOptions = options.seriesOptions || [];
+        var refChoices = [["", options.defaultReferenceLabel || "默认（变量 A / 第一输入）"]].concat(
+          seriesOptions.map(function (item) { return [item.id, item.path]; })
+        );
+        var reference = selectControl("参考序列", align.referenceSeriesId || "", refChoices);
+        reference.input.setAttribute("aria-label", "参考序列");
+        reference.input.addEventListener("change", function () {
+          align.referenceSeriesId = reference.input.value;
+          if (options.onChange) options.onChange();
+        });
+        referenceWrap = reference.wrap;
+      }
+      var delta = fieldControl("时间偏移 Δt", align.delta == null ? "0" : String(align.delta));
+      delta.input.setAttribute("aria-label", "时间偏移");
+      delta.input.addEventListener("input", function () {
+        var value = Number(delta.input.value);
+        align.delta = Number.isFinite(value) ? value : 0;
+        if (options.onChange) options.onChange();
+      });
+      var deltaHint = document.createElement("p");
+      deltaHint.className = "tv-hint";
+      deltaHint.textContent = "正号使待对齐序列向后平移。Δt 使用参考序列的 X 单位。";
+      var rangeRow = document.createElement("div");
+      rangeRow.className = "tv-align-row";
+      var rangeMin = fieldControl("窗口起点", align.rangeMin == null ? "" : String(align.rangeMin));
+      var rangeMax = fieldControl("窗口终点", align.rangeMax == null ? "" : String(align.rangeMax));
+      rangeMin.input.setAttribute("aria-label", "有效时间窗口起点");
+      rangeMax.input.setAttribute("aria-label", "有效时间窗口终点");
+      rangeMin.input.placeholder = "重叠起点";
+      rangeMax.input.placeholder = "重叠终点";
+      function writeRange() {
+        align.rangeMin = readOptionalNumber(rangeMin.input);
+        align.rangeMax = readOptionalNumber(rangeMax.input);
+        if (options.onChange) options.onChange();
+      }
+      rangeMin.input.addEventListener("input", writeRange);
+      rangeMax.input.addEventListener("input", writeRange);
+      rangeRow.append(rangeMin.wrap, rangeMax.wrap);
+      var fill = document.createElement("button");
+      fill.type = "button";
+      fill.className = "tv-button tv-button--tiny";
+      fill.textContent = "填入当前图 X 范围";
+      fill.addEventListener("click", function () {
+        var plot = options.getPlot ? options.getPlot() : selectedPlot();
+        if (!plot) {
+          setStatus("没有当前图窗，无法填入范围。", "error");
+          return;
+        }
+        var range = core.alignmentRangeFromPlot(project, plot);
+        align.rangeMin = range.rangeMin;
+        align.rangeMax = range.rangeMax;
+        paintAlignmentConfig(host, draft, options);
+        if (options.onChange) options.onChange();
+      });
+      host.append(mode.wrap);
+      if (referenceWrap) host.appendChild(referenceWrap);
+      host.append(delta.wrap, deltaHint, rangeRow, fill);
+      if (align.mode === "nearest") {
+        var tolerance = fieldControl("最近邻容差", align.tolerance == null ? "" : String(align.tolerance));
+        tolerance.input.setAttribute("aria-label", "最近邻容差");
+        tolerance.input.placeholder = "必填，非负";
+        tolerance.input.addEventListener("input", function () {
+          align.tolerance = readOptionalNumber(tolerance.input);
+          if (options.onChange) options.onChange();
+        });
+        host.appendChild(tolerance.wrap);
+      }
+      var gap = fieldControl("最大插值缺口", align.maxGap == null ? "" : String(align.maxGap));
+      gap.input.setAttribute("aria-label", "最大插值缺口");
+      gap.input.placeholder = "默认：中位间隔 × 5";
+      gap.input.addEventListener("input", function () {
+        align.maxGap = readOptionalNumber(gap.input);
+        if (options.onChange) options.onChange();
+      });
+      host.appendChild(gap.wrap);
+    }
+
     function openFormulaEditor(series) {
       var formula = series
         ? (project.formulas || []).find(function (item) { return item.id === series.formulaId; })
@@ -3768,7 +3992,7 @@
         expression: formula ? formula.expression : "",
         bindings: formula ? core.cloneJson(formula.bindings || {}) : {},
         outputUnit: formula ? (formula.outputUnit || "") : "",
-        alignment: formula && formula.alignment ? core.cloneJson(formula.alignment) : null,
+        alignment: core.normalizeAlignmentConfig(formula && formula.alignment),
         outputSeriesId: series ? series.id : "",
         preview: null,
         error: ""
@@ -3793,6 +4017,8 @@
       });
       var unit = fieldControl("输出单位", formulaDraft.outputUnit);
       unit.input.addEventListener("input", function () { formulaDraft.outputUnit = unit.input.value; });
+      var alignHost = document.createElement("div");
+      alignHost.id = "tvFormulaAlignHost";
       var previewHost = document.createElement("div");
       previewHost.id = "tvFormulaPreviewHost";
       var actions = document.createElement("div");
@@ -3815,12 +4041,358 @@
       actions.append(previewBtn, applyBtn, cancelBtn);
       var hint = document.createElement("p");
       hint.className = "tv-hint";
-      hint.textContent = "默认按变量 A 的时间轴线性插值，只保留重叠区间，不外推，也不按行号对齐。";
-      formulaBody.append(name.wrap, expr.wrap, bindCap, bindHost, unit.wrap, previewHost, actions, hint);
+      hint.textContent = "草稿预览不改原图。应用才写入。取消丢弃本次修改。只保留重叠区间，不外推，也不按行号对齐。";
+      formulaBody.append(name.wrap, expr.wrap, bindCap, bindHost, unit.wrap, alignHost, previewHost, actions, hint);
       paintFormulaBindings(bindHost);
+      paintAlignmentConfig(alignHost, formulaDraft, {
+        seriesOptions: core.listFormulaSeriesOptions(project, formulaDraft.outputSeriesId),
+        getPlot: selectedPlot,
+        onChange: function () { formulaDraft.preview = null; }
+      });
       showAppModal(formulaDialog);
       name.input.focus();
       name.input.select();
+    }
+
+    function closeAnalysisEditor() {
+      analysisDraft = null;
+      closeAppModal(analysisDialog);
+    }
+
+    function analysisPrefill() {
+      var checked = Array.from(checkedSeries);
+      var inspected = inspectorSeriesIds.slice();
+      var reference = "";
+      var prediction = "";
+      if (checked.length >= 2) {
+        reference = checked[0];
+        prediction = checked[1];
+      } else if (inspected.length >= 2) {
+        reference = inspected[0];
+        prediction = inspected[1];
+      } else {
+        reference = checked[0] || inspected[0] || "";
+        prediction = checked[1] || inspected[1] || "";
+        if (reference && prediction && reference === prediction) prediction = "";
+      }
+      return { reference: reference, prediction: prediction, checkedCount: checked.length };
+    }
+
+    function paintAnalysisPreview(host) {
+      if (!host) return;
+      host.replaceChildren();
+      if (analysisDraft.error) {
+        var err = document.createElement("p");
+        err.className = "tv-hint tv-formula-error";
+        err.textContent = analysisDraft.error;
+        host.appendChild(err);
+      }
+      var preview = analysisDraft.preview;
+      if (!preview) return;
+      var summary = document.createElement("p");
+      summary.className = "tv-hint";
+      summary.textContent = "有效 " + preview.validCount + " 点，排除 " + preview.excludedCount + " 点。MAE "
+        + csvOrDash(preview.metrics.mae) + "，RMSE " + csvOrDash(preview.metrics.rmse)
+        + "。提交前草稿不会写入工程。";
+      var table = document.createElement("table");
+      table.className = "tv-formula-preview";
+      var head = document.createElement("tr");
+      ["X", "Reference", "Prediction", "e"].forEach(function (label) {
+        head.appendChild(document.createElement("th")).textContent = label;
+      });
+      table.appendChild(head);
+      (preview.sample || []).forEach(function (row) {
+        var tr = document.createElement("tr");
+        [row.x, row.reference, row.prediction, row.error].forEach(function (value) {
+          var td = document.createElement("td");
+          td.textContent = Number.isFinite(value) ? String(value) : "NaN";
+          tr.appendChild(td);
+        });
+        table.appendChild(tr);
+      });
+      host.append(summary, table);
+    }
+
+    function csvOrDash(value) {
+      return Number.isFinite(value) ? JSON.stringify(value) : "—";
+    }
+
+    function runAnalysisPreview() {
+      if (!analysisDraft) return;
+      try {
+        analysisDraft.preview = core.previewAnalysis(project, analysisDraft);
+        analysisDraft.error = "";
+      } catch (error) {
+        analysisDraft.preview = null;
+        analysisDraft.error = error.message || "预览失败";
+      }
+      paintAnalysisPreview(document.getElementById("tvAnalysisPreviewHost"));
+    }
+
+    function applyAnalysisDraft() {
+      if (!analysisDraft) return;
+      try {
+        var record = null;
+        commitEdit("Apply analysis", function () {
+          record = core.applyAnalysis(project, analysisDraft);
+        });
+        activeAnalysisId = record.id;
+        closeAnalysisEditor();
+        resultsPrefs.open = true;
+        writeResultsPrefs();
+        setStatus("已计算「" + record.name + "」。未自动创建图窗。", "ok");
+        renderAll();
+      } catch (error) {
+        analysisDraft.preview = null;
+        analysisDraft.error = error.message || "计算失败";
+        paintAnalysisPreview(document.getElementById("tvAnalysisPreviewHost"));
+        setStatus(analysisDraft.error, "error");
+      }
+    }
+
+    function openAnalysisEditor(record) {
+      var prefill = analysisPrefill();
+      analysisDraft = {
+        id: record ? record.id : "",
+        name: record ? record.name : core.nextAnalysisName(project),
+        referenceSeriesId: record ? record.referenceSeriesId : prefill.reference,
+        predictionSeriesId: record ? record.predictionSeriesId : prefill.prediction,
+        alignment: core.normalizeAlignmentConfig(record && record.alignment),
+        preview: null,
+        error: ""
+      };
+      if (!record) analysisDraft.alignment.referenceSeriesId = analysisDraft.referenceSeriesId;
+      document.getElementById("tvAnalysisTitle").textContent = record ? "编辑分析" : "误差分析";
+      analysisBody.replaceChildren();
+      var name = fieldControl("名称", analysisDraft.name);
+      name.input.setAttribute("aria-label", "分析名称");
+      name.input.addEventListener("input", function () { analysisDraft.name = name.input.value; });
+      var options = core.listFormulaSeriesOptions(project, "");
+      var choices = [["", "选择系列"]].concat(options.map(function (item) { return [item.id, item.path]; }));
+      var reference = selectControl("参考系列", analysisDraft.referenceSeriesId, choices);
+      var prediction = selectControl("预测系列", analysisDraft.predictionSeriesId, choices);
+      reference.input.setAttribute("aria-label", "参考系列");
+      prediction.input.setAttribute("aria-label", "预测系列");
+      reference.input.addEventListener("change", function () {
+        analysisDraft.referenceSeriesId = reference.input.value;
+        analysisDraft.alignment.referenceSeriesId = reference.input.value;
+        analysisDraft.preview = null;
+      });
+      prediction.input.addEventListener("change", function () {
+        analysisDraft.predictionSeriesId = prediction.input.value;
+        analysisDraft.preview = null;
+      });
+      var alignHost = document.createElement("div");
+      alignHost.id = "tvAnalysisAlignHost";
+      var previewHost = document.createElement("div");
+      previewHost.id = "tvAnalysisPreviewHost";
+      var actions = document.createElement("div");
+      actions.className = "tv-dataset-tools";
+      var previewBtn = document.createElement("button");
+      previewBtn.type = "button";
+      previewBtn.className = "tv-button";
+      previewBtn.textContent = "预览";
+      previewBtn.addEventListener("click", runAnalysisPreview);
+      var applyBtn = document.createElement("button");
+      applyBtn.type = "button";
+      applyBtn.className = "tv-button tv-button--primary";
+      applyBtn.textContent = "计算";
+      applyBtn.addEventListener("click", applyAnalysisDraft);
+      var cancelBtn = document.createElement("button");
+      cancelBtn.type = "button";
+      cancelBtn.className = "tv-button";
+      cancelBtn.textContent = "取消";
+      cancelBtn.addEventListener("click", closeAnalysisEditor);
+      actions.append(previewBtn, applyBtn, cancelBtn);
+      var hint = document.createElement("p");
+      hint.className = "tv-hint";
+      hint.textContent = "可由当前勾选预填参考/预测，但不会改动勾选。计算后打开 Results，不自动加入画布。";
+      analysisBody.append(name.wrap, reference.wrap, prediction.wrap, alignHost, previewHost, actions, hint);
+      paintAlignmentConfig(alignHost, analysisDraft, {
+        hideReference: true,
+        getPlot: selectedPlot,
+        onChange: function () { analysisDraft.preview = null; }
+      });
+      showAppModal(analysisDialog);
+      name.input.focus();
+      name.input.select();
+    }
+
+    function writeResultsPrefs() {
+      try {
+        localStorage.setItem("visualizer.workspace.results", JSON.stringify({
+          open: !!resultsPrefs.open,
+          collapsed: !!resultsPrefs.collapsed,
+          x: resultsPrefs.x,
+          y: resultsPrefs.y
+        }));
+      } catch (error) { /* ponytail: quota or private mode */ }
+    }
+
+    function placeResultsDock() {
+      if (!resultsDock) return;
+      resultsDock.style.left = Math.round(resultsPrefs.x) + "px";
+      resultsDock.style.top = Math.round(resultsPrefs.y) + "px";
+      resultsDock.hidden = !resultsPrefs.open;
+      resultsDock.classList.toggle("is-collapsed", !!resultsPrefs.collapsed);
+      document.getElementById("tvResultsCollapse").textContent = resultsPrefs.collapsed ? "展开" : "收起";
+    }
+
+    function formatMetricDisplay(value) {
+      if (!Number.isFinite(value)) return "—";
+      var abs = Math.abs(value);
+      if (abs !== 0 && (abs >= 10000 || abs < 0.001)) return value.toExponential(6);
+      return String(Math.round(value * 1e6) / 1e6);
+    }
+
+    function exclusionText(record) {
+      var counts = record.excludedByReason || {};
+      var parts = Object.keys(counts).map(function (key) {
+        return (core.ANALYSIS_EXCLUSION_LABELS[key] || key) + " " + counts[key];
+      });
+      return parts.length ? parts.join("，") : "无";
+    }
+
+    function renderResultsDock() {
+      if (!resultsDock) return;
+      placeResultsDock();
+      var body = document.getElementById("tvResultsBody");
+      body.replaceChildren();
+      var records = project.analyses || [];
+      if (!records.length) {
+        var empty = document.createElement("p");
+        empty.className = "tv-hint";
+        empty.textContent = "还没有分析记录。点「分析」选择参考和预测系列。";
+        body.appendChild(empty);
+        return;
+      }
+      records.forEach(function (record) {
+        var card = document.createElement("article");
+        card.className = "tv-result-card" + (record.id === activeAnalysisId ? " is-active" : "");
+        card.addEventListener("click", function () {
+          activeAnalysisId = record.id;
+          renderResultsDock();
+        });
+        var head = document.createElement("div");
+        head.className = "tv-result-head";
+        var title = document.createElement("strong");
+        title.textContent = record.name;
+        var status = document.createElement("span");
+        status.className = "tv-result-status is-" + record.status;
+        status.textContent = formulaStatusLabel(record.status) + (record.errorMessage ? " · " + record.errorMessage : "");
+        head.append(title, status);
+        var metrics = document.createElement("div");
+        metrics.className = "tv-metric-grid";
+        [
+          ["MAE", record.metrics && record.metrics.mae],
+          ["RMSE", record.metrics && record.metrics.rmse],
+          ["MaxAE", record.metrics && record.metrics.maxAe],
+          ["Bias", record.metrics && record.metrics.bias],
+          ["N", record.metrics && record.metrics.n],
+          ["排除", record.excludedCount]
+        ].forEach(function (pair) {
+          var cell = document.createElement("div");
+          cell.className = "tv-metric";
+          var label = document.createElement("span");
+          label.textContent = pair[0];
+          var value = document.createElement("strong");
+          value.textContent = pair[0] === "N" || pair[0] === "排除"
+            ? String(Number.isFinite(pair[1]) ? pair[1] : 0)
+            : (record.status === "dirty" ? formatMetricDisplay(pair[1]) + " · 过期" : formatMetricDisplay(pair[1]));
+          cell.append(label, value);
+          metrics.appendChild(cell);
+        });
+        var meta = document.createElement("p");
+        meta.className = "tv-hint";
+        var summary = record.alignmentSummary || record.alignment || {};
+        meta.textContent = core.seriesPath(project, record.referenceSeriesId)
+          + " → " + core.seriesPath(project, record.predictionSeriesId)
+          + " · " + (summary.mode === "nearest" ? "最近邻" : summary.mode === "exact" ? "精确匹配" : "线性插值")
+          + " · Δt " + (record.alignment && record.alignment.delta != null ? record.alignment.delta : 0)
+          + (record.unit ? " · " + record.unit : "")
+          + " · 排除：" + exclusionText(record);
+        var actions = document.createElement("div");
+        actions.className = "tv-result-actions";
+        function addAction(label, run, danger) {
+          var button = document.createElement("button");
+          button.type = "button";
+          button.className = "tv-button tv-button--tiny" + (danger ? " tv-button--danger" : "");
+          button.textContent = label;
+          button.addEventListener("click", function (event) {
+            event.stopPropagation();
+            run();
+          });
+          actions.appendChild(button);
+        }
+        addAction("重命名", function () {
+          var next = askName(record.name, "分析名称");
+          if (!next) return;
+          commitEdit("Rename analysis", function () { core.renameAnalysis(project, record.id, next); });
+          renderAll();
+        });
+        addAction("编辑", function () { openAnalysisEditor(record); });
+        addAction("重算", function () {
+          try {
+            commitEdit("Recompute analysis", function () { core.recomputeAnalysis(project, record); });
+            setStatus("已重算「" + record.name + "」。", "ok");
+            renderAll();
+          } catch (error) {
+            setStatus(error.message || "重算失败", "error");
+            renderAll();
+          }
+        });
+        addAction("复制", function () {
+          try {
+            var text = core.analysisCopyText(project, record);
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(text).then(function () {
+                setStatus("已复制分析结果。", "ok");
+              }).catch(function () {
+                window.prompt("复制以下内容", text);
+              });
+            } else window.prompt("复制以下内容", text);
+          } catch (error) {
+            setStatus(error.message || "不能复制", "error");
+          }
+        });
+        addAction("摘要 CSV", function () {
+          try {
+            downloadBlob(new Blob([core.analysisSummaryCsv(project, record)], { type: "text/csv;charset=utf-8" }), sanitizeFilename(record.name) + "-summary.csv");
+          } catch (error) {
+            setStatus(error.message || "不能导出", "error");
+          }
+        });
+        addAction("逐点 CSV", function () {
+          try {
+            downloadBlob(new Blob([core.analysisPointwiseCsv(project, record)], { type: "text/csv;charset=utf-8" }), sanitizeFilename(record.name) + "-pointwise.csv");
+          } catch (error) {
+            setStatus(error.message || "不能导出", "error");
+          }
+        });
+        addAction("生成误差曲线", function () {
+          try {
+            var created = null;
+            commitEdit("Generate error curve", function () {
+              created = core.ensureAnalysisErrorCurve(project, record);
+            });
+            activeAnalysisId = record.id;
+            setStatus(created.reused
+              ? "已定位现有误差曲线「" + core.seriesDisplayName(created.series) + "」。"
+              : "已生成误差曲线，未放入当前画布。", "ok");
+            renderAll();
+          } catch (error) {
+            setStatus(error.message || "不能生成误差曲线", "error");
+          }
+        });
+        addAction("删除", function () {
+          if (!window.confirm("删除分析「" + record.name + "」？误差曲线和图窗会保留。")) return;
+          commitEdit("Delete analysis", function () { core.deleteAnalysis(project, record.id); });
+          if (activeAnalysisId === record.id) activeAnalysisId = "";
+          renderAll();
+        }, true);
+        card.append(head, metrics, meta, actions);
+        body.appendChild(card);
+      });
     }
 
     function showFormulaDeps(series) {
@@ -3877,6 +4449,12 @@
         used.textContent = "受影响的图：" + impact.plots.join("、");
         body.append(warn, list, used);
       } else body.append(warn, list);
+      if (impact.analyses && impact.analyses.length) {
+        var analyses = document.createElement("p");
+        analyses.className = "tv-hint";
+        analyses.textContent = "受影响的分析：" + impact.analyses.map(function (item) { return item.name; }).join("、");
+        body.appendChild(analyses);
+      }
       var go = document.createElement("button");
       go.type = "button";
       go.className = "tv-button tv-button--danger";
@@ -3927,6 +4505,14 @@
         var alignMode = formula.alignment.mode === "nearest" ? "最近邻" : (formula.alignment.mode === "exact" ? "精确匹配" : "线性插值");
         var alignText = alignMode;
         if (formula.alignment.delta) alignText += "，Δt " + formula.alignment.delta;
+        if (formula.alignment.rangeMin != null || formula.alignment.rangeMax != null) {
+          alignText += "，窗口 " + (formula.alignment.rangeMin == null ? "…" : formula.alignment.rangeMin)
+            + "–" + (formula.alignment.rangeMax == null ? "…" : formula.alignment.rangeMax);
+        }
+        if (formula.alignment.mode === "nearest" && formula.alignment.tolerance != null) {
+          alignText += "，容差 " + formula.alignment.tolerance;
+        }
+        if (formula.alignment.maxGap != null) alignText += "，缺口 " + formula.alignment.maxGap;
         addMeta("对齐", alignText);
       }
       addMeta("单位", series.unit || (formula && formula.outputUnit) || "无");
@@ -9302,6 +9888,7 @@
       renderLayers();
       renderDock();
       renderModebar();
+      renderResultsDock();
       setDirty(dirty);
     }
 
@@ -10731,6 +11318,55 @@
       event.preventDefault();
       closeFormulaEditor();
     });
+    document.getElementById("tvAnalyze").addEventListener("click", function () {
+      openAnalysisEditor(null);
+    });
+    document.getElementById("tvResultsToggle").addEventListener("click", function () {
+      resultsPrefs.open = !resultsPrefs.open;
+      writeResultsPrefs();
+      renderResultsDock();
+    });
+    document.getElementById("tvAnalysisCancel").addEventListener("click", closeAnalysisEditor);
+    analysisDialog.addEventListener("cancel", function (event) {
+      event.preventDefault();
+      closeAnalysisEditor();
+    });
+    document.getElementById("tvResultsClose").addEventListener("click", function () {
+      resultsPrefs.open = false;
+      writeResultsPrefs();
+      placeResultsDock();
+    });
+    document.getElementById("tvResultsCollapse").addEventListener("click", function () {
+      resultsPrefs.collapsed = !resultsPrefs.collapsed;
+      writeResultsPrefs();
+      placeResultsDock();
+    });
+    (function bindResultsDrag() {
+      var bar = document.getElementById("tvResultsDrag");
+      var dragState = null;
+      bar.addEventListener("pointerdown", function (event) {
+        if (event.button !== 0 || event.target.closest("button")) return;
+        dragState = {
+          pointerId: event.pointerId,
+          x: event.clientX - resultsPrefs.x,
+          y: event.clientY - resultsPrefs.y
+        };
+        bar.setPointerCapture(event.pointerId);
+      });
+      bar.addEventListener("pointermove", function (event) {
+        if (!dragState || dragState.pointerId !== event.pointerId) return;
+        var vw = document.documentElement.clientWidth || window.innerWidth;
+        var vh = document.documentElement.clientHeight || window.innerHeight;
+        resultsPrefs.x = Math.max(8, Math.min(vw - 80, event.clientX - dragState.x));
+        resultsPrefs.y = Math.max(8, Math.min(vh - 40, event.clientY - dragState.y));
+        placeResultsDock();
+      });
+      bar.addEventListener("pointerup", function (event) {
+        if (!dragState || dragState.pointerId !== event.pointerId) return;
+        dragState = null;
+        writeResultsPrefs();
+      });
+    }());
     document.getElementById("tvFormulaDepsClose").addEventListener("click", closeFormulaDeps);
     depsDialog.addEventListener("cancel", function (event) {
       event.preventDefault();

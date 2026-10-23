@@ -550,6 +550,7 @@
       savedAt: null,
       datasets: [],
       formulas: [],
+      analyses: [],
       plots: [],
       canvases: [],
       canvas: { width: 1280, height: 800, zoom: 1 },
@@ -836,6 +837,7 @@
     if (!dataset) return;
     var removedIds = dataset.series.map(function (series) { return series.id; });
     markDependentsInvalid(project, removedIds);
+    markAnalysesInvalid(project, removedIds, "来源系列已删除，未改绑同名列。");
     project.datasets = project.datasets.filter(function (item) { return item.id !== datasetId; });
     if (dataset.kind === "computed") {
       applySeriesRemoval(project, removedIds);
@@ -1658,6 +1660,7 @@
       savedAt: data.savedAt ? String(data.savedAt) : null,
       datasets: Array.isArray(data.datasets) ? data.datasets.map(normalizeDataset) : [],
       formulas: Array.isArray(data.formulas) ? data.formulas.map(normalizeFormulaDefinition) : [],
+      analyses: Array.isArray(data.analyses) ? data.analyses.map(normalizeAnalysisRecord) : [],
       plots: dataPlots.map(normalizePlot),
       canvases: [],
       canvas: {
@@ -1707,6 +1710,7 @@
     project.plots.forEach(function (plot) { finalizePlotInspection(project, plot); });
     syncAllPlotAxisAutoTitles(project);
     syncCanvasToPlots(project);
+    auditAnalyses(project);
     return project;
   }
 
@@ -1905,6 +1909,7 @@
       savedAt: new Date().toISOString(),
       datasets: project.datasets,
       formulas: Array.isArray(project.formulas) ? project.formulas : [],
+      analyses: Array.isArray(project.analyses) ? project.analyses : [],
       plots: (project.plots || []).map(function (plot) {
         var copy = cloneJson(plot);
         if (sourcePlotOf(project, plot)) copy.seriesRefs = [];
@@ -4108,6 +4113,7 @@
       canvases: cloneJson(project.canvases || []),
       canvas: cloneJson(project.canvas || {}),
       formulas: cloneJson(project.formulas || []),
+      analyses: cloneJson(project.analyses || []),
       computed: cloneJson((project.datasets || []).filter(function (dataset) { return dataset.kind === "computed"; }))
     };
   }
@@ -4127,6 +4133,9 @@
     pruneInstances(project);
     if (Object.prototype.hasOwnProperty.call(copy, "formulas")) {
       project.formulas = (copy.formulas || []).map(normalizeFormulaDefinition);
+    }
+    if (Object.prototype.hasOwnProperty.call(copy, "analyses")) {
+      project.analyses = (copy.analyses || []).map(normalizeAnalysisRecord);
     }
     if (Object.prototype.hasOwnProperty.call(copy, "computed")) {
       project.datasets = (project.datasets || []).filter(function (dataset) { return dataset.kind !== "computed"; });
@@ -5214,7 +5223,10 @@
         if (plots.indexOf(name) < 0) plots.push(name);
       });
     });
-    return { derived: derived, plots: plots };
+    var analyses = analysesUsingSeries(project, ids.concat(derived.map(function (item) { return item.id; }))).map(function (record) {
+      return { id: record.id, name: record.name || record.id };
+    });
+    return { derived: derived, plots: plots, analyses: analyses };
   }
 
   function setComputedStatus(series, status, message) {
@@ -5383,6 +5395,7 @@
 
   function recomputeComputedSeries(project, series) {
     if (!series || series.kind !== "computed") return series;
+    if (series.role === "analysis-error") return series;
     var formula = findFormula(project, series.formulaId);
     if (!formula) return setComputedStatus(series, "invalid", "找不到公式定义。");
     series.status = "computing";
@@ -5400,6 +5413,7 @@
     topoDerived(project, affected).forEach(function (id) {
       recomputeComputedSeries(project, findSeries(project, id));
     });
+    markAnalysesDirty(project, (startIds || []).concat(affected));
     return affected;
   }
 
@@ -5467,6 +5481,7 @@
     var removed = {};
     (seriesIds || []).forEach(function (id) { removed[id] = true; });
     markDependentsInvalid(project, seriesIds);
+    markAnalysesInvalid(project, seriesIds, "来源系列已删除，未改绑同名列。");
     var computed = computedDatasetOf(project);
     if (computed) {
       computed.series = computed.series.filter(function (series) { return !removed[series.id]; });
@@ -5484,6 +5499,440 @@
       prunePlotInspection(project, plot);
     });
     syncAllPlotAxisAutoTitles(project);
+  }
+
+  var ANALYSIS_STATUSES = FORMULA_STATUSES;
+  var ANALYSIS_EXCLUSION_LABELS = {
+    range: "窗口外",
+    outside: "重叠外",
+    exact: "无精确匹配",
+    nearest: "超出容差",
+    gap: "缺口过大",
+    nan: "无效值"
+  };
+
+  function normalizeAnalysisStatus(status, fallback) {
+    var value = String(status || fallback || "ready");
+    return ANALYSIS_STATUSES.indexOf(value) >= 0 ? value : (fallback || "ready");
+  }
+
+  function finiteOrNull(value) {
+    var n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function normalizeAnalysisMetrics(raw) {
+    var src = raw && typeof raw === "object" ? raw : {};
+    var n = Number(src.n);
+    if (!Number.isFinite(n) || n <= 0) {
+      return { mae: null, rmse: null, maxAe: null, bias: null, n: 0 };
+    }
+    return {
+      mae: finiteOrNull(src.mae),
+      rmse: finiteOrNull(src.rmse),
+      maxAe: finiteOrNull(src.maxAe),
+      bias: finiteOrNull(src.bias),
+      n: n
+    };
+  }
+
+  function normalizeAnalysisRecord(raw) {
+    var src = raw && typeof raw === "object" ? raw : {};
+    return {
+      id: String(src.id || makeId("analysis")),
+      name: String(src.name || "Analysis_001"),
+      referenceSeriesId: String(src.referenceSeriesId || ""),
+      predictionSeriesId: String(src.predictionSeriesId || ""),
+      alignment: normalizeAlignmentConfig(src.alignment),
+      metrics: normalizeAnalysisMetrics(src.metrics),
+      unit: src.unit == null ? "" : String(src.unit),
+      validCount: Number.isFinite(Number(src.validCount)) ? Number(src.validCount) : 0,
+      excludedCount: Number.isFinite(Number(src.excludedCount)) ? Number(src.excludedCount) : 0,
+      excludedByReason: normalizeAlignmentSummary({ excludedByReason: src.excludedByReason }).excludedByReason,
+      alignmentSummary: normalizeAlignmentSummary(src.alignmentSummary),
+      status: normalizeAnalysisStatus(src.status, "ready"),
+      errorMessage: src.errorMessage ? String(src.errorMessage) : "",
+      sourceStamp: src.sourceStamp == null ? "" : String(src.sourceStamp),
+      computedAt: src.computedAt ? String(src.computedAt) : "",
+      errorSeriesId: src.errorSeriesId ? String(src.errorSeriesId) : "",
+      errorPlotId: src.errorPlotId ? String(src.errorPlotId) : ""
+    };
+  }
+
+  function findAnalysis(project, analysisId) {
+    return (project.analyses || []).find(function (item) { return item.id === analysisId; }) || null;
+  }
+
+  function nextAnalysisName(project) {
+    var used = {};
+    (project.analyses || []).forEach(function (item) { used[String(item.name || "")] = true; });
+    var index = 1;
+    var name = "Analysis_001";
+    while (used[name]) {
+      index += 1;
+      name = "Analysis_" + String(index).padStart(3, "0");
+    }
+    return name;
+  }
+
+  function seriesStamp(series) {
+    if (!series) return "";
+    var sum = 0;
+    var xs = series.x || [];
+    var ys = series.y || [];
+    var i;
+    for (i = 0; i < xs.length; i += 1) {
+      var x = Number(xs[i]);
+      if (Number.isFinite(x)) sum += x * (i + 0.5);
+    }
+    for (i = 0; i < ys.length; i += 1) {
+      var y = Number(ys[i]);
+      if (Number.isFinite(y)) sum += y * (i + 1);
+    }
+    return series.id + ":" + xs.length + ":" + ys.length + ":" + sum;
+  }
+
+  function analysisSourceStamp(project, record) {
+    return seriesStamp(findSeries(project, record && record.referenceSeriesId))
+      + "|"
+      + seriesStamp(findSeries(project, record && record.predictionSeriesId));
+  }
+
+  function analysesUsingSeries(project, seriesIds) {
+    var wanted = {};
+    (seriesIds || []).forEach(function (id) { if (id) wanted[id] = true; });
+    return (project.analyses || []).filter(function (record) {
+      return wanted[record.referenceSeriesId] || wanted[record.predictionSeriesId] || wanted[record.errorSeriesId];
+    });
+  }
+
+  function setAnalysisStatus(record, status, message) {
+    if (!record) return record;
+    record.status = normalizeAnalysisStatus(status, record.status);
+    record.errorMessage = message ? String(message) : "";
+    if (status === "invalid" || status === "error") {
+      record.metrics = { mae: null, rmse: null, maxAe: null, bias: null, n: 0 };
+      record.validCount = 0;
+      record.alignmentSummary = null;
+    }
+    return record;
+  }
+
+  function markAnalysesDirty(project, seriesIds) {
+    analysesUsingSeries(project, seriesIds).forEach(function (record) {
+      if (record.status === "invalid" || record.status === "error") return;
+      if (record.status !== "dirty") record.status = "dirty";
+    });
+  }
+
+  function markAnalysesInvalid(project, seriesIds, message) {
+    var removed = {};
+    (seriesIds || []).forEach(function (id) { if (id) removed[id] = true; });
+    (project.analyses || []).forEach(function (record) {
+      if (removed[record.referenceSeriesId] || removed[record.predictionSeriesId]) {
+        setAnalysisStatus(record, "invalid", message);
+        return;
+      }
+      if (record.errorSeriesId && removed[record.errorSeriesId]) {
+        record.errorSeriesId = "";
+        record.errorPlotId = record.errorPlotId && findPlot(project, record.errorPlotId) ? record.errorPlotId : "";
+      }
+    });
+  }
+
+  function auditAnalyses(project) {
+    (project.analyses || []).forEach(function (record) {
+      if (!findSeries(project, record.referenceSeriesId) || !findSeries(project, record.predictionSeriesId)) {
+        setAnalysisStatus(record, "invalid", "找不到参考或预测系列。");
+        return;
+      }
+      if (record.status === "invalid" || record.status === "error") return;
+      var stamp = analysisSourceStamp(project, record);
+      if (record.sourceStamp && stamp !== record.sourceStamp) record.status = "dirty";
+    });
+    return project.analyses || [];
+  }
+
+  function meanOf(values) {
+    var sum = 0;
+    for (var i = 0; i < values.length; i += 1) sum += values[i];
+    return sum / values.length;
+  }
+
+  function evaluateAnalysis(project, draft) {
+    var referenceSeries = findSeries(project, draft && draft.referenceSeriesId);
+    var predictionSeries = findSeries(project, draft && draft.predictionSeriesId);
+    if (!referenceSeries) throw new Error("未选择参考系列。");
+    if (!predictionSeries) throw new Error("未选择预测系列。");
+    if (referenceSeries.id === predictionSeries.id) throw new Error("参考系列和预测系列不能相同。");
+    if (referenceSeries.status === "invalid" || referenceSeries.status === "error") {
+      throw new Error("参考系列无效：" + seriesPath(project, referenceSeries.id));
+    }
+    if (predictionSeries.status === "invalid" || predictionSeries.status === "error") {
+      throw new Error("预测系列无效：" + seriesPath(project, predictionSeries.id));
+    }
+    var alignment = normalizeAlignmentConfig((draft && draft.alignment) || {});
+    alignment.referenceSeriesId = referenceSeries.id;
+    var reference = seriesSample(project, referenceSeries);
+    var prediction = seriesSample(project, predictionSeries);
+    var aligned = alignSeries(reference, [prediction], alignment);
+    var errors = [];
+    var points = [];
+    var i;
+    for (i = 0; i < aligned.x.length; i += 1) {
+      var predY = aligned.columns[prediction.id][i];
+      var refY = aligned.referenceY[i];
+      if (!aligned.mask[i] || !Number.isFinite(predY) || !Number.isFinite(refY)) continue;
+      var signed = predY - refY;
+      errors.push(signed);
+      points.push({
+        x: aligned.x[i],
+        reference: refY,
+        prediction: predY,
+        error: signed,
+        absError: Math.abs(signed)
+      });
+    }
+    if (!errors.length) throw new Error("没有有效样本，不能计算指标。");
+    var abs = errors.map(function (value) { return Math.abs(value); });
+    var mae = meanOf(abs);
+    var rmse = Math.sqrt(meanOf(errors.map(function (value) { return value * value; })));
+    var maxAe = abs[0];
+    for (i = 1; i < abs.length; i += 1) if (abs[i] > maxAe) maxAe = abs[i];
+    var bias = meanOf(errors);
+    var unit = prediction.yUnit || reference.yUnit || "";
+    return {
+      alignment: alignment,
+      metrics: { mae: mae, rmse: rmse, maxAe: maxAe, bias: bias, n: errors.length },
+      points: points,
+      validCount: errors.length,
+      excludedCount: (reference.x.length - errors.length),
+      excludedByReason: aligned.excludedByReason,
+      alignmentSummary: {
+        mode: aligned.provenance.mode,
+        referenceSeriesId: reference.id,
+        delta: aligned.provenance.delta,
+        tolerance: aligned.provenance.tolerance,
+        rangeMin: aligned.provenance.rangeMin,
+        rangeMax: aligned.provenance.rangeMax,
+        maxGap: typeof aligned.provenance.maxGap === "number" ? aligned.provenance.maxGap : null,
+        maxGapSource: aligned.provenance.maxGapSource,
+        xUnit: aligned.provenance.xUnit,
+        excludedByReason: aligned.excludedByReason
+      },
+      unit: unit,
+      x: aligned.x,
+      referenceY: aligned.referenceY,
+      predictionY: aligned.columns[prediction.id],
+      mask: aligned.mask
+    };
+  }
+
+  function previewAnalysis(project, draft) {
+    var result = evaluateAnalysis(project, draft);
+    result.sample = result.points.slice(0, 8);
+    result.referencePath = seriesPath(project, draft.referenceSeriesId);
+    result.predictionPath = seriesPath(project, draft.predictionSeriesId);
+    return result;
+  }
+
+  function applyAnalysis(project, draft) {
+    if (!project.analyses) project.analyses = [];
+    var result = evaluateAnalysis(project, draft);
+    var existing = draft && draft.id ? findAnalysis(project, draft.id) : null;
+    var record = normalizeAnalysisRecord({
+      id: existing ? existing.id : makeId("analysis"),
+      name: (draft && draft.name) || (existing && existing.name) || nextAnalysisName(project),
+      referenceSeriesId: draft.referenceSeriesId,
+      predictionSeriesId: draft.predictionSeriesId,
+      alignment: result.alignment,
+      errorSeriesId: existing ? existing.errorSeriesId : "",
+      errorPlotId: existing ? existing.errorPlotId : ""
+    });
+    record.metrics = result.metrics;
+    record.unit = result.unit;
+    record.validCount = result.validCount;
+    record.excludedCount = result.excludedCount;
+    record.excludedByReason = result.excludedByReason;
+    record.alignmentSummary = normalizeAlignmentSummary(result.alignmentSummary);
+    record.status = "ready";
+    record.errorMessage = "";
+    record.computedAt = new Date().toISOString();
+    record.sourceStamp = analysisSourceStamp(project, record);
+    if (existing) {
+      project.analyses = project.analyses.map(function (item) { return item.id === record.id ? record : item; });
+    } else {
+      project.analyses.push(record);
+    }
+    return record;
+  }
+
+  function recomputeAnalysis(project, record) {
+    if (!record) throw new Error("找不到分析记录。");
+    record.status = "computing";
+    try {
+      var next = applyAnalysis(project, {
+        id: record.id,
+        name: record.name,
+        referenceSeriesId: record.referenceSeriesId,
+        predictionSeriesId: record.predictionSeriesId,
+        alignment: record.alignment,
+        errorSeriesId: record.errorSeriesId,
+        errorPlotId: record.errorPlotId
+      });
+      return next;
+    } catch (error) {
+      var missing = !findSeries(project, record.referenceSeriesId) || !findSeries(project, record.predictionSeriesId);
+      setAnalysisStatus(record, missing ? "invalid" : "error", error.message || "计算失败");
+      throw error;
+    }
+  }
+
+  function renameAnalysis(project, analysisId, name) {
+    var record = findAnalysis(project, analysisId);
+    if (!record) throw new Error("找不到分析记录。");
+    var next = String(name || "").trim();
+    if (!next) throw new Error("分析名称不能为空。");
+    record.name = next;
+    return record;
+  }
+
+  function deleteAnalysis(project, analysisId) {
+    project.analyses = (project.analyses || []).filter(function (item) { return item.id !== analysisId; });
+    return true;
+  }
+
+  function assertAnalysisExportable(record) {
+    if (!record) throw new Error("找不到分析记录。");
+    if (record.status === "dirty") throw new Error("结果已过期，请先重算。");
+    if (record.status === "invalid") throw new Error("分析已失效，不能导出。");
+    if (record.status === "error" || record.status === "computing") throw new Error("当前状态不能导出。");
+    if (!record.metrics || !record.metrics.n) throw new Error("没有有效样本，不能导出。");
+  }
+
+  function csvEscape(value) {
+    var text = String(value == null ? "" : value);
+    if (/[",\n\r]/.test(text)) return '"' + text.replace(/"/g, '""') + '"';
+    return text;
+  }
+
+  function csvNumber(value) {
+    if (!Number.isFinite(value)) return "";
+    return JSON.stringify(value);
+  }
+
+  function analysisSummaryCsv(project, record) {
+    assertAnalysisExportable(record);
+    var summary = record.alignmentSummary || {};
+    var rows = [
+      ["parameter", "value"],
+      ["name", record.name],
+      ["status", record.status],
+      ["reference", seriesPath(project, record.referenceSeriesId)],
+      ["prediction", seriesPath(project, record.predictionSeriesId)],
+      ["mode", summary.mode || record.alignment.mode],
+      ["delta", csvNumber(record.alignment.delta)],
+      ["rangeMin", csvNumber(record.alignment.rangeMin)],
+      ["rangeMax", csvNumber(record.alignment.rangeMax)],
+      ["tolerance", csvNumber(record.alignment.tolerance)],
+      ["maxGap", csvNumber(summary.maxGap)],
+      ["unit", record.unit],
+      ["N", csvNumber(record.metrics.n)],
+      ["excluded", csvNumber(record.excludedCount)],
+      ["MAE", csvNumber(record.metrics.mae)],
+      ["RMSE", csvNumber(record.metrics.rmse)],
+      ["MaxAE", csvNumber(record.metrics.maxAe)],
+      ["Bias", csvNumber(record.metrics.bias)]
+    ];
+    Object.keys(record.excludedByReason || {}).forEach(function (key) {
+      rows.push(["excluded." + key, csvNumber(record.excludedByReason[key])]);
+    });
+    return rows.map(function (row) {
+      return row.map(csvEscape).join(",");
+    }).join("\n") + "\n";
+  }
+
+  function analysisPointwiseCsv(project, record) {
+    assertAnalysisExportable(record);
+    var result = evaluateAnalysis(project, record);
+    var lines = ["X,Reference,Aligned Prediction,Signed Error,Absolute Error"];
+    result.points.forEach(function (point) {
+      lines.push([
+        csvNumber(point.x),
+        csvNumber(point.reference),
+        csvNumber(point.prediction),
+        csvNumber(point.error),
+        csvNumber(point.absError)
+      ].join(","));
+    });
+    return lines.join("\n") + "\n";
+  }
+
+  function analysisCopyText(project, record) {
+    assertAnalysisExportable(record);
+    var unit = record.unit ? " " + record.unit : "";
+    return [
+      record.name,
+      "Reference\t" + seriesPath(project, record.referenceSeriesId),
+      "Prediction\t" + seriesPath(project, record.predictionSeriesId),
+      "N\t" + record.metrics.n,
+      "MAE\t" + csvNumber(record.metrics.mae) + unit,
+      "RMSE\t" + csvNumber(record.metrics.rmse) + unit,
+      "MaxAE\t" + csvNumber(record.metrics.maxAe) + unit,
+      "Bias\t" + csvNumber(record.metrics.bias) + unit
+    ].join("\n");
+  }
+
+  function ensureAnalysisErrorCurve(project, record) {
+    assertAnalysisExportable(record);
+    var result = evaluateAnalysis(project, record);
+    var series = record.errorSeriesId ? findSeries(project, record.errorSeriesId) : null;
+    var plot = record.errorPlotId ? findPlot(project, record.errorPlotId) : null;
+    var reused = !!(series && plot);
+    if (!series) {
+      var formulaLike = {
+        name: record.name + "_error",
+        expression: "prediction - reference",
+        id: ""
+      };
+      series = createComputedSeriesRecord(project, formulaLike, {
+        x: result.points.map(function (point) { return point.x; }),
+        y: result.points.map(function (point) { return point.error; }),
+        unit: record.unit,
+        validCount: result.validCount,
+        excludedCount: result.excludedCount,
+        alignmentSummary: result.alignmentSummary
+      });
+      series.formulaId = "";
+      series.analysisId = record.id;
+      series.role = "analysis-error";
+      series.originalHeader = record.name + " signed error";
+      series.originalName = series.originalHeader;
+      series.sourceLabel = series.originalHeader;
+      record.errorSeriesId = series.id;
+    } else {
+      series.x = result.points.map(function (point) { return point.x; });
+      series.y = result.points.map(function (point) { return point.error; });
+      series.unit = record.unit;
+      series.status = "ready";
+      series.errorMessage = "";
+      series.validCount = result.validCount;
+      series.excludedCount = result.excludedCount;
+      series.alignmentSummary = normalizeAlignmentSummary(result.alignmentSummary);
+      series.analysisId = record.id;
+      series.role = "analysis-error";
+    }
+    if (!plot) {
+      plot = createPlot(project, {
+        name: record.name + " 误差",
+        title: record.name + " 误差",
+        seriesRefs: [{ seriesId: series.id, visible: true }]
+      });
+      record.errorPlotId = plot.id;
+    } else if (!(plot.seriesRefs || []).some(function (ref) { return ref.seriesId === series.id; })) {
+      addSeriesToPlot(project, plot, [series.id]);
+    }
+    return { series: series, plot: plot, reused: reused };
   }
 
   var api = {
@@ -5597,6 +6046,21 @@
     recomputeComputedSeries: recomputeComputedSeries,
     recomputeDownstream: recomputeDownstream,
     applySeriesRemoval: applySeriesRemoval,
+    normalizeAnalysisRecord: normalizeAnalysisRecord,
+    findAnalysis: findAnalysis,
+    nextAnalysisName: nextAnalysisName,
+    evaluateAnalysis: evaluateAnalysis,
+    previewAnalysis: previewAnalysis,
+    applyAnalysis: applyAnalysis,
+    recomputeAnalysis: recomputeAnalysis,
+    renameAnalysis: renameAnalysis,
+    deleteAnalysis: deleteAnalysis,
+    auditAnalyses: auditAnalyses,
+    analysisSummaryCsv: analysisSummaryCsv,
+    analysisPointwiseCsv: analysisPointwiseCsv,
+    analysisCopyText: analysisCopyText,
+    ensureAnalysisErrorCurve: ensureAnalysisErrorCurve,
+    ANALYSIS_EXCLUSION_LABELS: ANALYSIS_EXCLUSION_LABELS,
     formulaWouldCycle: formulaWouldCycle,
     addDataset: addDataset,
     removeDataset: removeDataset,

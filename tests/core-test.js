@@ -718,6 +718,14 @@ assert(page.indexOf("新建公式") >= 0, "左侧可新建公式");
 assert(page.indexOf("第一阶段只接受同一横坐标") < 0, "编辑器不再拒绝跨来源采样");
 assert(page.indexOf("不按行号对齐") >= 0, "编辑器说明对齐不按行号");
 assert(page.indexOf("formula.alignment") >= 0, "编辑公式保留已保存的对齐配置");
+assert(page.indexOf("对齐模式") >= 0 && page.indexOf("时间偏移 Δt") >= 0, "公式编辑器有对齐模式和 Δt");
+assert(page.indexOf("最近邻容差") >= 0 && page.indexOf("最大插值缺口") >= 0, "公式编辑器有容差和缺口");
+assert(page.indexOf("paintAlignmentConfig") >= 0, "公式与分析共用 AlignmentConfig UI");
+assert(page.indexOf("tvAnalysisDialog") >= 0 && page.indexOf("tvResultsDock") >= 0, "误差向导与 Results 工具窗口存在");
+assert(page.indexOf("visualizer.workspace.results") >= 0, "Results 位置是 UI 偏好");
+assert(page.indexOf("生成误差曲线") >= 0 && page.indexOf("ensureAnalysisErrorCurve") >= 0, "误差曲线需用户点击生成");
+assert(page.indexOf("renderResultsDock();") >= 0, "Results 随界面刷新");
+assert(page.indexOf("tvResultsDock") >= 0 && page.indexOf("id=\"tvDock\"") >= 0, "Results 与图窗 Dock 是两个节点");
 assert(page.indexOf("tvDeleteImpactDialog") >= 0, "删除来源前有影响确认");
 assert(page.indexOf("openFormulaEditor") >= 0 && page.indexOf("closeFormulaEditor") >= 0, "公式编辑器有草稿应用和取消");
 assert(page.indexOf("pickInspectorSeries") >= 0, "系列名称进入 Inspector，不与勾选混用");
@@ -1821,6 +1829,109 @@ var updateChecks = [
   assert(once.rangeMin !== 5, "已填入的范围不跟随随后的缩放");
   var filled = core.alignmentRangeFromPlot(project, plot);
   assert(filled.rangeMin === 5 && filled.rangeMax === 6, "再次读取才拿到当前可视 X");
+}());
+
+// V070-C: MAE/RMSE/MaxAE/Bias + AnalysisRecord. Shares alignSeries. APP 0.6.3, project format 1.1.
+(function () {
+  assert(core.APP_INFO.version === "0.6.3", "误差测试时软件版本仍是 0.6.3");
+  assert(core.PROJECT_FORMAT_VERSION === "1.1", "误差测试不升工程格式");
+  var ATOL = 1e-9;
+  var RTOL = 1e-9;
+  function near(actual, expected, message) {
+    var scale = Math.max(1, Math.abs(expected));
+    assert(Math.abs(actual - expected) <= ATOL + RTOL * scale, message + " " + actual + " vs " + expected);
+  }
+  var p = core.createProject({ projectName: "v070c" });
+  core.addDataset(p, core.parseDatasetFromCsv("Time(s),A(°C)\n0,10\n1,12\n2,14\n3,16\n", { id: "ds-a", name: "参考", sourceFilename: "a.csv" }));
+  core.addDataset(p, core.parseDatasetFromCsv("Time(s),B(°C)\n0,11\n2,15\n4,19\n", { id: "ds-b", name: "预测", sourceFilename: "b.csv" }));
+  var aligned = core.alignSeries(
+    { id: "ds-a::A", x: [0, 1, 2, 3], y: [10, 12, 14, 16], xIsTime: true, xUnit: "s", yUnit: "°C" },
+    [{ id: "ds-b::B", x: [0, 2, 4], y: [11, 15, 19], xIsTime: true, xUnit: "s", yUnit: "°C" }],
+    { mode: "linear" }
+  );
+  var record = core.applyAnalysis(p, {
+    name: "A01",
+    referenceSeriesId: "ds-a::A",
+    predictionSeriesId: "ds-b::B",
+    alignment: { mode: "linear" }
+  });
+  near(record.metrics.mae, 1, "SPEC-070 MAE");
+  near(record.metrics.rmse, 1, "SPEC-070 RMSE");
+  near(record.metrics.maxAe, 1, "SPEC-070 MaxAE");
+  near(record.metrics.bias, 1, "SPEC-070 Bias");
+  assert(record.metrics.n === 4 && record.validCount === 4, "SPEC-070 N=4");
+  near(record.metrics.mae, aligned.columns["ds-b::B"].reduce(function (s, y, i) { return s + Math.abs(y - aligned.referenceY[i]); }, 0) / 4, "指标与 alignSeries 掩码一致");
+  var evaluated = core.evaluateAnalysis(p, record);
+  assert(evaluated.points.map(function (item) { return item.prediction; }).join(",") === aligned.columns["ds-b::B"].join(","), "分析引擎不另写对齐");
+
+  var q = core.createProject({ projectName: "v070c-e" });
+  core.addDataset(q, core.parseDatasetFromCsv("Time(s),R\n0,0\n1,0\n2,0\n", { id: "ds-r", name: "R", sourceFilename: "r.csv" }));
+  core.addDataset(q, core.parseDatasetFromCsv("Time(s),P\n0,1\n1,-2\n2,3\n", { id: "ds-p", name: "P", sourceFilename: "p.csv" }));
+  var varying = core.applyAnalysis(q, {
+    name: "Vary",
+    referenceSeriesId: "ds-r::R",
+    predictionSeriesId: "ds-p::P",
+    alignment: { mode: "linear" }
+  });
+  near(varying.metrics.mae, 2, "e=[1,-2,3] MAE");
+  near(varying.metrics.rmse, Math.sqrt(14 / 3), "e=[1,-2,3] RMSE");
+  near(varying.metrics.maxAe, 3, "e=[1,-2,3] MaxAE");
+  near(varying.metrics.bias, 2 / 3, "e=[1,-2,3] Bias");
+  assert(varying.metrics.n === 3, "非恒定误差 N=3");
+
+  var emptyThrew = false;
+  try {
+    core.applyAnalysis(p, {
+      referenceSeriesId: "ds-a::A",
+      predictionSeriesId: "ds-b::B",
+      alignment: { mode: "linear", rangeMin: 10, rangeMax: 12 }
+    });
+  } catch (error) {
+    emptyThrew = /没有有效样本|指定范围内没有参考时间点|无重叠/.test(error.message);
+  }
+  assert(emptyThrew, "空区间不能输出伪零指标");
+
+  core.ensureWorkspace(p);
+  var instanceCount = (p.canvases[0].instances || []).length;
+  var firstCurve = core.ensureAnalysisErrorCurve(p, record);
+  assert(firstCurve.series.role === "analysis-error", "误差曲线是派生 Series");
+  assert(firstCurve.plot && firstCurve.plot.type !== "detail", "误差曲线有独立图窗");
+  assert((p.canvases[0].instances || []).length === instanceCount, "误差图窗不自动进入画布");
+  var secondCurve = core.ensureAnalysisErrorCurve(p, record);
+  assert(secondCurve.reused && secondCurve.series.id === firstCurve.series.id && secondCurve.plot.id === firstCurve.plot.id, "重复生成复用同一 Series 与图窗");
+  assert((p.datasets.filter(function (d) { return d.kind === "computed"; })[0].series.filter(function (s) { return s.role === "analysis-error"; }).length) === 1, "不会产生重复误差 Series");
+
+  var summary = core.analysisSummaryCsv(p, record);
+  assert(summary.indexOf("MAE") >= 0 && summary.indexOf(JSON.stringify(record.metrics.mae)) >= 0, "摘要 CSV 用计算精度");
+  var pointwise = core.analysisPointwiseCsv(p, record);
+  assert(pointwise.indexOf("X,Reference,Aligned Prediction,Signed Error,Absolute Error") === 0, "逐点 CSV 表头");
+  assert(pointwise.indexOf("11") >= 0 && pointwise.indexOf("1") >= 0, "逐点 CSV 含对齐预测和误差");
+  var copied = core.analysisCopyText(p, record);
+  assert(copied.indexOf("MAE") >= 0 && copied.indexOf("\t") >= 0, "复制文本保留指标语义");
+
+  record.status = "dirty";
+  var dirtyThrew = false;
+  try { core.analysisSummaryCsv(p, record); } catch (error) { dirtyThrew = /过期/.test(error.message); }
+  assert(dirtyThrew, "Dirty 不能当有效结果导出");
+  record = core.recomputeAnalysis(p, record);
+  assert(record.status === "ready" && record.metrics.n === 4, "重算恢复 Ready");
+
+  core.removeDataset(p, "ds-b");
+  var afterDelete = core.findAnalysis(p, record.id);
+  assert(afterDelete.status === "invalid", "删预测源后分析失效");
+
+  var saved = core.serializeProject(q);
+  assert(saved.indexOf("\"analyses\"") >= 0, "工程保存分析记录");
+  var restored = core.parseProject(saved);
+  assert(restored.analyses.length === 1, "工程往返恢复分析记录");
+  near(restored.analyses[0].metrics.rmse, Math.sqrt(14 / 3), "工程往返恢复 RMSE");
+  var oldOpened = core.parseProject(JSON.stringify({
+    projectFormatVersion: "1.1",
+    projectName: "old-c",
+    datasets: [],
+    plots: []
+  }));
+  assert((oldOpened.analyses || []).length === 0, "旧工程缺 analyses 可打开");
 }());
 
 Promise.all(updateChecks).then(function () {
