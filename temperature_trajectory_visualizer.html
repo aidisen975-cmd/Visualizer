@@ -929,7 +929,47 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    .tv-series-row.is-inspect {
+      background: rgba(53, 89, 122, .08);
+      box-shadow: inset 2px 0 0 var(--focus);
+    }
     .tv-series-row:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+    .tv-dataset-title {
+      min-height: 28px;
+      padding: 0 6px;
+      font-weight: 650;
+      line-height: 28px;
+    }
+    .tv-calc-meta {
+      display: grid;
+      grid-template-columns: 72px minmax(0, 1fr);
+      gap: 6px 10px;
+      margin: 0 0 10px;
+    }
+    .tv-calc-meta dt { color: var(--secondary); }
+    .tv-calc-meta dd { margin: 0; word-break: break-all; }
+    .tv-formula-bind {
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr);
+      gap: 6px;
+      align-items: center;
+      margin: 0 0 6px;
+    }
+    .tv-formula-preview {
+      width: 100%;
+      border-collapse: collapse;
+      font-variant-numeric: tabular-nums;
+      font-size: 11px;
+    }
+    .tv-formula-preview th, .tv-formula-preview td {
+      padding: 3px 6px;
+      border-bottom: 1px solid var(--rule);
+      text-align: right;
+    }
+    .tv-formula-preview th:first-child, .tv-formula-preview td:first-child { text-align: left; }
+    .tv-about.tv-formula-dialog { width: min(92vw, 520px); }
+    .tv-formula-error { color: var(--danger); margin: 0 0 10px; }
+    .tv-formula-create { margin-top: 8px; width: 100%; }
     .tv-series-dot {
       width: 8px;
       height: 8px;
@@ -2068,6 +2108,27 @@
     </div>
     <div class="tv-about-body" id="tvAboutBody"></div>
   </dialog>
+  <dialog class="tv-about tv-formula-dialog" id="tvFormulaDialog" aria-label="公式编辑器">
+    <div class="tv-preview-bar">
+      <strong id="tvFormulaTitle">编辑公式</strong>
+      <button type="button" class="tv-button" id="tvFormulaCancel">取消</button>
+    </div>
+    <div class="tv-about-body" id="tvFormulaBody"></div>
+  </dialog>
+  <dialog class="tv-about" id="tvFormulaDepsDialog" aria-label="依赖关系">
+    <div class="tv-preview-bar">
+      <strong>查看依赖</strong>
+      <button type="button" class="tv-button" id="tvFormulaDepsClose">关闭</button>
+    </div>
+    <div class="tv-about-body" id="tvFormulaDepsBody"></div>
+  </dialog>
+  <dialog class="tv-about" id="tvDeleteImpactDialog" aria-label="删除影响">
+    <div class="tv-preview-bar">
+      <strong>删除来源</strong>
+      <button type="button" class="tv-button" id="tvDeleteImpactCancel">取消</button>
+    </div>
+    <div class="tv-about-body" id="tvDeleteImpactBody"></div>
+  </dialog>
   <script src="visualizer-core.js"></script>
   <script>
   (function () {
@@ -2190,7 +2251,7 @@
         axes: false,
         xAxis: false, "xAxis.line": true, "xAxis.title": false, "xAxis.range": false, "xAxis.time": false, "xAxis.top": false,
         yAxis: false, "yAxis.line": true, "yAxis.title": false, "yAxis.range": false, "yAxis.right": false,
-        legend: false, series: false, "series.list": true, "series.style": false,
+        legend: false, series: false, "series.list": true, "series.style": false, "series.calc": true,
         local: false, annotation: false, export: false
       },
       detail: {
@@ -2242,6 +2303,13 @@
     var selectedRefIndex = 0;
     var lastSelectedSeriesId = {};
     var checkedSeries = new Set();
+    var inspectorSeriesIds = [];
+    var inspectorAnchor = "";
+    var formulaDraft = null;
+    var formulaDialog = document.getElementById("tvFormulaDialog");
+    var formulaBody = document.getElementById("tvFormulaBody");
+    var depsDialog = document.getElementById("tvFormulaDepsDialog");
+    var deleteImpactDialog = document.getElementById("tvDeleteImpactDialog");
     var collapsedDatasets = new Set();
     var expandedFigureGroups = {};
     var openGroupStyleKey = null;
@@ -3477,6 +3545,423 @@
       if (overviewOpenId === dataset.id) syncClusterOverview();
     }
 
+    var FORMULA_STATUS_LABEL = {
+      ready: "就绪",
+      dirty: "待更新",
+      computing: "计算中",
+      invalid: "失效",
+      error: "错误"
+    };
+    var pendingDeleteImpact = null;
+
+    function showAppModal(dialog) {
+      if (!dialog || dialog.open) return;
+      if (typeof dialog.showModal === "function") dialog.showModal();
+      else dialog.setAttribute("open", "");
+    }
+
+    function closeAppModal(dialog) {
+      if (!dialog) return;
+      if (dialog.open && typeof dialog.close === "function") dialog.close();
+      else dialog.removeAttribute("open");
+    }
+
+    function formulaStatusLabel(status) {
+      return FORMULA_STATUS_LABEL[status] || status || "就绪";
+    }
+
+    function pruneInspectorSeries() {
+      inspectorSeriesIds = inspectorSeriesIds.filter(function (id) {
+        return !!core.findSeries(project, id);
+      });
+      if (inspectorAnchor && inspectorSeriesIds.indexOf(inspectorAnchor) < 0) {
+        inspectorAnchor = inspectorSeriesIds[0] || "";
+      }
+    }
+
+    function inspectedComputedSeries() {
+      pruneInspectorSeries();
+      return inspectorSeriesIds.map(function (id) {
+        return core.findSeries(project, id);
+      }).filter(function (series) {
+        return series && series.kind === "computed";
+      });
+    }
+
+    function formulaCreateButton(className) {
+      var button = document.createElement("button");
+      button.type = "button";
+      button.className = className || "tv-button tv-button--tiny";
+      button.textContent = "新建公式";
+      button.addEventListener("click", function (event) {
+        event.stopPropagation();
+        openFormulaEditor(null);
+      });
+      return button;
+    }
+
+    function pickInspectorSeries(dataset, series, event) {
+      var ids = dataset.series.map(function (item) { return item.id; });
+      if (event.shiftKey && inspectorAnchor && ids.indexOf(inspectorAnchor) >= 0) {
+        var from = ids.indexOf(inspectorAnchor);
+        var to = ids.indexOf(series.id);
+        var lo = Math.min(from, to);
+        var hi = Math.max(from, to);
+        inspectorSeriesIds = ids.slice(lo, hi + 1);
+      } else if (event.ctrlKey || event.metaKey) {
+        var index = inspectorSeriesIds.indexOf(series.id);
+        if (index >= 0) inspectorSeriesIds = inspectorSeriesIds.filter(function (id) { return id !== series.id; });
+        else inspectorSeriesIds = inspectorSeriesIds.concat([series.id]);
+      } else {
+        inspectorSeriesIds = [series.id];
+      }
+      inspectorAnchor = series.id;
+      if (uiState().rightPanelCollapsed) {
+        uiState().rightPanelCollapsed = false;
+        applyPanelLayout();
+      }
+      setRightTab("props");
+      renderData();
+      renderProps();
+    }
+
+    function closeFormulaEditor() {
+      formulaDraft = null;
+      closeAppModal(formulaDialog);
+    }
+
+    function closeFormulaDeps() {
+      closeAppModal(depsDialog);
+    }
+
+    function closeDeleteImpact() {
+      pendingDeleteImpact = null;
+      closeAppModal(deleteImpactDialog);
+    }
+
+    function currentDraftAliases() {
+      try {
+        return core.formulaAliases(core.parseFormulaExpression(formulaDraft.expression));
+      } catch (error) {
+        return Object.keys(formulaDraft.bindings || {});
+      }
+    }
+
+    function paintFormulaBindings(host) {
+      host.replaceChildren();
+      var aliases = currentDraftAliases();
+      var excludeId = formulaDraft.outputSeriesId || "";
+      var options = core.listFormulaSeriesOptions(project, excludeId);
+      if (!aliases.length) {
+        var empty = document.createElement("p");
+        empty.className = "tv-hint";
+        empty.textContent = "表达式里的变量会出现在这里，再绑定到来源系列。";
+        host.appendChild(empty);
+        return;
+      }
+      aliases.forEach(function (alias) {
+        var row = document.createElement("label");
+        row.className = "tv-formula-bind";
+        var name = document.createElement("span");
+        name.textContent = alias;
+        var select = document.createElement("select");
+        select.className = "tv-select";
+        select.setAttribute("aria-label", "变量 " + alias + " 绑定");
+        var blank = document.createElement("option");
+        blank.value = "";
+        blank.textContent = "选择来源系列";
+        select.appendChild(blank);
+        options.forEach(function (option) {
+          var item = document.createElement("option");
+          item.value = option.id;
+          item.textContent = option.path;
+          select.appendChild(item);
+        });
+        if (formulaDraft.bindings[alias] && options.some(function (option) { return option.id === formulaDraft.bindings[alias]; })) {
+          select.value = formulaDraft.bindings[alias];
+        }
+        select.addEventListener("change", function () {
+          formulaDraft.bindings[alias] = select.value;
+        });
+        row.append(name, select);
+        host.appendChild(row);
+      });
+    }
+
+    function paintFormulaPreview(host) {
+      if (!host) return;
+      host.replaceChildren();
+      if (formulaDraft.error) {
+        var err = document.createElement("p");
+        err.className = "tv-hint tv-formula-error";
+        err.textContent = formulaDraft.error;
+        host.appendChild(err);
+      }
+      var preview = formulaDraft.preview;
+      if (!preview) return;
+      var summary = document.createElement("p");
+      summary.className = "tv-hint";
+      summary.textContent = "有效 " + preview.validCount + " 点，排除 " + preview.excludedCount + " 点。提交前草稿不会写入工程。";
+      var table = document.createElement("table");
+      table.className = "tv-formula-preview";
+      var head = document.createElement("tr");
+      head.appendChild(document.createElement("th")).textContent = "X";
+      head.appendChild(document.createElement("th")).textContent = "Y";
+      table.appendChild(head);
+      (preview.sample || []).forEach(function (row) {
+        var tr = document.createElement("tr");
+        var x = document.createElement("td");
+        x.textContent = String(row.x);
+        var y = document.createElement("td");
+        y.textContent = Number.isFinite(row.y) ? String(row.y) : "NaN";
+        tr.append(x, y);
+        table.appendChild(tr);
+      });
+      host.append(summary, table);
+    }
+
+    function runFormulaPreview() {
+      if (!formulaDraft) return;
+      currentDraftAliases().forEach(function (alias) {
+        if (!formulaDraft.bindings[alias]) formulaDraft.bindings[alias] = "";
+      });
+      try {
+        formulaDraft.preview = core.previewFormula(project, formulaDraft);
+        formulaDraft.error = "";
+      } catch (error) {
+        formulaDraft.preview = null;
+        formulaDraft.error = error.message || "预览失败";
+      }
+      paintFormulaPreview(document.getElementById("tvFormulaPreviewHost"));
+    }
+
+    function applyFormulaDraft() {
+      if (!formulaDraft) return;
+      try {
+        var created = null;
+        commitEdit("Apply formula", function () {
+          created = core.applyFormula(project, formulaDraft);
+        });
+        if (created) {
+          inspectorSeriesIds = [created.id];
+          inspectorAnchor = created.id;
+        }
+        var name = created ? core.seriesDisplayName(created) : formulaDraft.name;
+        closeFormulaEditor();
+        setStatus("已提交公式「" + name + "」。未自动加入当前图。", "ok");
+        renderAll();
+      } catch (error) {
+        formulaDraft.preview = null;
+        formulaDraft.error = error.message || "提交失败";
+        paintFormulaPreview(document.getElementById("tvFormulaPreviewHost"));
+        setStatus(formulaDraft.error, "error");
+      }
+    }
+
+    function openFormulaEditor(series) {
+      var formula = series
+        ? (project.formulas || []).find(function (item) { return item.id === series.formulaId; })
+        : null;
+      formulaDraft = {
+        id: formula ? formula.id : "",
+        name: formula ? formula.name : core.nextFormulaName(project),
+        expression: formula ? formula.expression : "",
+        bindings: formula ? core.cloneJson(formula.bindings || {}) : {},
+        outputUnit: formula ? (formula.outputUnit || "") : "",
+        outputSeriesId: series ? series.id : "",
+        preview: null,
+        error: ""
+      };
+      document.getElementById("tvFormulaTitle").textContent = formula ? "编辑公式" : "新建公式";
+      formulaBody.replaceChildren();
+      var name = fieldControl("名称", formulaDraft.name);
+      name.input.setAttribute("aria-label", "公式名称");
+      name.input.addEventListener("input", function () { formulaDraft.name = name.input.value; });
+      var expr = fieldControl("表达式", formulaDraft.expression, "textarea");
+      expr.input.setAttribute("aria-label", "公式表达式");
+      expr.input.placeholder = "例如 A - B 或 A * 0.5";
+      var bindCap = document.createElement("span");
+      bindCap.className = "tv-prop-label";
+      bindCap.textContent = "变量绑定";
+      var bindHost = document.createElement("div");
+      bindHost.id = "tvFormulaBindHost";
+      expr.input.addEventListener("input", function () {
+        formulaDraft.expression = expr.input.value;
+        formulaDraft.preview = null;
+        paintFormulaBindings(bindHost);
+      });
+      var unit = fieldControl("输出单位", formulaDraft.outputUnit);
+      unit.input.addEventListener("input", function () { formulaDraft.outputUnit = unit.input.value; });
+      var previewHost = document.createElement("div");
+      previewHost.id = "tvFormulaPreviewHost";
+      var actions = document.createElement("div");
+      actions.className = "tv-dataset-tools";
+      var previewBtn = document.createElement("button");
+      previewBtn.type = "button";
+      previewBtn.className = "tv-button";
+      previewBtn.textContent = "预览";
+      previewBtn.addEventListener("click", runFormulaPreview);
+      var applyBtn = document.createElement("button");
+      applyBtn.type = "button";
+      applyBtn.className = "tv-button tv-button--primary";
+      applyBtn.textContent = "应用";
+      applyBtn.addEventListener("click", applyFormulaDraft);
+      var cancelBtn = document.createElement("button");
+      cancelBtn.type = "button";
+      cancelBtn.className = "tv-button";
+      cancelBtn.textContent = "取消";
+      cancelBtn.addEventListener("click", closeFormulaEditor);
+      actions.append(previewBtn, applyBtn, cancelBtn);
+      var hint = document.createElement("p");
+      hint.className = "tv-hint";
+      hint.textContent = "第一阶段只接受同一横坐标的逐点运算。不同采样会拒绝，不会按行号硬对齐。";
+      formulaBody.append(name.wrap, expr.wrap, bindCap, bindHost, unit.wrap, previewHost, actions, hint);
+      paintFormulaBindings(bindHost);
+      showAppModal(formulaDialog);
+      name.input.focus();
+      name.input.select();
+    }
+
+    function showFormulaDeps(series) {
+      var body = document.getElementById("tvFormulaDepsBody");
+      body.replaceChildren();
+      var formula = (project.formulas || []).find(function (item) { return item.id === series.formulaId; });
+      var inputs = document.createElement("p");
+      inputs.className = "tv-hint";
+      if (formula) {
+        var aliases = Object.keys(formula.bindings || {});
+        inputs.textContent = aliases.length
+          ? "输入：" + aliases.map(function (alias) {
+            return alias + " = " + core.seriesPath(project, formula.bindings[alias]);
+          }).join("；")
+          : "没有绑定输入。";
+      } else {
+        inputs.textContent = "找不到公式定义。";
+      }
+      var impact = core.formulaImpact(project, [series.id]);
+      var derived = document.createElement("p");
+      derived.className = "tv-hint";
+      derived.textContent = impact.derived.length
+        ? "下游：" + impact.derived.map(function (item) { return item.path; }).join("；")
+        : "没有下游计算系列。";
+      var plots = document.createElement("p");
+      plots.className = "tv-hint";
+      plots.textContent = impact.plots.length
+        ? "所在图：" + impact.plots.join("、")
+        : "当前没有图引用这条计算系列。";
+      body.append(inputs, derived, plots);
+      showAppModal(depsDialog);
+    }
+
+    function confirmDeleteImpact(seriesIds, onConfirm) {
+      var impact = core.formulaImpact(project, seriesIds);
+      if (!impact.derived.length) {
+        onConfirm();
+        return;
+      }
+      pendingDeleteImpact = onConfirm;
+      var body = document.getElementById("tvDeleteImpactBody");
+      body.replaceChildren();
+      var warn = document.createElement("p");
+      warn.textContent = "删除后以下计算系列将失效，不会改绑同名列。";
+      var list = document.createElement("ul");
+      impact.derived.forEach(function (item) {
+        var li = document.createElement("li");
+        li.textContent = item.path;
+        list.appendChild(li);
+      });
+      if (impact.plots.length) {
+        var used = document.createElement("p");
+        used.className = "tv-hint";
+        used.textContent = "受影响的图：" + impact.plots.join("、");
+        body.append(warn, list, used);
+      } else body.append(warn, list);
+      var go = document.createElement("button");
+      go.type = "button";
+      go.className = "tv-button tv-button--danger";
+      go.textContent = "仍要删除";
+      go.addEventListener("click", function () {
+        var fn = pendingDeleteImpact;
+        pendingDeleteImpact = null;
+        closeAppModal(deleteImpactDialog);
+        if (fn) fn();
+      });
+      body.appendChild(go);
+      showAppModal(deleteImpactDialog);
+      document.getElementById("tvDeleteImpactCancel").focus();
+    }
+
+    function buildCalcInfoSection() {
+      var computed = inspectedComputedSeries();
+      if (!computed.length) return null;
+      var calcSec = section("计算信息", true, "series.calc", "dataset", "l1");
+      var formulaIds = [];
+      computed.forEach(function (item) {
+        if (item.formulaId && formulaIds.indexOf(item.formulaId) < 0) formulaIds.push(item.formulaId);
+      });
+      if (computed.length > 1 && formulaIds.length !== 1) {
+        var mixed = document.createElement("p");
+        mixed.className = "tv-hint";
+        mixed.textContent = "已选择 " + computed.length + " 条计算系列，公式不同。";
+        calcSec.body.appendChild(mixed);
+        return calcSec;
+      }
+      var series = computed[0];
+      var formula = (project.formulas || []).find(function (item) { return item.id === series.formulaId; });
+      var meta = document.createElement("dl");
+      meta.className = "tv-calc-meta";
+      function addMeta(label, value) {
+        var dt = document.createElement("dt");
+        dt.textContent = label;
+        var dd = document.createElement("dd");
+        dd.textContent = value;
+        meta.append(dt, dd);
+      }
+      addMeta("名称", formula ? formula.name : core.seriesDisplayName(series));
+      addMeta("表达式", formula ? formula.expression : "—");
+      addMeta("状态", formulaStatusLabel(series.status) + (series.errorMessage ? " · " + series.errorMessage : ""));
+      addMeta("有效点", String(series.validCount == null ? "—" : series.validCount));
+      addMeta("排除点", String(series.excludedCount == null ? "—" : series.excludedCount));
+      addMeta("单位", series.unit || (formula && formula.outputUnit) || "无");
+      if (formula) {
+        Object.keys(formula.bindings || {}).forEach(function (alias) {
+          addMeta(alias, core.seriesPath(project, formula.bindings[alias]));
+        });
+      }
+      calcSec.body.appendChild(meta);
+      var actions = document.createElement("div");
+      actions.className = "tv-dataset-tools";
+      var edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "tv-button tv-button--tiny";
+      edit.textContent = "编辑公式";
+      edit.addEventListener("click", function () { openFormulaEditor(series); });
+      var deps = document.createElement("button");
+      deps.type = "button";
+      deps.className = "tv-button tv-button--tiny";
+      deps.textContent = "查看依赖";
+      deps.addEventListener("click", function () { showFormulaDeps(series); });
+      var remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "tv-button tv-button--tiny tv-button--danger";
+      remove.textContent = "删除计算系列";
+      remove.addEventListener("click", function () {
+        var ids = computed.map(function (item) { return item.id; });
+        confirmDeleteImpact(ids, function () {
+          commitEdit("Remove computed series", function () {
+            core.applySeriesRemoval(project, ids);
+          });
+          inspectorSeriesIds = [];
+          inspectorAnchor = "";
+          setStatus("已删除计算系列。", "ok");
+          renderAll();
+        });
+      });
+      actions.append(edit, deps, remove);
+      calcSec.body.appendChild(actions);
+      return calcSec;
+    }
+
     function renderData() {
       dataPanel.replaceChildren();
       if (!project.datasets.length) {
@@ -3487,14 +3972,21 @@
         hint.className = "tv-hint";
         hint.textContent = "尚未导入数据。CSV 只要含可绘制的数值列即可；时间列或第一数值列将作为横坐标。";
         empty.appendChild(hint);
+        empty.appendChild(formulaCreateButton("tv-button tv-formula-create"));
         dataPanel.appendChild(empty);
         syncClusterOverview();
         return;
       }
+      pruneInspectorSeries();
       var painted = {};
       var browserPlot = selectedPlot();
       if (browserPlot) core.resolvePlotSeries(project, browserPlot).forEach(function (item) { painted[item.series.id] = item.color; });
-      project.datasets.forEach(function (dataset) {
+      var datasets = project.datasets.slice().sort(function (a, b) {
+        if ((a.kind === "computed") === (b.kind === "computed")) return 0;
+        return a.kind === "computed" ? 1 : -1;
+      });
+      datasets.forEach(function (dataset) {
+        var computedCluster = dataset.kind === "computed";
         var box = document.createElement("section");
         box.className = "tv-dataset";
         box.dataset.datasetId = dataset.id;
@@ -3507,16 +3999,23 @@
         toggle.textContent = collapsed ? "▶" : "▼";
         toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
         toggle.setAttribute("aria-label", (collapsed ? "展开 " : "折叠 ") + dataset.name);
-        var name = document.createElement("input");
-        name.value = dataset.name;
-        name.setAttribute("aria-label", "数据源名称");
-        name.addEventListener("change", function () {
-          dataset.name = name.value.trim() || dataset.sourceFilename || "未命名数据";
-          setDirty(true);
-          renderCanvas();
-          renderProps();
-        });
-        name.addEventListener("click", function (event) { event.stopPropagation(); });
+        var name;
+        if (computedCluster) {
+          name = document.createElement("span");
+          name.className = "tv-dataset-title";
+          name.textContent = dataset.name || core.COMPUTED_DATASET_NAME;
+        } else {
+          name = document.createElement("input");
+          name.value = dataset.name;
+          name.setAttribute("aria-label", "数据源名称");
+          name.addEventListener("change", function () {
+            dataset.name = name.value.trim() || dataset.sourceFilename || "未命名数据";
+            setDirty(true);
+            renderCanvas();
+            renderProps();
+          });
+          name.addEventListener("click", function (event) { event.stopPropagation(); });
+        }
         var count = document.createElement("span");
         count.className = "tv-dataset-count";
         function paintCount() {
@@ -3530,17 +4029,20 @@
         remove.setAttribute("aria-label", "移除 " + dataset.name);
         remove.addEventListener("click", function (event) {
           event.stopPropagation();
-          core.removeDataset(project, dataset.id);
-          dataset.series.forEach(function (series) { checkedSeries.delete(series.id); });
-          collapsedDatasets.delete(dataset.id);
-          delete selectionAnchor[dataset.id];
-          if (activeDatasetId === dataset.id) activeDatasetId = null;
-          setDirty(true);
-          setStatus("已移除 " + dataset.name + "。", "ok");
-          renderAll();
+          var ids = dataset.series.map(function (series) { return series.id; });
+          confirmDeleteImpact(ids, function () {
+            core.removeDataset(project, dataset.id);
+            ids.forEach(function (id) { checkedSeries.delete(id); });
+            collapsedDatasets.delete(dataset.id);
+            delete selectionAnchor[dataset.id];
+            if (activeDatasetId === dataset.id) activeDatasetId = null;
+            setDirty(true);
+            setStatus("已移除 " + dataset.name + "。", "ok");
+            renderAll();
+          });
         });
         function toggleCollapsed(event) {
-          if (event.target === name || event.target === remove) return;
+          if ((event.target === name && name.tagName === "INPUT") || event.target === remove) return;
           event.preventDefault();
           if (collapsedDatasets.has(dataset.id)) collapsedDatasets.delete(dataset.id);
           else collapsedDatasets.add(dataset.id);
@@ -3584,12 +4086,13 @@
             refreshChecks();
           });
           tools.append(selectAll, selectNone);
+          if (computedCluster) tools.appendChild(formulaCreateButton());
           box.appendChild(tools);
           var list = document.createElement("div");
           list.className = "tv-series-list";
           dataset.series.forEach(function (series) {
             var row = document.createElement("div");
-            row.className = "tv-series-row";
+            row.className = "tv-series-row" + (inspectorSeriesIds.indexOf(series.id) >= 0 ? " is-inspect" : "");
             row.tabIndex = 0;
             var check = document.createElement("input");
             check.type = "checkbox";
@@ -3607,18 +4110,24 @@
               });
               refreshChecks();
             }
-            // Checkbox is controlled by checkedSeries. pointerdown preventDefault
-            // stops the UA from toggling checked after we write it (that flip was one click late).
-            row.addEventListener("pointerdown", function (event) {
+            // Checkbox is plot selection. Name/row is Inspector target. Keep them separate.
+            check.addEventListener("pointerdown", function (event) {
               if (event.button != null && event.button !== 0) return;
               event.preventDefault();
+              event.stopPropagation();
               pickSeries(event);
             });
             check.addEventListener("click", function (event) { event.preventDefault(); });
+            row.addEventListener("pointerdown", function (event) {
+              if (event.button != null && event.button !== 0) return;
+              if (event.target === check) return;
+              event.preventDefault();
+              pickInspectorSeries(dataset, series, event);
+            });
             row.addEventListener("keydown", function (event) {
               if (event.key !== " " && event.key !== "Enter") return;
               event.preventDefault();
-              pickSeries(event);
+              pickInspectorSeries(dataset, series, event);
             });
             var dot = document.createElement("span");
             dot.className = "tv-series-dot";
@@ -3627,7 +4136,10 @@
             copy.className = "tv-series-name";
             copy.textContent = core.seriesDisplayName(series);
             var meta = document.createElement("small");
-            meta.textContent = series.x.length + " pts";
+            var statusNote = series.kind === "computed" && series.status && series.status !== "ready"
+              ? " · " + formulaStatusLabel(series.status)
+              : "";
+            meta.textContent = series.x.length + " pts" + statusNote;
             row.addEventListener("pointerenter", function () {
               if (!row.title) row.title = seriesTooltip(series, dataset);
             });
@@ -3711,9 +4223,12 @@
       });
       addRow.append(select, add);
       dataPanel.append(addRow);
+      if (!core.computedDatasetOf(project)) {
+        dataPanel.appendChild(formulaCreateButton("tv-button tv-formula-create"));
+      }
       var hint = document.createElement("p");
       hint.className = "tv-hint";
-      hint.textContent = "左侧只负责选择数据。样式在右侧当前图里设置。Shift 连选，Ctrl/Cmd 点选，Ctrl/Cmd+A 全选当前数据簇。加入图后选择会清空。";
+      hint.textContent = "勾选后加入当前图。点名称查看属性。Shift 连选，Ctrl/Cmd 点选，Ctrl/Cmd+A 全选当前数据簇。加入图后勾选会清空。";
       dataPanel.appendChild(hint);
       syncClusterOverview();
     }
@@ -8221,12 +8736,25 @@
         var objectFocus = selectedObject ? core.getPropertyFocus(selectedObject) : "";
         var nested = objectFocus === "annotation" || objectFocus === "inset" || objectFocus === "source-box" || objectFocus === "connector" || objectFocus === "detail";
         if (!nested) {
+          inspectorKind = "normal";
+          var canvasCalc = buildCalcInfoSection();
+          if (canvasCalc) {
+            propsPanel.appendChild(canvasCalc.wrap);
+            return;
+          }
           if (selectedInstanceIds.length) return renderInstanceFocus();
           return renderCanvasFocus();
         }
       }
       var plot = selectedPlot();
       if (!plot) {
+        inspectorKind = "normal";
+        var calcOnly = buildCalcInfoSection();
+        if (calcOnly) {
+          propsPanel.appendChild(calcOnly.wrap);
+          appendCanvasSettings(propsPanel);
+          return;
+        }
         var hint = document.createElement("p");
         hint.className = "tv-hint";
         hint.textContent = project.plots.length ? "在画布中点选一张图以编辑标题、曲线和坐标。" : "新建工程后会自动创建 Figure 1。";
@@ -8705,13 +9233,15 @@
         var place = section("位置与尺寸", false, "place", "layout", "l1");
         if (figureBucket.firstChild) about.body.insertBefore(figureBucket.firstChild, about.body.firstChild);
         while (figureBucket.firstChild) place.body.appendChild(figureBucket.firstChild);
-        blocks = [about.wrap, detailParts.range, titleSec.wrap, axesSec.wrap, legendSec.wrap, detailParts.link, place.wrap, annSec.wrap, exportSec.wrap, del].filter(Boolean);
+        var calcSec = buildCalcInfoSection();
+        blocks = [about.wrap, detailParts.range, titleSec.wrap, axesSec.wrap, legendSec.wrap, detailParts.link, place.wrap, annSec.wrap, calcSec && calcSec.wrap, exportSec.wrap, del].filter(Boolean);
       } else {
         var frameSec = section("背景与尺寸", false, "chart.frame", "frame", "l1");
         while (figureBucket.firstChild) frameSec.body.appendChild(figureBucket.firstChild);
         appendTemplateControls(frameSec.body, plot);
         var seriesSec = section("数据系列", false, "series", "series-style", "l1");
         seriesSec.body.append(dataSec.wrap, styleSec.wrap);
+        var calcSec = buildCalcInfoSection();
         var localSec = section("局部视图", false, "local", "inset", "l1");
         var children = core.detailChildren(project, plot.id);
         if (!children.length) {
@@ -8735,7 +9265,7 @@
           });
           localSec.body.appendChild(jump);
         });
-        blocks = [titleSec.wrap, frameSec.wrap, axesSec.wrap, legendSec.wrap, seriesSec.wrap, localSec.wrap, annSec.wrap, exportSec.wrap, del];
+        blocks = [titleSec.wrap, frameSec.wrap, axesSec.wrap, legendSec.wrap, seriesSec.wrap, calcSec && calcSec.wrap, localSec.wrap, annSec.wrap, exportSec.wrap, del].filter(Boolean);
       }
       if (focus === "legend") blocks = [legendSec.wrap];
       propsPanel.append.apply(propsPanel, blocks);
@@ -10189,6 +10719,21 @@
     }
     setSelectedObject(null);
     mountChromeIcons();
+    document.getElementById("tvFormulaCancel").addEventListener("click", closeFormulaEditor);
+    formulaDialog.addEventListener("cancel", function (event) {
+      event.preventDefault();
+      closeFormulaEditor();
+    });
+    document.getElementById("tvFormulaDepsClose").addEventListener("click", closeFormulaDeps);
+    depsDialog.addEventListener("cancel", function (event) {
+      event.preventDefault();
+      closeFormulaDeps();
+    });
+    document.getElementById("tvDeleteImpactCancel").addEventListener("click", closeDeleteImpact);
+    deleteImpactDialog.addEventListener("cancel", function (event) {
+      event.preventDefault();
+      closeDeleteImpact();
+    });
     renderAll();
   }());
   </script>

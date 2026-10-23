@@ -1200,3 +1200,26 @@ Claude 字体没有替换。2026-10-19 在 `https://claude.ai/login` 读到界�
 正式版，不是 Draft，也不是 Pre-release。附件 `Visualizer-v0.6.3.zip`（html + `visualizer-core.js` + `README.md`，三个文件在压缩包根目录）。SHA256 `c48340ba144f04da35bae9fba9cffb06aab93c11f0615755a5dd0cc976be98d3`。远端下载后校验一致。
 
 FONT-001 与 DOCK-001 不在这一版。发布后取 `releases/latest`：`0.6.2` 判断为发现新版本 `0.6.3` 且带 zip 下载地址；本地 `0.6.3` 判断为当前已是最新。
+
+---
+
+## 2026-10-23 V070-A 公式计算（未升版本）
+
+在 `0.6.3` / 工程格式 `1.1` 上实现 V0.7.0 第一阶段 V070-A，不改 `APP_INFO.version`，不打 tag，不发 Release。
+
+核心：
+
+- Project 增加 `formulas[]`。派生结果是 Series，进入唯一虚拟数据簇「计算结果」，不覆盖 Raw y。
+- 受限公式解析（加减乘除、乘方、括号、abs/sqrt/ln/log10/exp/min/max、pi/e），不用 `eval`。
+- 同 X 逐点计算；不同 X 拒绝，不按行号对齐。循环依赖提交时拒绝。删源后下游标 Invalid，保留 formulaId，不改绑同名列。
+- Undo 快照含 formulas 与 computed dataset。旧工程缺 formulas 仍可打开。
+
+界面：
+
+- 左侧勾选仍是加入当前图；点名称进入 Inspector。
+- 「新建公式」草稿 / 预览 / 应用 / 取消。应用后不自动勾选、不自动加入当前图。
+- Inspector「计算信息」：表达式、状态、绑定、编辑、查看依赖、删除计算系列。删源前弹出下游影响。
+
+验证：`node --check visualizer-core.js` PASS；`node tests/core-test.js` PASS（含 F-01..06 与界面字符串）；`node tests/icon-slot-test.js` PASS。Chrome headless 导入 `TESTDATA_exp_25C.csv`，提交 `T2 - T1`，簇名为计算结果，y 为 `0.1/0.1/0.2/0.1`，Raw 未改，取消不写入，勾选与 Inspector 分离。1920×1080 与 760×480 下 `scrollWidth` 未超出视口，计算信息与计算结果簇仍在。Cursor 内嵌浏览器访问 localhost 失败（chrome-error）。Edge、真机触控板、系统保存框 NOT RUN。
+
+未做：对齐引擎（V070-B）、MAE/RMSE/Results（V070-C）。

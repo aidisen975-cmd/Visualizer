@@ -12,6 +12,11 @@
   var SOFTWARE_VERSION = APP_INFO.version;
   var PROJECT_FORMAT_VERSION = "1.1";
   var SCHEMA_VERSION = 2;
+  var COMPUTED_DATASET_ID = "ds-computed";
+  var COMPUTED_DATASET_NAME = "计算结果";
+  var FORMULA_STATUSES = ["ready", "dirty", "computing", "invalid", "error"];
+  var FORMULA_FUNCTIONS = { abs: 1, sqrt: 1, ln: 1, log10: 1, exp: 1, min: 2, max: 2 };
+  var FORMULA_CONSTANTS = { pi: Math.PI, e: Math.E };
   var TEMPLATE_FORMAT_VERSION = 1;
   var TEMPLATE_STORAGE_KEY = "visualizer.templates.figure.v1";
   var SELECTED_OBJECT_TYPES = ["plot", "detail", "legend", "annotation", "source-box", "connector", "inset"];
@@ -544,6 +549,7 @@
       projectName: (partial && (partial.projectName || partial.name)) || "未命名工程",
       savedAt: null,
       datasets: [],
+      formulas: [],
       plots: [],
       canvases: [],
       canvas: { width: 1280, height: 800, zoom: 1 },
@@ -826,13 +832,17 @@
   }
 
   function removeDataset(project, datasetId) {
-    var removedIds = new Set();
     var dataset = findDataset(project, datasetId);
     if (!dataset) return;
-    dataset.series.forEach(function (series) { removedIds.add(series.id); });
+    var removedIds = dataset.series.map(function (series) { return series.id; });
+    markDependentsInvalid(project, removedIds);
     project.datasets = project.datasets.filter(function (item) { return item.id !== datasetId; });
+    if (dataset.kind === "computed") {
+      applySeriesRemoval(project, removedIds);
+      return;
+    }
     project.plots.forEach(function (plot) {
-      plot.seriesRefs = plot.seriesRefs.filter(function (ref) { return !removedIds.has(ref.seriesId); });
+      plot.seriesRefs = plot.seriesRefs.filter(function (ref) { return removedIds.indexOf(ref.seriesId) < 0; });
       prunePlotInspection(project, plot);
     });
     syncAllPlotAxisAutoTitles(project);
@@ -1370,9 +1380,18 @@
     throw new Error(message);
   }
 
+  function normalizeFormulaStatus(value, kind) {
+    if (kind !== "computed") return "ready";
+    return FORMULA_STATUSES.indexOf(value) >= 0 ? value : "ready";
+  }
+
   function normalizeSeries(raw, datasetId) {
     if (!raw || typeof raw !== "object") throw new Error("曲线必须是对象。");
-    if (!Array.isArray(raw.x) || !Array.isArray(raw.y) || raw.x.length !== raw.y.length || raw.x.length < 2) {
+    var kind = raw.kind === "computed" ? "computed" : "raw";
+    if (!Array.isArray(raw.x) || !Array.isArray(raw.y) || raw.x.length !== raw.y.length) {
+      throw new Error("曲线必须提供长度一致的独立 x/y。");
+    }
+    if (kind !== "computed" && raw.x.length < 2) {
       throw new Error("曲线必须提供长度一致且至少两点的独立 x/y。");
     }
     var localId = String(raw.localId || raw.id || "series");
@@ -1389,7 +1408,7 @@
     var originalName = String(raw.originalName || originalHeader || name);
     var displayName = String(raw.displayName || raw.label || name || localId);
     var style = normalizeSeriesStyle(raw.style, raw.color || "#5d646b");
-    return {
+    var series = {
       id: id,
       datasetId: datasetId,
       localId: localId,
@@ -1400,25 +1419,38 @@
       originalName: originalName,
       displayName: displayName,
       sourceLabel: String(raw.sourceLabel || originalHeader),
-      kind: "raw",
-      role: raw.role || "numeric",
+      kind: kind,
+      role: raw.role || (kind === "computed" ? "computed" : "numeric"),
       sensorId: raw.sensorId == null ? null : Number(raw.sensorId),
       color: style.color || String(raw.color || "#5d646b"),
       style: style,
       x: raw.x.map(function (value, index) { return finiteNumber(value, "曲线 " + localId + " x[" + index + "] 无效。"); }),
       y: raw.y.map(function (value, index) { return coerceStoredNumber(value, "曲线 " + localId + " y[" + index + "] 无效。"); })
     };
+    if (kind === "computed") {
+      series.formulaId = String(raw.formulaId || "");
+      series.status = normalizeFormulaStatus(raw.status, kind);
+      series.errorMessage = String(raw.errorMessage || "");
+      series.validCount = Number.isFinite(Number(raw.validCount)) ? Math.max(0, Math.round(Number(raw.validCount))) : 0;
+      series.excludedCount = Number.isFinite(Number(raw.excludedCount)) ? Math.max(0, Math.round(Number(raw.excludedCount))) : 0;
+      series.computedAt = String(raw.computedAt || "");
+    }
+    return series;
   }
 
   function normalizeDataset(raw) {
     if (!raw || typeof raw !== "object") throw new Error("数据源必须是对象。");
     var datasetId = String(raw.id || makeId("ds"));
-    if (!Array.isArray(raw.series) || !raw.series.length) throw new Error("数据源至少需要一条曲线。");
+    var kind = raw.kind === "computed" ? "computed" : "raw";
+    if (!Array.isArray(raw.series) || (kind !== "computed" && !raw.series.length)) {
+      throw new Error("数据源至少需要一条曲线。");
+    }
     var xMeta = parseColumnHeader(raw.xHeader || raw.xName || "");
     var xIsTime = raw.xIsTime === false ? false : (raw.xIsTime === true ? true : (xMeta.name ? isTimeHeader(xMeta) : true));
     return {
       id: datasetId,
-      name: String(raw.name || "未命名数据"),
+      name: kind === "computed" ? String(raw.name || COMPUTED_DATASET_NAME) : String(raw.name || "未命名数据"),
+      kind: kind,
       sourceFilename: String(raw.sourceFilename || ""),
       importedAt: String(raw.importedAt || ""),
       headers: Array.isArray(raw.headers) ? raw.headers.map(String) : [],
@@ -1427,9 +1459,9 @@
       xName: String(raw.xName || xMeta.name || (xIsTime ? "Time" : "")),
       xUnit: raw.xUnit == null ? (xMeta.unit || "") : String(raw.xUnit),
       xIsTime: xIsTime,
-      rawCsv: String(raw.rawCsv || ""),
+      rawCsv: kind === "computed" ? "" : String(raw.rawCsv || ""),
       warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : [],
-      series: raw.series.map(function (item) { return normalizeSeries(item, datasetId); })
+      series: (raw.series || []).map(function (item) { return normalizeSeries(item, datasetId); })
     };
   }
 
@@ -1624,6 +1656,7 @@
       projectName: projectName,
       savedAt: data.savedAt ? String(data.savedAt) : null,
       datasets: Array.isArray(data.datasets) ? data.datasets.map(normalizeDataset) : [],
+      formulas: Array.isArray(data.formulas) ? data.formulas.map(normalizeFormulaDefinition) : [],
       plots: dataPlots.map(normalizePlot),
       canvases: [],
       canvas: {
@@ -1870,6 +1903,7 @@
       projectName: project.projectName,
       savedAt: new Date().toISOString(),
       datasets: project.datasets,
+      formulas: Array.isArray(project.formulas) ? project.formulas : [],
       plots: (project.plots || []).map(function (plot) {
         var copy = cloneJson(plot);
         if (sourcePlotOf(project, plot)) copy.seriesRefs = [];
@@ -4071,7 +4105,9 @@
       plots: cloneJson(project.plots || []),
       series: series,
       canvases: cloneJson(project.canvases || []),
-      canvas: cloneJson(project.canvas || {})
+      canvas: cloneJson(project.canvas || {}),
+      formulas: cloneJson(project.formulas || []),
+      computed: cloneJson((project.datasets || []).filter(function (dataset) { return dataset.kind === "computed"; }))
     };
   }
 
@@ -4088,6 +4124,15 @@
       if (copy.canvas.id) project.canvas.id = String(copy.canvas.id);
     }
     pruneInstances(project);
+    if (Object.prototype.hasOwnProperty.call(copy, "formulas")) {
+      project.formulas = (copy.formulas || []).map(normalizeFormulaDefinition);
+    }
+    if (Object.prototype.hasOwnProperty.call(copy, "computed")) {
+      project.datasets = (project.datasets || []).filter(function (dataset) { return dataset.kind !== "computed"; });
+      (copy.computed || []).forEach(function (dataset) {
+        project.datasets.push(normalizeDataset(dataset));
+      });
+    }
     var saved = {};
     (copy.series || []).forEach(function (item) { saved[item.id] = item; });
     (project.datasets || []).forEach(function (dataset) {
@@ -4492,6 +4537,660 @@
     return plot.id;
   }
 
+  function normalizeAlignmentConfig(raw) {
+    var src = raw && typeof raw === "object" ? raw : {};
+    var mode = src.mode === "linear" || src.mode === "nearest" ? src.mode : "exact";
+    var delta = Number(src.delta);
+    var rangeMin = src.rangeMin == null || src.rangeMin === "" ? null : Number(src.rangeMin);
+    var rangeMax = src.rangeMax == null || src.rangeMax === "" ? null : Number(src.rangeMax);
+    var maxGap = src.maxGap == null || src.maxGap === "" ? null : Number(src.maxGap);
+    return {
+      mode: mode,
+      referenceSeriesId: src.referenceSeriesId ? String(src.referenceSeriesId) : "",
+      delta: Number.isFinite(delta) ? delta : 0,
+      rangeMin: Number.isFinite(rangeMin) ? rangeMin : null,
+      rangeMax: Number.isFinite(rangeMax) ? rangeMax : null,
+      maxGap: Number.isFinite(maxGap) && maxGap > 0 ? maxGap : null
+    };
+  }
+
+  function normalizeFormulaDefinition(raw) {
+    if (!raw || typeof raw !== "object") throw new Error("公式定义必须是对象。");
+    var bindings = {};
+    var source = raw.bindings && typeof raw.bindings === "object" ? raw.bindings : {};
+    Object.keys(source).forEach(function (alias) {
+      var key = String(alias || "").trim();
+      if (!key) return;
+      bindings[key] = String(source[alias] || "");
+    });
+    return {
+      id: String(raw.id || makeId("formula")),
+      name: String(raw.name || "Formula_001"),
+      expression: String(raw.expression || ""),
+      bindings: bindings,
+      alignment: normalizeAlignmentConfig(raw.alignment),
+      outputUnit: raw.outputUnit == null ? "" : String(raw.outputUnit),
+      updatedAt: String(raw.updatedAt || "")
+    };
+  }
+
+  function findFormula(project, formulaId) {
+    return (project.formulas || []).find(function (item) { return item.id === formulaId; }) || null;
+  }
+
+  function computedDatasetOf(project) {
+    return (project.datasets || []).find(function (dataset) { return dataset.kind === "computed"; }) || null;
+  }
+
+  function ensureComputedDataset(project) {
+    var existing = computedDatasetOf(project);
+    if (existing) return existing;
+    var id = findDataset(project, COMPUTED_DATASET_ID) ? makeId("ds-computed") : COMPUTED_DATASET_ID;
+    var dataset = {
+      id: id,
+      name: COMPUTED_DATASET_NAME,
+      kind: "computed",
+      sourceFilename: "",
+      importedAt: new Date().toISOString(),
+      headers: [],
+      timeUnit: "s",
+      xHeader: "",
+      xName: "X",
+      xUnit: "",
+      xIsTime: true,
+      rawCsv: "",
+      warnings: [],
+      series: []
+    };
+    addDataset(project, dataset);
+    return dataset;
+  }
+
+  function tokenizeFormula(text) {
+    var src = String(text || "").replace(/[\u2212\u2013\u2014]/g, "-");
+    if (src.length > 500) throw new Error("公式过长。");
+    var tokens = [];
+    var i = 0;
+    while (i < src.length) {
+      var ch = src.charAt(i);
+      if (ch === " " || ch === "\t" || ch === "\n" || ch === "\r") {
+        i += 1;
+        continue;
+      }
+      if ("+-*/^(),".indexOf(ch) >= 0) {
+        tokens.push({ type: ch, value: ch });
+        i += 1;
+        continue;
+      }
+      if ((ch >= "0" && ch <= "9") || (ch === "." && i + 1 < src.length && src.charAt(i + 1) >= "0" && src.charAt(i + 1) <= "9")) {
+        var num = ch;
+        i += 1;
+        while (i < src.length && ((src.charAt(i) >= "0" && src.charAt(i) <= "9") || src.charAt(i) === ".")) {
+          num += src.charAt(i);
+          i += 1;
+        }
+        if (!/^\d+(\.\d+)?$/.test(num) && !/^\.\d+$/.test(num)) throw new Error("数字格式无效：" + num);
+        tokens.push({ type: "num", value: Number(num) });
+        continue;
+      }
+      if ((ch >= "A" && ch <= "Z") || (ch >= "a" && ch <= "z") || ch === "_") {
+        var ident = ch;
+        i += 1;
+        while (i < src.length) {
+          var next = src.charAt(i);
+          if ((next >= "A" && next <= "Z") || (next >= "a" && next <= "z") || (next >= "0" && next <= "9") || next === "_") {
+            ident += next;
+            i += 1;
+          } else break;
+        }
+        tokens.push({ type: "ident", value: ident });
+        continue;
+      }
+      throw new Error("公式含有不支持的字符：" + ch);
+    }
+    tokens.push({ type: "end", value: "" });
+    return tokens;
+  }
+
+  function parseFormulaExpression(text) {
+    var tokens = tokenizeFormula(text);
+    var pos = 0;
+    function peek() { return tokens[pos]; }
+    function take() {
+      var token = tokens[pos];
+      pos += 1;
+      return token;
+    }
+    function expect(type) {
+      var token = take();
+      if (token.type !== type) throw new Error("公式语法无效。");
+      return token;
+    }
+    function parseExpr() {
+      var node = parseTerm();
+      while (peek().type === "+" || peek().type === "-") {
+        var op = take().type;
+        node = { type: "binary", op: op, left: node, right: parseTerm() };
+      }
+      return node;
+    }
+    function parseTerm() {
+      var node = parsePower();
+      while (peek().type === "*" || peek().type === "/") {
+        var op = take().type;
+        node = { type: "binary", op: op, left: node, right: parsePower() };
+      }
+      return node;
+    }
+    function parsePower() {
+      var node = parseUnary();
+      if (peek().type === "^") {
+        take();
+        node = { type: "binary", op: "^", left: node, right: parsePower() };
+      }
+      return node;
+    }
+    function parseUnary() {
+      if (peek().type === "+" || peek().type === "-") {
+        var op = take().type;
+        return { type: "unary", op: op, arg: parseUnary() };
+      }
+      return parsePrimary();
+    }
+    function parsePrimary() {
+      var token = peek();
+      if (token.type === "num") {
+        take();
+        return { type: "num", value: token.value };
+      }
+      if (token.type === "ident") {
+        take();
+        if (peek().type === "(") {
+          if (!Object.prototype.hasOwnProperty.call(FORMULA_FUNCTIONS, token.value)) {
+            throw new Error("不支持的函数：" + token.value);
+          }
+          take();
+          var args = [];
+          if (peek().type !== ")") {
+            args.push(parseExpr());
+            while (peek().type === ",") {
+              take();
+              args.push(parseExpr());
+            }
+          }
+          expect(")");
+          var minArgs = FORMULA_FUNCTIONS[token.value];
+          if (args.length < minArgs) throw new Error(token.value + " 参数不足。");
+          return { type: "call", name: token.value, args: args };
+        }
+        if (Object.prototype.hasOwnProperty.call(FORMULA_FUNCTIONS, token.value)) {
+          throw new Error(token.value + " 需要括号。");
+        }
+        return { type: "ident", name: token.value };
+      }
+      if (token.type === "(") {
+        take();
+        var inner = parseExpr();
+        expect(")");
+        return inner;
+      }
+      throw new Error("公式语法无效。");
+    }
+    if (!String(text || "").trim()) throw new Error("公式不能为空。");
+    var ast = parseExpr();
+    if (peek().type !== "end") throw new Error("公式语法无效。");
+    return ast;
+  }
+
+  function formulaAliases(ast) {
+    var found = [];
+    function walk(node) {
+      if (!node) return;
+      if (node.type === "ident") {
+        if (!Object.prototype.hasOwnProperty.call(FORMULA_CONSTANTS, node.name) && found.indexOf(node.name) < 0) {
+          found.push(node.name);
+        }
+        return;
+      }
+      if (node.type === "unary") return walk(node.arg);
+      if (node.type === "binary") {
+        walk(node.left);
+        walk(node.right);
+        return;
+      }
+      if (node.type === "call") node.args.forEach(walk);
+    }
+    walk(ast);
+    return found;
+  }
+
+  function evaluateFormulaAst(ast, env) {
+    function evalNode(node) {
+      if (node.type === "num") return node.value;
+      if (node.type === "ident") {
+        if (Object.prototype.hasOwnProperty.call(FORMULA_CONSTANTS, node.name)) return FORMULA_CONSTANTS[node.name];
+        if (!Object.prototype.hasOwnProperty.call(env, node.name)) throw new Error("未绑定变量 " + node.name);
+        return env[node.name];
+      }
+      if (node.type === "unary") {
+        var arg = evalNode(node.arg);
+        return node.op === "-" ? -arg : arg;
+      }
+      if (node.type === "binary") {
+        var left = evalNode(node.left);
+        var right = evalNode(node.right);
+        if (node.op === "+") return left + right;
+        if (node.op === "-") return left - right;
+        if (node.op === "*") return left * right;
+        if (node.op === "/") return right === 0 ? NaN : left / right;
+        if (node.op === "^") return Math.pow(left, right);
+      }
+      if (node.type === "call") {
+        var args = node.args.map(evalNode);
+        if (node.name === "abs") return Math.abs(args[0]);
+        if (node.name === "sqrt") return args[0] < 0 ? NaN : Math.sqrt(args[0]);
+        if (node.name === "ln") return args[0] <= 0 ? NaN : Math.log(args[0]);
+        if (node.name === "log10") return args[0] <= 0 ? NaN : Math.log(args[0]) / Math.LN10;
+        if (node.name === "exp") return Math.exp(args[0]);
+        if (node.name === "min") return Math.min.apply(null, args);
+        if (node.name === "max") return Math.max.apply(null, args);
+      }
+      return NaN;
+    }
+    return evalNode(ast);
+  }
+
+  function sameSeriesX(left, right) {
+    if (!left || !right || left.length !== right.length) return false;
+    for (var i = 0; i < left.length; i += 1) {
+      if (left[i] !== right[i]) return false;
+    }
+    return true;
+  }
+
+  function formulaBindingIds(formula) {
+    var ids = [];
+    Object.keys((formula && formula.bindings) || {}).forEach(function (alias) {
+      var id = formula.bindings[alias];
+      if (id && ids.indexOf(id) < 0) ids.push(id);
+    });
+    return ids;
+  }
+
+  function seriesDependencies(project, seriesId) {
+    var series = findSeries(project, seriesId);
+    if (!series || series.kind !== "computed") return [];
+    return formulaBindingIds(findFormula(project, series.formulaId));
+  }
+
+  function formulaWouldCycle(project, outputSeriesId, dependencyIds) {
+    var seen = {};
+    var stack = (dependencyIds || []).slice();
+    while (stack.length) {
+      var id = stack.pop();
+      if (!id) continue;
+      if (outputSeriesId && id === outputSeriesId) return true;
+      if (seen[id]) continue;
+      seen[id] = true;
+      seriesDependencies(project, id).forEach(function (dep) { stack.push(dep); });
+    }
+    return false;
+  }
+
+  function seriesPath(project, seriesId) {
+    var series = findSeries(project, seriesId);
+    if (!series) return String(seriesId || "");
+    var dataset = findDataset(project, series.datasetId);
+    var datasetName = dataset ? dataset.name : series.datasetId;
+    return datasetName + " / " + seriesDisplayName(series);
+  }
+
+  function nextFormulaName(project) {
+    var used = {};
+    (project.formulas || []).forEach(function (item) { used[String(item.name || "")] = true; });
+    (project.datasets || []).forEach(function (dataset) {
+      (dataset.series || []).forEach(function (series) {
+        used[seriesDisplayName(series)] = true;
+        used[String(series.localId || "")] = true;
+      });
+    });
+    var index = 1;
+    var name = "Formula_001";
+    while (used[name]) {
+      index += 1;
+      name = "Formula_" + String(index).padStart(3, "0");
+    }
+    return name;
+  }
+
+  function listFormulaSeriesOptions(project, excludeId) {
+    var options = [];
+    (project.datasets || []).forEach(function (dataset) {
+      (dataset.series || []).forEach(function (series) {
+        if (excludeId && series.id === excludeId) return;
+        options.push({
+          id: series.id,
+          path: (dataset.name || dataset.id) + " / " + seriesDisplayName(series),
+          datasetId: dataset.id,
+          kind: series.kind || "raw"
+        });
+      });
+    });
+    return options;
+  }
+
+  function collectDownstreamDerived(project, startIds) {
+    var starts = {};
+    (startIds || []).forEach(function (id) { starts[id] = true; });
+    var found = [];
+    var seen = {};
+    var changed = true;
+    while (changed) {
+      changed = false;
+      (project.datasets || []).forEach(function (dataset) {
+        (dataset.series || []).forEach(function (series) {
+          if (series.kind !== "computed" || seen[series.id]) return;
+          var deps = seriesDependencies(project, series.id);
+          var hit = deps.some(function (id) { return starts[id] || seen[id]; });
+          if (!hit) return;
+          seen[series.id] = true;
+          found.push(series.id);
+          changed = true;
+        });
+      });
+    }
+    return found;
+  }
+
+  function topoDerived(project, seriesIds) {
+    var wanted = {};
+    (seriesIds || []).forEach(function (id) { wanted[id] = true; });
+    var remaining = (seriesIds || []).slice();
+    var ordered = [];
+    var guard = remaining.length + 1;
+    while (remaining.length && guard > 0) {
+      guard -= 1;
+      var next = remaining.filter(function (id) {
+        return seriesDependencies(project, id).every(function (dep) { return !wanted[dep] || ordered.indexOf(dep) >= 0; });
+      });
+      if (!next.length) break;
+      next.forEach(function (id) {
+        ordered.push(id);
+        remaining = remaining.filter(function (item) { return item !== id; });
+      });
+    }
+    remaining.forEach(function (id) { if (ordered.indexOf(id) < 0) ordered.push(id); });
+    return ordered;
+  }
+
+  function plotsUsingSeries(project, seriesId) {
+    var names = [];
+    plotWindows(project).forEach(function (plot) {
+      var used = (plot.seriesRefs || []).some(function (ref) { return ref.seriesId === seriesId; });
+      if (used) names.push(plotEditorName(plot));
+    });
+    return names;
+  }
+
+  function formulaImpact(project, seriesIds) {
+    var ids = (seriesIds || []).filter(Boolean);
+    var derived = [];
+    var plots = [];
+    collectDownstreamDerived(project, ids).forEach(function (id) {
+      derived.push({ id: id, path: seriesPath(project, id) });
+    });
+    ids.concat(derived.map(function (item) { return item.id; })).forEach(function (id) {
+      plotsUsingSeries(project, id).forEach(function (name) {
+        if (plots.indexOf(name) < 0) plots.push(name);
+      });
+    });
+    return { derived: derived, plots: plots };
+  }
+
+  function setComputedStatus(series, status, message) {
+    if (!series || series.kind !== "computed") return series;
+    series.status = normalizeFormulaStatus(status, "computed");
+    series.errorMessage = message ? String(message) : "";
+    if (status === "invalid" || status === "error") {
+      series.y = (series.y || []).map(function () { return NaN; });
+      series.validCount = 0;
+      series.excludedCount = series.x ? series.x.length : 0;
+    }
+    return series;
+  }
+
+  function evaluateFormulaDraft(project, draft) {
+    var formula = normalizeFormulaDefinition(draft || {});
+    var ast = parseFormulaExpression(formula.expression);
+    var aliases = formulaAliases(ast);
+    aliases.forEach(function (alias) {
+      if (!formula.bindings[alias]) throw new Error("变量 " + alias + " 未绑定来源系列。");
+    });
+    var inputs = aliases.map(function (alias) {
+      var series = findSeries(project, formula.bindings[alias]);
+      if (!series) throw new Error("找不到变量 " + alias + " 绑定的系列，未按同名列猜测。");
+      if (series.status === "invalid" || series.status === "error") {
+        throw new Error("输入系列无效：" + seriesPath(project, series.id));
+      }
+      return { alias: alias, series: series };
+    });
+    if (!inputs.length) throw new Error("公式需要至少一个系列变量。");
+    var reference = inputs[0].series;
+    inputs.forEach(function (item) {
+      if (!sameSeriesX(reference.x, item.series.x)) {
+        throw new Error("X 无法对齐。V0.7.0 第一阶段只支持同一横坐标；不同采样请等待对齐引擎。");
+      }
+    });
+    var y = [];
+    var validCount = 0;
+    var excludedCount = 0;
+    for (var i = 0; i < reference.x.length; i += 1) {
+      var env = {};
+      var skip = false;
+      inputs.forEach(function (item) {
+        var value = item.series.y[i];
+        if (!Number.isFinite(value)) skip = true;
+        env[item.alias] = value;
+      });
+      if (skip) {
+        y.push(NaN);
+        excludedCount += 1;
+        continue;
+      }
+      var value = evaluateFormulaAst(ast, env);
+      if (!Number.isFinite(value)) {
+        y.push(NaN);
+        excludedCount += 1;
+      } else {
+        y.push(value);
+        validCount += 1;
+      }
+    }
+    if (validCount === 0) throw new Error("没有有效样本。");
+    return {
+      formula: formula,
+      aliases: aliases,
+      x: reference.x.slice(),
+      y: y,
+      validCount: validCount,
+      excludedCount: excludedCount,
+      unit: formula.outputUnit || reference.unit || "",
+      xName: reference.name ? "" : "",
+      xIsTime: true,
+      datasetId: reference.datasetId
+    };
+  }
+
+  function previewFormula(project, draft) {
+    var result = evaluateFormulaDraft(project, draft);
+    result.sample = result.x.slice(0, 8).map(function (x, index) {
+      return { x: x, y: result.y[index] };
+    });
+    result.inputPaths = result.aliases.map(function (alias) {
+      var seriesId = result.formula.bindings[alias];
+      return { alias: alias, path: seriesPath(project, seriesId), seriesId: seriesId };
+    });
+    return result;
+  }
+
+  function paintComputedSeries(series, result, formula) {
+    series.x = result.x.slice();
+    series.y = result.y.slice();
+    series.unit = result.unit || series.unit || "";
+    series.status = "ready";
+    series.errorMessage = "";
+    series.validCount = result.validCount;
+    series.excludedCount = result.excludedCount;
+    series.computedAt = new Date().toISOString();
+    series.formulaId = formula.id;
+    series.kind = "computed";
+    series.role = "computed";
+    return series;
+  }
+
+  function createComputedSeriesRecord(project, formula, result) {
+    var dataset = ensureComputedDataset(project);
+    var localId = formula.name.replace(/\s+/g, "_") || "Formula_001";
+    var used = {};
+    dataset.series.forEach(function (item) { used[item.localId] = true; });
+    var unique = localId;
+    var suffix = 2;
+    while (used[unique]) {
+      unique = localId + "_" + suffix;
+      suffix += 1;
+    }
+    var color = SERIES_COLORS[dataset.series.length % SERIES_COLORS.length];
+    var series = normalizeSeries({
+      localId: unique,
+      label: formula.name,
+      name: formula.name,
+      displayName: formula.name,
+      originalHeader: formula.expression,
+      originalName: formula.expression,
+      sourceLabel: formula.expression,
+      unit: result.unit || "",
+      kind: "computed",
+      role: "computed",
+      formulaId: formula.id,
+      status: "ready",
+      validCount: result.validCount,
+      excludedCount: result.excludedCount,
+      computedAt: new Date().toISOString(),
+      color: color,
+      style: { color: color, lineWidth: 1.5, lineType: "solid", opacity: 1 },
+      x: result.x,
+      y: result.y
+    }, dataset.id);
+    dataset.series.push(series);
+    assertUniqueSeriesIds(project);
+    return series;
+  }
+
+  function recomputeComputedSeries(project, series) {
+    if (!series || series.kind !== "computed") return series;
+    var formula = findFormula(project, series.formulaId);
+    if (!formula) return setComputedStatus(series, "invalid", "找不到公式定义。");
+    series.status = "computing";
+    try {
+      var result = evaluateFormulaDraft(project, formula);
+      return paintComputedSeries(series, result, formula);
+    } catch (error) {
+      var missing = formulaBindingIds(formula).some(function (id) { return !findSeries(project, id); });
+      return setComputedStatus(series, missing ? "invalid" : "error", error.message || "计算失败");
+    }
+  }
+
+  function recomputeDownstream(project, startIds) {
+    var affected = collectDownstreamDerived(project, startIds);
+    topoDerived(project, affected).forEach(function (id) {
+      recomputeComputedSeries(project, findSeries(project, id));
+    });
+    return affected;
+  }
+
+  function applyFormula(project, draft) {
+    if (!project.formulas) project.formulas = [];
+    var parsed = parseFormulaExpression((draft && draft.expression) || "");
+    var aliases = formulaAliases(parsed);
+    var bindings = (draft && draft.bindings) || {};
+    aliases.forEach(function (alias) {
+      if (!bindings[alias]) throw new Error("变量 " + alias + " 未绑定来源系列。");
+    });
+    var existing = draft && draft.id ? findFormula(project, draft.id) : null;
+    var outputSeries = existing
+      ? (project.datasets || []).reduce(function (found, dataset) {
+        return found || (dataset.series || []).find(function (item) { return item.formulaId === existing.id; }) || null;
+      }, null)
+      : null;
+    var depIds = aliases.map(function (alias) { return String(bindings[alias]); });
+    if (formulaWouldCycle(project, outputSeries ? outputSeries.id : "", depIds)) {
+      throw new Error("公式存在循环依赖。");
+    }
+    var result = evaluateFormulaDraft(project, {
+      name: (draft && draft.name) || (existing && existing.name) || nextFormulaName(project),
+      expression: draft.expression,
+      bindings: bindings,
+      alignment: draft && draft.alignment,
+      outputUnit: draft && draft.outputUnit
+    });
+    var formula = normalizeFormulaDefinition({
+      id: existing ? existing.id : makeId("formula"),
+      name: result.formula.name,
+      expression: String(draft.expression || ""),
+      bindings: bindings,
+      alignment: draft && draft.alignment,
+      outputUnit: draft && draft.outputUnit,
+      updatedAt: new Date().toISOString()
+    });
+    if (existing) {
+      project.formulas = project.formulas.map(function (item) { return item.id === formula.id ? formula : item; });
+    } else {
+      project.formulas.push(formula);
+    }
+    if (outputSeries) {
+      paintComputedSeries(outputSeries, result, formula);
+      outputSeries.displayName = formula.name;
+      outputSeries.label = formula.name;
+      outputSeries.name = formula.name;
+      recomputeDownstream(project, [outputSeries.id]);
+      return outputSeries;
+    }
+    return createComputedSeriesRecord(project, formula, result);
+  }
+
+  function markDependentsInvalid(project, removedIds) {
+    var removed = {};
+    (removedIds || []).forEach(function (id) { removed[id] = true; });
+    collectDownstreamDerived(project, removedIds).forEach(function (id) {
+      var series = findSeries(project, id);
+      if (!series) return;
+      setComputedStatus(series, "invalid", "来源系列已删除，未改绑同名列。");
+    });
+  }
+
+  function applySeriesRemoval(project, seriesIds) {
+    var removed = {};
+    (seriesIds || []).forEach(function (id) { removed[id] = true; });
+    markDependentsInvalid(project, seriesIds);
+    var computed = computedDatasetOf(project);
+    if (computed) {
+      computed.series = computed.series.filter(function (series) { return !removed[series.id]; });
+    }
+    var dropFormulas = {};
+    (project.formulas || []).forEach(function (formula) {
+      var owner = (project.datasets || []).some(function (dataset) {
+        return (dataset.series || []).some(function (series) { return series.formulaId === formula.id && !removed[series.id]; });
+      });
+      if (!owner) dropFormulas[formula.id] = true;
+    });
+    project.formulas = (project.formulas || []).filter(function (formula) { return !dropFormulas[formula.id]; });
+    project.plots.forEach(function (plot) {
+      plot.seriesRefs = (plot.seriesRefs || []).filter(function (ref) { return !removed[ref.seriesId]; });
+      prunePlotInspection(project, plot);
+    });
+    syncAllPlotAxisAutoTitles(project);
+  }
+
   var api = {
     APP_INFO: APP_INFO,
     SOFTWARE_VERSION: SOFTWARE_VERSION,
@@ -4582,6 +5281,25 @@
     createProject: createProject,
     parseProject: parseProject,
     serializeProject: serializeProject,
+    COMPUTED_DATASET_ID: COMPUTED_DATASET_ID,
+    COMPUTED_DATASET_NAME: COMPUTED_DATASET_NAME,
+    parseFormulaExpression: parseFormulaExpression,
+    formulaAliases: formulaAliases,
+    evaluateFormulaAst: evaluateFormulaAst,
+    normalizeFormulaDefinition: normalizeFormulaDefinition,
+    normalizeAlignmentConfig: normalizeAlignmentConfig,
+    ensureComputedDataset: ensureComputedDataset,
+    computedDatasetOf: computedDatasetOf,
+    nextFormulaName: nextFormulaName,
+    listFormulaSeriesOptions: listFormulaSeriesOptions,
+    seriesPath: seriesPath,
+    formulaImpact: formulaImpact,
+    previewFormula: previewFormula,
+    applyFormula: applyFormula,
+    recomputeComputedSeries: recomputeComputedSeries,
+    recomputeDownstream: recomputeDownstream,
+    applySeriesRemoval: applySeriesRemoval,
+    formulaWouldCycle: formulaWouldCycle,
     addDataset: addDataset,
     removeDataset: removeDataset,
     createPlot: createPlot,

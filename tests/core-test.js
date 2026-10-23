@@ -712,6 +712,14 @@ assert(page.indexOf("core.applyStyleToSeries(") < 0 && page.indexOf("core.setGro
 assert(page.indexOf('seriesInfo.textContent = "概览"') < 0, "系列行不再有单独的概览按钮");
 assert(page.indexOf("placeFloating(menu, { left: x, top: y, right: x, bottom: y }, \"point\")") >= 0, "右键菜单走统一浮层定位");
 assert(page.indexOf("z-index: 1000") >= 0 && page.indexOf("z-index: 10") >= 0, "Modal 层级高于分隔条");
+assert(page.indexOf("tvFormulaDialog") >= 0, "公式编辑器使用独立对话框");
+assert(page.indexOf("计算信息") >= 0, "Inspector 有计算信息分组");
+assert(page.indexOf("新建公式") >= 0, "左侧可新建公式");
+assert(page.indexOf("tvDeleteImpactDialog") >= 0, "删除来源前有影响确认");
+assert(page.indexOf("openFormulaEditor") >= 0 && page.indexOf("closeFormulaEditor") >= 0, "公式编辑器有草稿应用和取消");
+assert(page.indexOf("pickInspectorSeries") >= 0, "系列名称进入 Inspector，不与勾选混用");
+assert(page.indexOf("core.COMPUTED_DATASET_NAME") >= 0, "虚拟数据簇使用计算结果名称");
+assert(!/\beval\s*\(/.test(page), "界面不用 eval");
 var savedProject = core.serializeProject(project);
 assert(savedProject.indexOf("updateState") < 0, "工程不含 updateState");
 assert(savedProject.indexOf("latestVersion") < 0, "工程不含 latestVersion");
@@ -1521,6 +1529,142 @@ var updateChecks = [
   assert(usage.total === 55 && usage.selected === 2 && usage.inAnyPlot === 3 && usage.inCurrentPlot === 3, "已选、已加入图窗、全部系列分别统计");
   core.addSeriesToPlot(p, plot, [ds.series[20].id]);
   assert(core.datasetUsage(p, ds, [], plot.id).inAnyPlot === 4, "概览统计读当前状态而不是导入时缓存");
+}());
+
+// V070-A: formula parser, derived series, DAG, virtual cluster. Alignment engine is V070-B.
+(function () {
+  function almost(actual, expected, message) {
+    assert(Math.abs(actual - expected) < 1e-12, message);
+  }
+  var ast = core.parseFormulaExpression("B - A");
+  assert(core.formulaAliases(ast).join(",") === "B,A", "F-01 提取 B、A 变量");
+  almost(core.evaluateFormulaAst(core.parseFormulaExpression("A + B * k"), { A: 10, B: 2, k: 3 }), 16, "F-01 先乘后加");
+  almost(core.evaluateFormulaAst(core.parseFormulaExpression("(A + B) * 2"), { A: 1, B: 3 }), 8, "F-01 括号");
+  almost(core.evaluateFormulaAst(core.parseFormulaExpression("A ^ 2"), { A: 3 }), 9, "F-01 乘方");
+  almost(core.evaluateFormulaAst(core.parseFormulaExpression("abs(-2) + sqrt(16) + ln(e) + log10(100) + exp(0) + min(3, 1, 4) + max(pi, 1)"), {}), 2 + 4 + 1 + 2 + 1 + 1 + Math.PI, "F-02 函数与常数");
+  var   threw = false;
+  try { core.parseFormulaExpression("process.exit()"); } catch (error) { threw = /不支持的函数|语法|字符/.test(error.message); }
+  assert(threw, "F-04 拒绝任意调用，不用 eval");
+  threw = false;
+  try { core.parseFormulaExpression("A.foo"); } catch (error) { threw = true; }
+  assert(threw, "F-04 拒绝成员访问");
+
+  var p = core.createProject({ projectName: "v070a" });
+  var csv = "Time(s),A,B,C\n0,10,11,1\n1,12,13,2\n2,14,15,3\n3,16,17,4\n";
+  var ds = core.parseDatasetFromCsv(csv, { id: "ds-raw", name: "实验", sourceFilename: "exp.csv" });
+  core.addDataset(p, ds);
+  var rawA = ds.series[0].y.slice();
+  var derived = core.applyFormula(p, {
+    name: "BminusA",
+    expression: "B - A",
+    bindings: { A: "ds-raw::A", B: "ds-raw::B" }
+  });
+  assert(derived.kind === "computed" && derived.datasetId === core.COMPUTED_DATASET_ID, "派生系列进入计算结果簇");
+  assert(core.computedDatasetOf(p) && core.computedDatasetOf(p).name === "计算结果", "虚拟数据簇唯一且名为计算结果");
+  assert(derived.y.join(",") === "1,1,1,1" && derived.validCount === 4 && derived.excludedCount === 0, "F-03 同 X 逐点相减");
+  assert(ds.series[0].y.join(",") === rawA.join(","), "F-01 计算不改写 Raw y");
+  assert(p.formulas.length === 1 && p.formulas[0].bindings.A === "ds-raw::A", "公式绑定稳定 Series ID");
+
+  var scaled = core.applyFormula(p, {
+    expression: "A * 0.5",
+    bindings: { A: "ds-raw::A" }
+  });
+  assert(scaled.y[0] === 5 && scaled.displayName.indexOf("Formula_") === 0, "F-01 标量乘法并默认 Formula_00N 名称");
+
+  threw = false;
+  try {
+    core.applyFormula(p, { expression: "B - A", bindings: { A: "ds-raw::A" } });
+  } catch (error) {
+    threw = /未绑定/.test(error.message);
+  }
+  assert(threw, "F-04 缺绑定拒绝提交");
+
+  var other = core.parseDatasetFromCsv("Time(s),T1\n0,11\n2,15\n4,19\n", { id: "ds-other", name: "异频", sourceFilename: "other.csv" });
+  core.addDataset(p, other);
+  threw = false;
+  try {
+    core.applyFormula(p, {
+      expression: "B - A",
+      bindings: { A: "ds-raw::A", B: "ds-other::T1" }
+    });
+  } catch (error) {
+    threw = /X 无法对齐/.test(error.message);
+  }
+  assert(threw, "禁止跨来源不同 X 按行号强算");
+  assert(ds.series[0].y.join(",") === rawA.join(","), "对齐失败后 Raw 仍未改");
+
+  var level1 = core.applyFormula(p, {
+    name: "HalfA",
+    expression: "A / 2",
+    bindings: { A: "ds-raw::A" }
+  });
+  var level2 = core.applyFormula(p, {
+    name: "HalfTwice",
+    expression: "H * 3",
+    bindings: { H: level1.id }
+  });
+  assert(level2.y[0] === 15, "F-06 多级公式可用上游派生系列");
+  core.applyFormula(p, {
+    id: p.formulas.filter(function (item) { return item.name === "HalfA"; })[0].id,
+    name: "HalfA",
+    expression: "A / 4",
+    bindings: { A: "ds-raw::A" }
+  });
+  assert(Math.abs(core.findSeries(p, level2.id).y[0] - 7.5) < 1e-12, "F-06 上游提交后拓扑刷新下游");
+
+  threw = false;
+  try {
+    core.applyFormula(p, {
+      id: p.formulas.filter(function (item) { return item.name === "HalfA"; })[0].id,
+      name: "HalfA",
+      expression: "H + 1",
+      bindings: { H: level2.id }
+    });
+  } catch (error) {
+    threw = /循环/.test(error.message);
+  }
+  assert(threw, "F-05 循环依赖在提交时拒绝");
+  assert(core.findSeries(p, level1.id).y[0] === 2.5, "循环拒绝后不改已有结果");
+
+  var json = core.serializeProject(p);
+  assert(json.indexOf("\"formulas\"") >= 0 && json.indexOf("ds-computed") >= 0, "工程保存公式与虚拟簇");
+  var restored = core.parseProject(json);
+  assert(core.findSeries(restored, derived.id).y.join(",") === "1,1,1,1", "工程往返恢复派生 y");
+  assert(restored.formulas[0].bindings.B === "ds-raw::B", "工程往返恢复稳定绑定");
+  var oldJson = core.serializeProject(core.parseProject(JSON.stringify({
+    projectFormatVersion: "1.1",
+    projectName: "old",
+    datasets: [ds],
+    plots: []
+  })));
+  var oldOpened = core.parseProject(oldJson);
+  assert((oldOpened.formulas || []).length === 0 && !core.computedDatasetOf(oldOpened), "旧工程缺 formulas 可打开");
+
+  ds.name = "实验改名";
+  assert(core.seriesPath(p, "ds-raw::A").indexOf("实验改名") === 0, "重命名数据簇不改变 seriesId");
+  assert(p.formulas[0].bindings.A === "ds-raw::A", "重命名后公式仍引用稳定 ID");
+
+  var before = core.captureEditorState(p);
+  var created = core.applyFormula(p, {
+    name: "UndoMe",
+    expression: "A + 1",
+    bindings: { A: "ds-raw::A" }
+  });
+  assert(core.findSeries(p, created.id), "提交后存在新系列");
+  core.restoreEditorState(p, before);
+  assert(!core.findSeries(p, created.id), "Undo 撤销公式提交");
+  assert(core.findSeries(p, derived.id).y.join(",") === "1,1,1,1", "Undo 不影响未改的派生系列");
+
+  var impactPlot = core.plotWindows(p)[0] || core.createPlot(p, { title: "F" });
+  core.addSeriesToPlot(p, impactPlot, [derived.id]);
+  var impact = core.formulaImpact(p, ["ds-raw::A"]);
+  assert(impact.derived.some(function (item) { return item.id === derived.id; }), "删源影响列出直接派生");
+  assert(impact.plots.length >= 1, "删源影响列出引用图窗");
+  core.removeDataset(p, "ds-raw");
+  var afterDelete = core.findSeries(p, derived.id);
+  assert(afterDelete && afterDelete.status === "invalid", "删源后保留派生定义并标 Invalid");
+  assert(!Number.isFinite(afterDelete.y[0]), "Invalid 不把旧值当新值");
+  assert(afterDelete.formulaId, "Invalid 后仍保留公式 ID，不改绑同名列");
 }());
 
 Promise.all(updateChecks).then(function () {
