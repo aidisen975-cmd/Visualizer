@@ -1434,6 +1434,7 @@
       series.validCount = Number.isFinite(Number(raw.validCount)) ? Math.max(0, Math.round(Number(raw.validCount))) : 0;
       series.excludedCount = Number.isFinite(Number(raw.excludedCount)) ? Math.max(0, Math.round(Number(raw.excludedCount))) : 0;
       series.computedAt = String(raw.computedAt || "");
+      series.alignmentSummary = normalizeAlignmentSummary(raw.alignmentSummary);
     }
     return series;
   }
@@ -4537,21 +4538,298 @@
     return plot.id;
   }
 
+  var ALIGNMENT_MODES = { linear: true, exact: true, nearest: true };
+  // ponytail: median positive step × 5. Change the factor only if a real series is split or bridged wrongly.
+  var ALIGNMENT_GAP_FACTOR = 5;
+
   function normalizeAlignmentConfig(raw) {
     var src = raw && typeof raw === "object" ? raw : {};
-    var mode = src.mode === "linear" || src.mode === "nearest" ? src.mode : "exact";
+    if (src.mode != null && src.mode !== "" && !ALIGNMENT_MODES[src.mode]) {
+      throw new Error("未知对齐模式：" + src.mode);
+    }
+    var mode = ALIGNMENT_MODES[src.mode] ? src.mode : "linear";
     var delta = Number(src.delta);
     var rangeMin = src.rangeMin == null || src.rangeMin === "" ? null : Number(src.rangeMin);
     var rangeMax = src.rangeMax == null || src.rangeMax === "" ? null : Number(src.rangeMax);
     var maxGap = src.maxGap == null || src.maxGap === "" ? null : Number(src.maxGap);
+    var tolerance = src.tolerance == null || src.tolerance === "" ? null : Number(src.tolerance);
+    if (Number.isFinite(rangeMin) && Number.isFinite(rangeMax) && rangeMin > rangeMax) {
+      throw new Error("X 范围无效。");
+    }
+    if (src.tolerance != null && src.tolerance !== "" && !(Number.isFinite(tolerance) && tolerance >= 0)) {
+      throw new Error("最近邻容差必须是非负数字。");
+    }
     return {
       mode: mode,
       referenceSeriesId: src.referenceSeriesId ? String(src.referenceSeriesId) : "",
       delta: Number.isFinite(delta) ? delta : 0,
       rangeMin: Number.isFinite(rangeMin) ? rangeMin : null,
       rangeMax: Number.isFinite(rangeMax) ? rangeMax : null,
-      maxGap: Number.isFinite(maxGap) && maxGap > 0 ? maxGap : null
+      maxGap: Number.isFinite(maxGap) && maxGap > 0 ? maxGap : null,
+      tolerance: Number.isFinite(tolerance) && tolerance >= 0 ? tolerance : null
     };
+  }
+
+  function normalizeAlignmentSummary(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    var counts = {};
+    var src = raw.excludedByReason && typeof raw.excludedByReason === "object" ? raw.excludedByReason : {};
+    Object.keys(src).forEach(function (key) {
+      var count = Number(src[key]);
+      if (Number.isFinite(count)) counts[String(key)] = count;
+    });
+    var summary = {
+      mode: raw.mode === "exact" || raw.mode === "nearest" ? raw.mode : "linear",
+      referenceSeriesId: String(raw.referenceSeriesId || ""),
+      delta: Number.isFinite(Number(raw.delta)) ? Number(raw.delta) : 0,
+      tolerance: raw.tolerance == null || raw.tolerance === "" ? null : Number(raw.tolerance),
+      rangeMin: raw.rangeMin == null || raw.rangeMin === "" ? null : Number(raw.rangeMin),
+      rangeMax: raw.rangeMax == null || raw.rangeMax === "" ? null : Number(raw.rangeMax),
+      maxGap: raw.maxGap == null || raw.maxGap === "" ? null : Number(raw.maxGap),
+      maxGapSource: raw.maxGapSource === "config" ? "config" : "median-x5",
+      xUnit: String(raw.xUnit || ""),
+      excludedByReason: counts
+    };
+    return summary;
+  }
+
+  function canonicalTempUnit(unit) {
+    var text = String(unit || "").replace(/\s+/g, "").replace("℃", "°C");
+    if (text === "°C" || text === "C") return "C";
+    if (text === "K") return "K";
+    return "";
+  }
+
+  function convertTemperature(value, fromUnit, toUnit) {
+    if (fromUnit === toUnit) return value;
+    if (fromUnit === "C" && toUnit === "K") return value + 273.15;
+    if (fromUnit === "K" && toUnit === "C") return value - 273.15;
+    return value;
+  }
+
+  function plainUnit(unit) {
+    return String(unit || "").replace(/\s+/g, "");
+  }
+
+  function defaultMaxGap(xs) {
+    var steps = [];
+    for (var i = 1; i < xs.length; i += 1) steps.push(xs[i] - xs[i - 1]);
+    steps.sort(function (a, b) { return a - b; });
+    var mid = Math.floor(steps.length / 2);
+    var median = steps.length % 2 ? steps[mid] : (steps[mid - 1] + steps[mid]) / 2;
+    return median * ALIGNMENT_GAP_FACTOR;
+  }
+
+  function assertStrictAxis(xs, label) {
+    if (!xs || xs.length < 2) throw new Error(label + "至少需要两个时间点。");
+    for (var i = 0; i < xs.length; i += 1) {
+      if (!Number.isFinite(xs[i])) throw new Error(label + "时间轴含 NaN 或 Inf。");
+      if (i === 0) continue;
+      if (xs[i] === xs[i - 1]) throw new Error(label + "存在重复时间戳。");
+      if (xs[i] < xs[i - 1]) throw new Error(label + "时间轴不是严格递增。");
+    }
+  }
+
+  function xInReferenceUnit(sample, reference) {
+    var sampleTime = sample.xIsTime !== false;
+    var referenceTime = reference.xIsTime !== false;
+    if (sampleTime !== referenceTime) throw new Error("时间单位不匹配，未按行号对齐。");
+    var xs = sample.x.slice();
+    if (!referenceTime) {
+      if (plainUnit(sample.xUnit) && plainUnit(reference.xUnit) && plainUnit(sample.xUnit) !== plainUnit(reference.xUnit)) {
+        throw new Error("X 单位不匹配：" + sample.xUnit + " 与 " + reference.xUnit + "。");
+      }
+      return xs;
+    }
+    var fromUnit = TIME_IN_SECONDS[sample.xUnit] ? sample.xUnit : "s";
+    var toUnit = TIME_IN_SECONDS[reference.xUnit] ? reference.xUnit : "s";
+    var factor = TIME_IN_SECONDS[fromUnit] / TIME_IN_SECONDS[toUnit];
+    if (factor === 1) return xs;
+    return xs.map(function (value) { return value * factor; });
+  }
+
+  function yInReferenceUnit(sample, reference) {
+    var fromTemp = canonicalTempUnit(sample.yUnit);
+    var toTemp = canonicalTempUnit(reference.yUnit);
+    if (fromTemp && toTemp) {
+      return sample.y.map(function (value) {
+        return Number.isFinite(value) ? convertTemperature(value, fromTemp, toTemp) : value;
+      });
+    }
+    if (plainUnit(sample.yUnit) && plainUnit(reference.yUnit) && plainUnit(sample.yUnit) !== plainUnit(reference.yUnit)) {
+      throw new Error("单位不匹配：" + sample.yUnit + " 与 " + reference.yUnit + "，未暗中换算。");
+    }
+    return sample.y.slice();
+  }
+
+  function bracketAt(xs, x) {
+    if (x < xs[0] || x > xs[xs.length - 1]) return null;
+    var lo = 0;
+    var hi = xs.length - 1;
+    while (hi - lo > 1) {
+      var mid = (lo + hi) >> 1;
+      if (xs[mid] <= x) lo = mid;
+      else hi = mid;
+    }
+    if (xs[lo] === x) return { left: lo, right: lo };
+    if (xs[hi] === x) return { left: hi, right: hi };
+    return { left: lo, right: hi };
+  }
+
+  function sampleAt(xs, ys, x, config, maxGap) {
+    if (config.mode === "exact") {
+      var lo = 0;
+      var hi = xs.length - 1;
+      while (lo <= hi) {
+        var mid = (lo + hi) >> 1;
+        if (xs[mid] === x) {
+          return Number.isFinite(ys[mid]) ? { ok: true, y: ys[mid] } : { ok: false, reason: "nan" };
+        }
+        if (xs[mid] < x) lo = mid + 1;
+        else hi = mid - 1;
+      }
+      return { ok: false, reason: "exact" };
+    }
+    if (config.mode === "nearest") {
+      var index = 0;
+      var end = xs.length - 1;
+      while (index < end) {
+        var middle = (index + end) >> 1;
+        if (xs[middle] < x) index = middle + 1;
+        else end = middle;
+      }
+      var best = index;
+      if (index > 0 && Math.abs(xs[index - 1] - x) <= Math.abs(xs[index] - x)) best = index - 1;
+      if (Math.abs(xs[best] - x) > config.tolerance) return { ok: false, reason: "nearest" };
+      return Number.isFinite(ys[best]) ? { ok: true, y: ys[best] } : { ok: false, reason: "nan" };
+    }
+    var bracket = bracketAt(xs, x);
+    if (!bracket) return { ok: false, reason: "outside" };
+    if (!Number.isFinite(ys[bracket.left]) || !Number.isFinite(ys[bracket.right])) return { ok: false, reason: "nan" };
+    if (bracket.left === bracket.right) return { ok: true, y: ys[bracket.left] };
+    var span = xs[bracket.right] - xs[bracket.left];
+    if (span > maxGap) return { ok: false, reason: "gap" };
+    var weight = (x - xs[bracket.left]) / span;
+    return { ok: true, y: ys[bracket.left] + weight * (ys[bracket.right] - ys[bracket.left]) };
+  }
+
+  function alignSeries(reference, sources, rawConfig) {
+    if (!reference || !Array.isArray(reference.x) || !Array.isArray(reference.y)) {
+      throw new Error("参考序列缺少 x/y。");
+    }
+    if (reference.x.length !== reference.y.length) throw new Error("参考序列 x/y 长度不一致。");
+    var config = normalizeAlignmentConfig(rawConfig);
+    if (config.mode === "nearest" && config.tolerance == null) throw new Error("最近邻匹配需要明确容差。");
+    var refX = reference.x.slice();
+    var refY = reference.y.slice();
+    assertStrictAxis(refX, "参考序列");
+    var prepared = (sources || []).map(function (source) {
+      if (!source || !Array.isArray(source.x) || !Array.isArray(source.y) || source.x.length !== source.y.length) {
+        throw new Error("待对齐序列缺少长度一致的 x/y。");
+      }
+      var xs = xInReferenceUnit(source, reference).map(function (value) { return value + config.delta; });
+      assertStrictAxis(xs, (source.id || "待对齐序列") + " ");
+      var gap = config.maxGap == null ? defaultMaxGap(xs) : config.maxGap;
+      return {
+        id: String(source.id || ""),
+        x: xs,
+        y: yInReferenceUnit(source, reference),
+        maxGap: gap
+      };
+    });
+    var x = [];
+    var referenceY = [];
+    var columns = {};
+    prepared.forEach(function (source) { columns[source.id] = []; });
+    var mask = [];
+    var exclusions = [];
+    var excludedByReason = {};
+    function bump(reason) {
+      excludedByReason[reason] = (excludedByReason[reason] || 0) + 1;
+    }
+    for (var i = 0; i < refX.length; i += 1) {
+      if ((config.rangeMin != null && refX[i] < config.rangeMin) || (config.rangeMax != null && refX[i] > config.rangeMax)) {
+        bump("range");
+        exclusions.push({ index: i, x: refX[i], reason: "range" });
+        continue;
+      }
+      var reasons = [];
+      var values = {};
+      if (!Number.isFinite(refY[i])) reasons.push("nan");
+      prepared.forEach(function (source) {
+        var hit = sampleAt(source.x, source.y, refX[i], config, source.maxGap);
+        if (!hit.ok) reasons.push(hit.reason);
+        else values[source.id] = hit.y;
+      });
+      x.push(refX[i]);
+      if (reasons.length) {
+        var reason = reasons[0];
+        bump(reason);
+        exclusions.push({ index: i, x: refX[i], reason: reason });
+        referenceY.push(NaN);
+        prepared.forEach(function (source) { columns[source.id].push(NaN); });
+        mask.push(false);
+      } else {
+        referenceY.push(refY[i]);
+        prepared.forEach(function (source) { columns[source.id].push(values[source.id]); });
+        mask.push(true);
+      }
+    }
+    var geometric = mask.filter(Boolean).length + exclusions.filter(function (item) {
+      return item.reason === "nan" || item.reason === "gap";
+    }).length;
+    if (!x.length) throw new Error("指定范围内没有参考时间点。");
+    if (!geometric) throw new Error("无重叠区间，禁止外推。");
+    if (excludedByReason.gap && !mask.some(Boolean) && !excludedByReason.nan) {
+      throw new Error("数据缺口超过允许间隔，没有可用样本。");
+    }
+    var validCount = mask.filter(Boolean).length;
+    return {
+      x: x,
+      referenceY: referenceY,
+      columns: columns,
+      mask: mask,
+      validCount: validCount,
+      excludedCount: refX.length - validCount,
+      exclusions: exclusions,
+      excludedByReason: excludedByReason,
+      provenance: {
+        mode: config.mode,
+        referenceSeriesId: String(reference.id || config.referenceSeriesId || ""),
+        delta: config.delta,
+        tolerance: config.tolerance,
+        rangeMin: config.rangeMin,
+        rangeMax: config.rangeMax,
+        maxGap: prepared.length === 1 ? prepared[0].maxGap : prepared.map(function (source) {
+          return { id: source.id, maxGap: source.maxGap };
+        }),
+        maxGapSource: config.maxGap == null ? "median-x5" : "config",
+        xUnit: reference.xUnit || (reference.xIsTime === false ? "" : "s")
+      }
+    };
+  }
+
+  function seriesSample(project, series) {
+    var dataset = series && series.datasetId ? findDataset(project, series.datasetId) : null;
+    var xIsTime = dataset ? dataset.xIsTime !== false : series.xIsTime !== false;
+    var xUnit = series.xUnit || (dataset ? datasetXUnit(dataset) : "") || "";
+    if (xIsTime && !TIME_IN_SECONDS[xUnit]) {
+      xUnit = dataset && TIME_IN_SECONDS[dataset.timeUnit] ? dataset.timeUnit : "s";
+    }
+    return {
+      id: series.id,
+      x: series.x.slice(),
+      y: series.y.slice(),
+      xIsTime: xIsTime,
+      xUnit: xUnit,
+      yUnit: series.unit || series.yUnit || ""
+    };
+  }
+
+  function alignmentRangeFromPlot(project, plot) {
+    if (!plot) throw new Error("找不到图窗。");
+    var domain = plotExtents(project, plot).x.slice();
+    return { rangeMin: domain[0], rangeMax: domain[1] };
   }
 
   function normalizeFormulaDefinition(raw) {
@@ -4800,14 +5078,6 @@
     return evalNode(ast);
   }
 
-  function sameSeriesX(left, right) {
-    if (!left || !right || left.length !== right.length) return false;
-    for (var i = 0; i < left.length; i += 1) {
-      if (left[i] !== right[i]) return false;
-    }
-    return true;
-  }
-
   function formulaBindingIds(formula) {
     var ids = [];
     Object.keys((formula && formula.bindings) || {}).forEach(function (alias) {
@@ -4955,6 +5225,7 @@
       series.y = (series.y || []).map(function () { return NaN; });
       series.validCount = 0;
       series.excludedCount = series.x ? series.x.length : 0;
+      series.alignmentSummary = null;
     }
     return series;
   }
@@ -4975,49 +5246,71 @@
       return { alias: alias, series: series };
     });
     if (!inputs.length) throw new Error("公式需要至少一个系列变量。");
-    var reference = inputs[0].series;
-    inputs.forEach(function (item) {
-      if (!sameSeriesX(reference.x, item.series.x)) {
-        throw new Error("X 无法对齐。V0.7.0 第一阶段只支持同一横坐标；不同采样请等待对齐引擎。");
-      }
+    var samples = inputs.map(function (item) {
+      var sample = seriesSample(project, item.series);
+      sample.alias = item.alias;
+      return sample;
     });
+    var reference = null;
+    if (formula.alignment.referenceSeriesId) {
+      reference = samples.filter(function (item) { return item.id === formula.alignment.referenceSeriesId; })[0] || null;
+      if (!reference) throw new Error("参考系列不在公式输入中。");
+    }
+    if (!reference) reference = samples.filter(function (item) { return item.alias === "A"; })[0] || samples[0];
+    var seenSource = {};
+    var sources = [];
+    samples.forEach(function (item) {
+      if (item.id === reference.id || seenSource[item.id]) return;
+      seenSource[item.id] = true;
+      sources.push(item);
+    });
+    var aligned = alignSeries(reference, sources, formula.alignment);
     var y = [];
     var validCount = 0;
-    var excludedCount = 0;
-    for (var i = 0; i < reference.x.length; i += 1) {
-      var env = {};
-      var skip = false;
-      inputs.forEach(function (item) {
-        var value = item.series.y[i];
-        if (!Number.isFinite(value)) skip = true;
-        env[item.alias] = value;
-      });
-      if (skip) {
+    for (var i = 0; i < aligned.x.length; i += 1) {
+      if (!aligned.mask[i]) {
         y.push(NaN);
-        excludedCount += 1;
         continue;
       }
-      var value = evaluateFormulaAst(ast, env);
-      if (!Number.isFinite(value)) {
-        y.push(NaN);
-        excludedCount += 1;
-      } else {
+      var env = {};
+      var failed = false;
+      samples.forEach(function (item) {
+        var value = item.id === reference.id ? aligned.referenceY[i] : aligned.columns[item.id][i];
+        if (!Number.isFinite(value)) failed = true;
+        env[item.alias] = value;
+      });
+      var value = failed ? NaN : evaluateFormulaAst(ast, env);
+      if (!Number.isFinite(value)) y.push(NaN);
+      else {
         y.push(value);
         validCount += 1;
       }
     }
-    if (validCount === 0) throw new Error("没有有效样本。");
+    if (validCount === 0) throw new Error("没有有效样本。排除 " + (reference.x.length - validCount) + " 点。");
+    var summary = {
+      mode: aligned.provenance.mode,
+      referenceSeriesId: reference.id,
+      delta: aligned.provenance.delta,
+      tolerance: aligned.provenance.tolerance,
+      rangeMin: aligned.provenance.rangeMin,
+      rangeMax: aligned.provenance.rangeMax,
+      maxGap: typeof aligned.provenance.maxGap === "number" ? aligned.provenance.maxGap : null,
+      maxGapSource: aligned.provenance.maxGapSource,
+      xUnit: aligned.provenance.xUnit,
+      excludedByReason: aligned.excludedByReason
+    };
     return {
       formula: formula,
       aliases: aliases,
-      x: reference.x.slice(),
+      x: aligned.x,
       y: y,
       validCount: validCount,
-      excludedCount: excludedCount,
-      unit: formula.outputUnit || reference.unit || "",
-      xName: reference.name ? "" : "",
-      xIsTime: true,
-      datasetId: reference.datasetId
+      excludedCount: reference.x.length - validCount,
+      alignmentSummary: summary,
+      unit: formula.outputUnit || reference.yUnit || "",
+      xName: "",
+      xIsTime: reference.xIsTime !== false,
+      datasetId: inputs[0].series.datasetId
     };
   }
 
@@ -5041,6 +5334,7 @@
     series.errorMessage = "";
     series.validCount = result.validCount;
     series.excludedCount = result.excludedCount;
+    series.alignmentSummary = normalizeAlignmentSummary(result.alignmentSummary);
     series.computedAt = new Date().toISOString();
     series.formulaId = formula.id;
     series.kind = "computed";
@@ -5075,6 +5369,7 @@
       status: "ready",
       validCount: result.validCount,
       excludedCount: result.excludedCount,
+      alignmentSummary: result.alignmentSummary,
       computedAt: new Date().toISOString(),
       color: color,
       style: { color: color, lineWidth: 1.5, lineType: "solid", opacity: 1 },
@@ -5288,6 +5583,9 @@
     evaluateFormulaAst: evaluateFormulaAst,
     normalizeFormulaDefinition: normalizeFormulaDefinition,
     normalizeAlignmentConfig: normalizeAlignmentConfig,
+    alignSeries: alignSeries,
+    alignmentRangeFromPlot: alignmentRangeFromPlot,
+    ALIGNMENT_GAP_FACTOR: ALIGNMENT_GAP_FACTOR,
     ensureComputedDataset: ensureComputedDataset,
     computedDatasetOf: computedDatasetOf,
     nextFormulaName: nextFormulaName,

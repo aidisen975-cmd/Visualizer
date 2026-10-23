@@ -715,6 +715,9 @@ assert(page.indexOf("z-index: 1000") >= 0 && page.indexOf("z-index: 10") >= 0, "
 assert(page.indexOf("tvFormulaDialog") >= 0, "公式编辑器使用独立对话框");
 assert(page.indexOf("计算信息") >= 0, "Inspector 有计算信息分组");
 assert(page.indexOf("新建公式") >= 0, "左侧可新建公式");
+assert(page.indexOf("第一阶段只接受同一横坐标") < 0, "编辑器不再拒绝跨来源采样");
+assert(page.indexOf("不按行号对齐") >= 0, "编辑器说明对齐不按行号");
+assert(page.indexOf("formula.alignment") >= 0, "编辑公式保留已保存的对齐配置");
 assert(page.indexOf("tvDeleteImpactDialog") >= 0, "删除来源前有影响确认");
 assert(page.indexOf("openFormulaEditor") >= 0 && page.indexOf("closeFormulaEditor") >= 0, "公式编辑器有草稿应用和取消");
 assert(page.indexOf("pickInspectorSeries") >= 0, "系列名称进入 Inspector，不与勾选混用");
@@ -1581,17 +1584,16 @@ var updateChecks = [
 
   var other = core.parseDatasetFromCsv("Time(s),T1\n0,11\n2,15\n4,19\n", { id: "ds-other", name: "异频", sourceFilename: "other.csv" });
   core.addDataset(p, other);
-  threw = false;
-  try {
-    core.applyFormula(p, {
-      expression: "B - A",
-      bindings: { A: "ds-raw::A", B: "ds-other::T1" }
-    });
-  } catch (error) {
-    threw = /X 无法对齐/.test(error.message);
-  }
-  assert(threw, "禁止跨来源不同 X 按行号强算");
-  assert(ds.series[0].y.join(",") === rawA.join(","), "对齐失败后 Raw 仍未改");
+  var otherY = other.series[0].y.slice();
+  var otherX = other.series[0].x.slice();
+  var cross = core.applyFormula(p, {
+    expression: "B - A",
+    bindings: { A: "ds-raw::A", B: "ds-other::T1" }
+  });
+  assert(cross.x.join(",") === "0,1,2,3" && cross.y.join(",") === "1,1,1,1", "A-01 公式列按参考 X 插值，不按行号");
+  assert(cross.alignmentSummary && cross.alignmentSummary.mode === "linear" && cross.alignmentSummary.referenceSeriesId === "ds-raw::A", "公式列调用统一对齐引擎，默认参考 A");
+  assert(other.series[0].x.join(",") === otherX.join(",") && other.series[0].y.join(",") === otherY.join(","), "插值不改写来源数组");
+  assert(ds.series[0].y.join(",") === rawA.join(","), "跨来源计算后 Raw 仍未改");
 
   var level1 = core.applyFormula(p, {
     name: "HalfA",
@@ -1665,6 +1667,160 @@ var updateChecks = [
   assert(afterDelete && afterDelete.status === "invalid", "删源后保留派生定义并标 Invalid");
   assert(!Number.isFinite(afterDelete.y[0]), "Invalid 不把旧值当新值");
   assert(afterDelete.formulaId, "Invalid 后仍保留公式 ID，不改绑同名列");
+}());
+
+// V070-B: Alignment Engine. Fixed SPEC-070 fixture. atol = 1e-9, rtol = 1e-9. APP 0.6.3, project format 1.1.
+(function () {
+  assert(core.APP_INFO.version === "0.6.3", "对齐测试时软件版本仍是 0.6.3");
+  assert(core.PROJECT_FORMAT_VERSION === "1.1", "对齐测试不升工程格式");
+  var ATOL = 1e-9;
+  var RTOL = 1e-9;
+  function nearList(actual, expected, message) {
+    var problem = "";
+    if (!actual || actual.length !== expected.length) problem = "长度";
+    else {
+      for (var i = 0; i < expected.length; i += 1) {
+        if (!Number.isFinite(expected[i])) {
+          if (Number.isFinite(actual[i])) problem = "[" + i + "] 应为无效";
+        } else {
+          var scale = Math.max(1, Math.abs(expected[i]));
+          if (!(Math.abs(actual[i] - expected[i]) <= ATOL + RTOL * scale)) {
+            problem = "[" + i + "] " + actual[i] + " vs " + expected[i];
+          }
+        }
+        if (problem) break;
+      }
+    }
+    assert(!problem, message + (problem ? " " + problem : ""));
+  }
+  function throws(fn, pattern, message) {
+    var matched = false;
+    try { fn(); } catch (error) { matched = pattern.test(error.message); }
+    assert(matched, message);
+  }
+  var fixA = { id: "A", x: [0, 1, 2, 3], y: [10, 12, 14, 16], xIsTime: true, xUnit: "s", yUnit: "°C" };
+  var fixB = { id: "B", x: [0, 2, 4], y: [11, 15, 19], xIsTime: true, xUnit: "s", yUnit: "°C" };
+  var rawBX = fixB.x.slice();
+  var rawBY = fixB.y.slice();
+  var linear = core.alignSeries(fixA, [fixB], { mode: "linear" });
+  nearList(linear.x, [0, 1, 2, 3], "A-01 参考 X");
+  nearList(linear.columns.B, [11, 13, 15, 17], "A-01 B 对齐到 A");
+  nearList(linear.columns.B.map(function (value, index) { return value - linear.referenceY[index]; }), [1, 1, 1, 1], "A-01 误差");
+  assert(linear.mask.join(",") === "true,true,true,true" && linear.validCount === 4 && linear.excludedCount === 0, "A-01 掩码与排除数");
+  assert(fixB.x.join(",") === rawBX.join(",") && fixB.y.join(",") === rawBY.join(","), "A-01 不改原始数组");
+  assert(linear.columns.B.join(",") !== "11,15,19", "A-01 不是按行号截取 B");
+  var again = core.alignSeries(fixA, [fixB], { mode: "linear" });
+  assert(JSON.stringify(again.columns.B) === JSON.stringify(linear.columns.B) && again.mask.join(",") === linear.mask.join(","), "同一输入与配置得到同一对齐结果");
+  throws(function () { core.alignSeries(fixA, [fixB], { delta: 9.081 }); }, /无重叠/, "Δt=+9.081 s 向后平移后无重叠");
+  throws(function () { core.alignSeries(fixA, [fixB], { delta: -9.081 }); }, /无重叠/, "Δt=-9.081 s 向前平移后无重叠");
+  var plus = core.alignSeries(fixA, [fixB], { delta: 1 });
+  nearList(plus.columns.B, [NaN, 11, 13, 15], "Δt=+1 使 B 的 (0,11) 落到参考 t=1");
+  assert(plus.mask.join(",") === "false,true,true,true" && plus.excludedByReason.outside === 1, "Δt=+1 起点在重叠外，不外推");
+  var minus = core.alignSeries(fixA, [fixB], { delta: -1 });
+  nearList(minus.columns.B, [13, 15, 17, 19], "Δt=-1 使 B 提前，参考终点取到原 B 的 19");
+  var exact = core.alignSeries(fixA, [fixB], { mode: "exact" });
+  nearList(exact.columns.B, [11, NaN, 15, NaN], "A-10 Exact 只保留 0 与 2");
+  assert(exact.validCount === 2 && exact.excludedCount === 2 && exact.excludedByReason.exact === 2, "A-10 Exact 排除数量");
+  throws(function () { core.alignSeries(fixA, [fixB], { mode: "nearest" }); }, /容差/, "Nearest 缺少容差时拒绝");
+  var nearestTight = core.alignSeries(fixA, [fixB], { mode: "nearest", tolerance: 0.4 });
+  nearList(nearestTight.columns.B, [11, NaN, 15, NaN], "A-10 Nearest 容差 0.4 不吃到相邻 1 s");
+  var nearest = core.alignSeries(fixA, [fixB], { mode: "nearest", tolerance: 1 });
+  nearList(nearest.columns.B, [11, 11, 15, 15], "A-10 Nearest 容差 1，等距取较早时间戳");
+  var windowed = core.alignSeries(fixA, [fixB], { rangeMin: 1, rangeMax: 2 });
+  nearList(windowed.x, [1, 2], "A-09 指定窗口 X");
+  nearList(windowed.columns.B, [13, 15], "A-09 指定窗口内插值");
+  assert(windowed.validCount === 2 && windowed.excludedCount === 2 && windowed.excludedByReason.range === 2, "A-09 窗口外计入排除");
+  throws(function () { core.alignSeries(fixA, [{ id: "B", x: [0, 0, 2], y: [11, 12, 15], xIsTime: true, xUnit: "s", yUnit: "°C" }], {}); }, /重复时间戳/, "重复时间戳报错");
+  throws(function () { core.alignSeries(fixA, [{ id: "B", x: [0, 2, 1], y: [11, 15, 19], xIsTime: true, xUnit: "s", yUnit: "°C" }], {}); }, /严格递增/, "非递增时间轴报错");
+  throws(function () { core.alignSeries({ id: "A", x: [0, NaN, 2], y: [10, 12, 14], xIsTime: true, xUnit: "s", yUnit: "°C" }, [fixB], {}); }, /NaN 或 Inf/, "参考时间轴 NaN 报错");
+  var nanY = core.alignSeries(fixA, [{ id: "B", x: [0, 2, 4], y: [11, NaN, 19], xIsTime: true, xUnit: "s", yUnit: "°C" }], {});
+  nearList(nanY.columns.B, [11, NaN, NaN, NaN], "NaN Y 不参与插值");
+  assert(nanY.validCount === 1 && nanY.excludedByReason.nan === 3, "NaN Y 计入排除");
+  var infY = core.alignSeries(fixA, [{ id: "B", x: [0, 2, 4], y: [11, Infinity, 19], xIsTime: true, xUnit: "s", yUnit: "°C" }], {});
+  assert(infY.validCount === 1 && infY.excludedByReason.nan === 3, "Inf Y 与 NaN 一样排除");
+  var gappy = core.alignSeries(
+    { id: "A", x: [0, 1, 2, 3, 6, 10], y: [0, 1, 2, 3, 6, 10], xIsTime: true, xUnit: "s", yUnit: "" },
+    [{ id: "B", x: [0, 1, 2, 10], y: [0, 10, 20, 100], xIsTime: true, xUnit: "s", yUnit: "" }],
+    {}
+  );
+  assert(gappy.provenance.maxGap === 5 && gappy.provenance.maxGapSource === "median-x5", "缺口阈值固定为正常间隔中位数×5");
+  nearList(gappy.columns.B, [0, 10, 20, NaN, NaN, 100], "A-04 默认不跨 8 s 缺口");
+  assert(gappy.excludedByReason.gap === 2, "A-04 缺口计入排除");
+  var bridged = core.alignSeries(
+    { id: "A", x: [0, 1, 2, 3, 6, 10], y: [0, 1, 2, 3, 6, 10], xIsTime: true, xUnit: "s", yUnit: "" },
+    [{ id: "B", x: [0, 1, 2, 10], y: [0, 10, 20, 100], xIsTime: true, xUnit: "s", yUnit: "" }],
+    { maxGap: 8 }
+  );
+  nearList(bridged.columns.B, [0, 10, 20, 30, 60, 100], "显式 maxGap 允许跨过同一缺口");
+  throws(function () {
+    core.alignSeries(
+      { id: "A", x: [3, 4, 5, 6], y: [3, 4, 5, 6], xIsTime: true, xUnit: "s", yUnit: "" },
+      [{ id: "B", x: [0, 1, 2, 10], y: [0, 10, 20, 100], xIsTime: true, xUnit: "s", yUnit: "" }],
+      {}
+    );
+  }, /数据缺口/, "全部落在缺口内时报错");
+  var millis = core.alignSeries(fixA, [{ id: "B", x: [0, 2000, 4000], y: [11, 15, 19], xIsTime: true, xUnit: "ms", yUnit: "°C" }], {});
+  nearList(millis.columns.B, [11, 13, 15, 17], "A-07 ms 换到参考秒");
+  var minutes = core.alignSeries(fixA, [{ id: "B", x: [0, 2 / 60, 4 / 60], y: [11, 15, 19], xIsTime: true, xUnit: "min", yUnit: "°C" }], {});
+  nearList(minutes.columns.B, [11, 13, 15, 17], "A-07 min 换到参考秒");
+  var hours = core.alignSeries(fixA, [{ id: "B", x: [0, 2 / 3600, 4 / 3600], y: [11, 15, 19], xIsTime: true, xUnit: "h", yUnit: "°C" }], {});
+  nearList(hours.columns.B, [11, 13, 15, 17], "A-07 h 换到参考秒");
+  var kelvin = core.alignSeries(fixA, [{ id: "B", x: [0, 2, 4], y: [11 + 273.15, 15 + 273.15, 19 + 273.15], xIsTime: true, xUnit: "s", yUnit: "K" }], {});
+  nearList(kelvin.columns.B, [11, 13, 15, 17], "A-08 K 换到参考 °C");
+  throws(function () {
+    core.alignSeries(fixA, [{ id: "B", x: [0, 2, 4], y: [11, 15, 19], xIsTime: true, xUnit: "s", yUnit: "V" }], {});
+  }, /单位不匹配/, "°C 与 V 不暗中计算");
+  throws(function () { core.normalizeAlignmentConfig({ mode: "spline" }); }, /未知对齐模式/, "未知对齐模式报错");
+  throws(function () { core.normalizeAlignmentConfig({ rangeMin: 3, rangeMax: 1 }); }, /X 范围无效/, "颠倒的 X 范围报错");
+
+  var project = core.createProject({ projectName: "v070b-align" });
+  var left = core.parseDatasetFromCsv("Time(s),A(°C)\n0,10\n1,12\n2,14\n3,16\n", { id: "ds-a", name: "参考", sourceFilename: "a.csv" });
+  var right = core.parseDatasetFromCsv("Time(ms),B(K)\n0,284.15\n2000,288.15\n4000,292.15\n", { id: "ds-b", name: "预测", sourceFilename: "b.csv" });
+  core.addDataset(project, left);
+  core.addDataset(project, right);
+  var derived = core.applyFormula(project, {
+    name: "BminusA",
+    expression: "B - A",
+    bindings: { A: "ds-a::A", B: "ds-b::B" },
+    alignment: { mode: "linear", referenceSeriesId: "ds-a::A", delta: 0, maxGap: 5 }
+  });
+  nearList(derived.y, [1, 1, 1, 1], "公式列同时换算 ms 与 K");
+  assert(derived.validCount === 4 && derived.excludedCount === 0, "公式列带回有效与排除数量");
+  assert(project.projectFormatVersion === "1.1", "工程格式保持 1.1");
+  var saved = core.serializeProject(project);
+  var restored = core.parseProject(saved);
+  var stored = restored.formulas[0].alignment;
+  assert(stored.mode === "linear" && stored.referenceSeriesId === "ds-a::A" && stored.delta === 0 && stored.maxGap === 5 && stored.tolerance == null, "工程往返保存对齐参数");
+  nearList(core.findSeries(restored, derived.id).y, [1, 1, 1, 1], "工程往返恢复对齐后的 y");
+  var shifted = core.createProject({ projectName: "v070b-delta" });
+  core.addDataset(shifted, core.parseDatasetFromCsv("Time(s),A\n0,0\n10,10\n20,20\n30,30\n", { id: "ds-shift-a", name: "A", sourceFilename: "sa.csv" }));
+  core.addDataset(shifted, core.parseDatasetFromCsv("Time(s),B\n0,1\n10,11\n20,21\n", { id: "ds-shift-b", name: "B", sourceFilename: "sb.csv" }));
+  core.applyFormula(shifted, {
+    name: "Shifted",
+    expression: "B - A",
+    bindings: { A: "ds-shift-a::A", B: "ds-shift-b::B" },
+    alignment: { mode: "nearest", referenceSeriesId: "ds-shift-a::A", delta: 9.081, tolerance: 1, rangeMin: 10, rangeMax: 20 }
+  });
+  var shiftedBack = core.parseProject(core.serializeProject(shifted));
+  var shiftAlign = shiftedBack.formulas[0].alignment;
+  assert(shiftAlign.mode === "nearest" && shiftAlign.delta === 9.081 && shiftAlign.tolerance === 1 && shiftAlign.rangeMin === 10 && shiftAlign.rangeMax === 20, "Δt=9.081、容差和窗口可持久化");
+  var legacy = core.parseProject(JSON.stringify({
+    projectFormatVersion: "1.1",
+    projectName: "legacy-align",
+    datasets: [left],
+    formulas: [{ id: "f-old", name: "Old", expression: "A", bindings: { A: "ds-a::A" }, alignment: { mode: "exact", delta: 0 } }],
+    plots: []
+  }));
+  assert(legacy.formulas[0].alignment.mode === "exact" && legacy.formulas[0].alignment.tolerance == null, "旧公式缺省容差仍可打开，并保留 exact");
+  var plot = core.plotWindows(project)[0] || core.createPlot(project, { title: "范围" });
+  core.addSeriesToPlot(project, plot, ["ds-a::A"]);
+  var once = core.alignmentRangeFromPlot(project, plot);
+  plot.xAxis.mode = "manual";
+  plot.xAxis.min = 5;
+  plot.xAxis.max = 6;
+  assert(once.rangeMin !== 5, "已填入的范围不跟随随后的缩放");
+  var filled = core.alignmentRangeFromPlot(project, plot);
+  assert(filled.rangeMin === 5 && filled.rangeMax === 6, "再次读取才拿到当前可视 X");
 }());
 
 Promise.all(updateChecks).then(function () {

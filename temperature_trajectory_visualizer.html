@@ -3768,6 +3768,7 @@
         expression: formula ? formula.expression : "",
         bindings: formula ? core.cloneJson(formula.bindings || {}) : {},
         outputUnit: formula ? (formula.outputUnit || "") : "",
+        alignment: formula && formula.alignment ? core.cloneJson(formula.alignment) : null,
         outputSeriesId: series ? series.id : "",
         preview: null,
         error: ""
@@ -3814,7 +3815,7 @@
       actions.append(previewBtn, applyBtn, cancelBtn);
       var hint = document.createElement("p");
       hint.className = "tv-hint";
-      hint.textContent = "第一阶段只接受同一横坐标的逐点运算。不同采样会拒绝，不会按行号硬对齐。";
+      hint.textContent = "默认按变量 A 的时间轴线性插值，只保留重叠区间，不外推，也不按行号对齐。";
       formulaBody.append(name.wrap, expr.wrap, bindCap, bindHost, unit.wrap, previewHost, actions, hint);
       paintFormulaBindings(bindHost);
       showAppModal(formulaDialog);
@@ -3922,6 +3923,12 @@
       addMeta("状态", formulaStatusLabel(series.status) + (series.errorMessage ? " · " + series.errorMessage : ""));
       addMeta("有效点", String(series.validCount == null ? "—" : series.validCount));
       addMeta("排除点", String(series.excludedCount == null ? "—" : series.excludedCount));
+      if (formula && formula.alignment) {
+        var alignMode = formula.alignment.mode === "nearest" ? "最近邻" : (formula.alignment.mode === "exact" ? "精确匹配" : "线性插值");
+        var alignText = alignMode;
+        if (formula.alignment.delta) alignText += "，Δt " + formula.alignment.delta;
+        addMeta("对齐", alignText);
+      }
       addMeta("单位", series.unit || (formula && formula.outputUnit) || "无");
       if (formula) {
         Object.keys(formula.bindings || {}).forEach(function (alias) {

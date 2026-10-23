@@ -1223,3 +1223,23 @@ FONT-001 与 DOCK-001 不在这一版。发布后取 `releases/latest`：`0.6.2`
 验证：`node --check visualizer-core.js` PASS；`node tests/core-test.js` PASS（含 F-01..06 与界面字符串）；`node tests/icon-slot-test.js` PASS。Chrome headless 导入 `TESTDATA_exp_25C.csv`，提交 `T2 - T1`，簇名为计算结果，y 为 `0.1/0.1/0.2/0.1`，Raw 未改，取消不写入，勾选与 Inspector 分离。1920×1080 与 760×480 下 `scrollWidth` 未超出视口，计算信息与计算结果簇仍在。Cursor 内嵌浏览器访问 localhost 失败（chrome-error）。Edge、真机触控板、系统保存框 NOT RUN。
 
 未做：对齐引擎（V070-B）、MAE/RMSE/Results（V070-C）。
+
+---
+
+## 2026-10-23 V070-B 对齐引擎（未升版本）
+
+在 `0.6.3` / 工程格式 `1.1` 上实现 V070-B。不改 `APP_INFO.version`，不打 tag，不发 Release。基线是 V070-A 的 `06a33e0`。
+
+核心 `alignSeries`：
+
+- 默认参考时间轴是变量 A 的 X；没有 A 时用第一个输入。输出 X 用参考序列，不改原始数组。
+- 线性插值是默认。Exact 只保留相同时间戳。Nearest 必须给出非负容差，等距取较早的点。
+- Δt 加在待对齐序列上。正号使该序列向后移。只保留重叠区间，线性模式不外推。
+- 时间单位支持 s、ms、min、h，先换到参考单位再平移。温度只在 °C 与 K 之间换算。两边都标了单位且对不上时拒绝，不暗中换算。
+- 重复时间戳、非严格递增、时间轴 NaN/Inf 直接报错。Y 的 NaN/Inf 排除并计数。默认缺口阈值是正间隔中位数的 5 倍；跨过更大的间隔就排除，全部落在缺口里则报错。
+- 返回对齐后的向量、有效掩码、排除数量和原因。公式列走这个接口。按行号相减不会发生。
+- 对齐参数写在公式的 `alignment` 里，随工程保存。旧工程仍是 `1.1`。缺省容差可以打开。已经存成 exact 的旧公式保持 exact。
+
+界面只改了两处说明：公式编辑器不再写「不同采样会拒绝」；计算信息里显示对齐方式和 Δt。没有做 Results，也没有重做工作台。
+
+验证：`node --check visualizer-core.js` PASS；`node tests/core-test.js` PASS。固定夹具 A=(0,10),(1,12),(2,14),(3,16)，B=(0,11),(2,15),(4,19)。线性对齐后 B 为 11,13,15,17，误差为 1,1,1,1。比较用 atol = 1e-9、rtol = 1e-9。另有 Δt=±9.081 无重叠、Δt=±1 的方向、Exact、Nearest 容差 0.4 和 1、窗口、缺口、单位、工程往返。Edge、真机触控板、系统保存框 NOT RUN。MAE/RMSE/Results 仍是 V070-C，本轮未做。
