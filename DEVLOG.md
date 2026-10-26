@@ -1314,4 +1314,19 @@ Edge 未安装，`playwright install msedge` 需要 sudo，file:// 记 NOT RUN�
 
 明确不包含 FONT-001、DOCK-001。仓库没有 LICENSE 文件，不为第三方素材赋许可。
 
+---
+
+## 2026-10-26 发布 v0.7.0
+
+- 软件版本：`0.7.0`
+- 工程格式：`projectFormatVersion: "1.1"`
+- 分支：`feat/v0.1.0`
+- 提交：`4ddb54c0db05443c0813480135727964706dd268`
+- tag：`v0.7.0` 指向该提交（annotated tag 对象 `f76141e8b1df81275be9db74069b010a3dd1404e`）
+- 页面：https://github.com/aidisen975-cmd/Visualizer/releases/tag/v0.7.0
+
+正式版，不是 Draft，也不是 Pre-release。附件 `Visualizer-v0.7.0.zip`（html + `visualizer-core.js` + `README.md`，三个文件在压缩包根目录）。SHA256 `901813d02157d94a067c3197d85ef19c0bf23196127ead414745c759e80e0d27`。从 GitHub 重新下载后哈希一致。
+
+FONT-001 与 DOCK-001 不在这一版。发布后取 `releases/latest`：`0.6.3` 判断为发现新版本 `0.7.0` 且带 zip 下载地址；本地 `0.7.0` 判断为当前已是最新。Edge、真机触控板、系统保存框、Windows NOT RUN。
+
 验证：`node --check visualizer-core.js` PASS；`node tests/core-test.js` PASS（`APP_INFO.version` 为 `0.7.0`，工程格式 `1.1`）；`node tests/icon-slot-test.js` PASS。普通 Chrome 无 `--allow-file-access-from-files` 打开工作树与 ZIP 解压 HTML。Playwright Chrome headless `file://` 同样未加该旗标：导入 spec070-A/B、公式 B−A 得 1,1,1,1、MAE=RMSE=MaxAE=Bias=1 N=4、CSV/SVG/PNG、1.0 工程打开后工作副本 1.1、工程文本重开。ZIP 三个文件在压缩包根目录。Edge、真机触控板、系统保存框、Windows NOT RUN。760×480 打开 Dock 时 Results 底边重叠约 20 px。
