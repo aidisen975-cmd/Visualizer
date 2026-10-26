@@ -988,6 +988,7 @@
       z-index: 42;
       width: min(92vw, 420px);
       max-height: min(72vh, 680px);
+      container-type: inline-size;
       display: flex;
       flex-direction: column;
       background: var(--frame);
@@ -1040,6 +1041,9 @@
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 8px 10px;
       margin: 0 0 8px;
+    }
+    @container (max-width: 280px) {
+      .tv-metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
     .tv-metric {
       min-width: 0;
@@ -2410,7 +2414,7 @@
     var formulaDraft = null;
     var analysisDraft = null;
     var activeAnalysisId = "";
-    var resultsPrefs = { open: false, collapsed: false, x: 24, y: 72 };
+    var resultsPrefs = { open: false, collapsed: false, x: 300, y: 148 };
     try {
       var storedResults = JSON.parse(localStorage.getItem("visualizer.workspace.results") || "");
       if (storedResults && typeof storedResults === "object") {
@@ -4231,11 +4235,42 @@
 
     function placeResultsDock() {
       if (!resultsDock) return;
-      resultsDock.style.left = Math.round(resultsPrefs.x) + "px";
-      resultsDock.style.top = Math.round(resultsPrefs.y) + "px";
       resultsDock.hidden = !resultsPrefs.open;
       resultsDock.classList.toggle("is-collapsed", !!resultsPrefs.collapsed);
       document.getElementById("tvResultsCollapse").textContent = resultsPrefs.collapsed ? "展开" : "收起";
+      if (!resultsPrefs.open) return;
+      var margin = 12;
+      var leftRail = document.getElementById("tvLeftPanel");
+      var rightRail = document.getElementById("tvRightPanel");
+      var leftBox = leftRail ? leftRail.getBoundingClientRect() : null;
+      var rightBox = rightRail ? rightRail.getBoundingClientRect() : null;
+      var leftEdge = leftBox && leftBox.width > 40 ? leftBox.right : margin;
+      var rightEdge = rightBox && rightBox.width > 40 ? rightBox.left : window.innerWidth - margin;
+      var lane = Math.max(0, rightEdge - leftEdge);
+      var x = Number(resultsPrefs.x);
+      if (!Number.isFinite(x)) x = leftEdge + 8;
+      if (x < leftEdge + 8) x = leftEdge + 8;
+      var room = rightEdge - x - 8;
+      var width = Math.min(420, window.innerWidth - margin * 2);
+      if (room >= 200) width = Math.min(width, room);
+      else {
+        x = leftEdge + 8;
+        width = Math.min(width, Math.max(180, rightEdge - x - 8));
+      }
+      if (width < 180) width = Math.min(420, window.innerWidth - margin * 2);
+      resultsDock.style.width = Math.round(width) + "px";
+      var y = Number(resultsPrefs.y);
+      if (!Number.isFinite(y)) y = 148;
+      var bottomGap = 88;
+      resultsDock.style.maxHeight = Math.max(180, window.innerHeight - Math.max(y, margin) - bottomGap) + "px";
+      var height = resultsDock.offsetHeight || 240;
+      var maxX = Math.max(margin, window.innerWidth - width - margin);
+      x = Math.min(Math.max(margin, x), maxX);
+      var maxY = Math.max(margin, window.innerHeight - height - bottomGap);
+      y = Math.min(Math.max(margin, y), maxY);
+      resultsDock.style.left = Math.round(x) + "px";
+      resultsDock.style.top = Math.round(y) + "px";
+      resultsDock.style.maxHeight = Math.max(180, window.innerHeight - y - bottomGap) + "px";
     }
 
     function formatMetricDisplay(value) {
@@ -9330,13 +9365,11 @@
         var nested = objectFocus === "annotation" || objectFocus === "inset" || objectFocus === "source-box" || objectFocus === "connector" || objectFocus === "detail";
         if (!nested) {
           inspectorKind = "normal";
+          if (selectedInstanceIds.length) renderInstanceFocus();
+          else renderCanvasFocus();
           var canvasCalc = buildCalcInfoSection();
-          if (canvasCalc) {
-            propsPanel.appendChild(canvasCalc.wrap);
-            return;
-          }
-          if (selectedInstanceIds.length) return renderInstanceFocus();
-          return renderCanvasFocus();
+          if (canvasCalc) propsPanel.appendChild(canvasCalc.wrap);
+          return;
         }
       }
       var plot = selectedPlot();
@@ -11336,6 +11369,7 @@
       writeResultsPrefs();
       placeResultsDock();
     });
+    window.addEventListener("resize", function () { placeResultsDock(); });
     document.getElementById("tvResultsCollapse").addEventListener("click", function () {
       resultsPrefs.collapsed = !resultsPrefs.collapsed;
       writeResultsPrefs();

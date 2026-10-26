@@ -339,7 +339,7 @@ assert(legend.columns >= 2, "大量图例自动多列");
 assert(legend.placed.length >= 20, "多列后尽量保留图例项");
 
 var v021 = core.parseProject(core.serializeProject(elecProject));
-assert(v021.softwareVersion === "0.6.3", "新工程写入 0.6.3");
+assert(v021.softwareVersion === "0.7.0", "新工程写入 0.7.0");
 assert(v021.schemaVersion === 2, "新工程写入 schemaVersion 2");
 assert(v021.plots[0].legend.visible === true, "legend 随工程保存");
 assert(v021.ui.leftPanelWidth >= 220, "ui layout 随工程保存");
@@ -473,7 +473,7 @@ var oldMigrated = core.parseProject(readFixture("TESTDATA_v010.tvproj.json"));
 assert(oldMigrated.plots[0].seriesRefs[0].style && oldMigrated.plots[0].seriesRefs[0].style.lineWidth === 1.5, "旧工程补齐 series.style");
 assert(oldMigrated.plots[0].xAxis.time && oldMigrated.plots[0].xAxis.time.displayUnit, "旧工程补齐 per-chart time");
 assert(oldMigrated.plots[0].textStyles && oldMigrated.plots[0].textStyles.title.fontSize === 14, "旧工程补齐 textStyles");
-assert(oldMigrated.softwareVersion === "0.6.3", "打开后 working copy 版本为 0.6.3，源文件未改");
+assert(oldMigrated.softwareVersion === "0.7.0", "打开后 working copy 版本为 0.7.0，源文件未改");
 assert(oldMigrated.plots[0].type === "normal" && oldMigrated.plots[0].topEdge.showLine === false, "旧工程补上普通图和默认关闭的上边轴");
 assert(oldMigrated.plots[0].xAxis.showLine === true && oldMigrated.plots[0].xAxis.showTickLabels === true && oldMigrated.plots[0].xAxis.tickDirection === "out", "旧工程底轴默认轴线、刻度标签和向外刻度");
 assert(oldMigrated.plots[0].showTitle === true && oldMigrated.plots[0].title !== "未命名图", "旧工程有标题时显示标题，不回写成未命名图");
@@ -583,7 +583,7 @@ assert(huge.grown, "文字过大时允许增大 Figure");
 assert(huge.plotArea.width >= core.FIGURE_LAYOUT.minPlotWidth, "Plot Area 不低于最小宽度");
 assert(huge.plotArea.height >= core.FIGURE_LAYOUT.minPlotHeight, "Plot Area 不低于最小高度");
 
-assert(core.APP_INFO.version === "0.6.3", "APP version 为 0.6.3");
+assert(core.APP_INFO.version === "0.7.0", "APP version 为 0.7.0");
 assert(core.SOFTWARE_VERSION === core.APP_INFO.version, "SOFTWARE_VERSION 与 APP_INFO.version 相同");
 assert(core.PROJECT_FORMAT_VERSION === "1.1", "工程格式为 1.1");
 assert(core.APP_INFO.version !== core.PROJECT_FORMAT_VERSION, "软件版本与工程格式分离");
@@ -1677,9 +1677,9 @@ var updateChecks = [
   assert(afterDelete.formulaId, "Invalid 后仍保留公式 ID，不改绑同名列");
 }());
 
-// V070-B: Alignment Engine. Fixed SPEC-070 fixture. atol = 1e-9, rtol = 1e-9. APP 0.6.3, project format 1.1.
+// V070-B: Alignment Engine. Fixed SPEC-070 fixture. atol = 1e-9, rtol = 1e-9. APP 0.7.0, project format 1.1.
 (function () {
-  assert(core.APP_INFO.version === "0.6.3", "对齐测试时软件版本仍是 0.6.3");
+  assert(core.APP_INFO.version === "0.7.0", "对齐测试时软件版本为 0.7.0");
   assert(core.PROJECT_FORMAT_VERSION === "1.1", "对齐测试不升工程格式");
   var ATOL = 1e-9;
   var RTOL = 1e-9;
@@ -1831,9 +1831,9 @@ var updateChecks = [
   assert(filled.rangeMin === 5 && filled.rangeMax === 6, "再次读取才拿到当前可视 X");
 }());
 
-// V070-C: MAE/RMSE/MaxAE/Bias + AnalysisRecord. Shares alignSeries. APP 0.6.3, project format 1.1.
+// V070-C: MAE/RMSE/MaxAE/Bias + AnalysisRecord. Shares alignSeries. APP 0.7.0, project format 1.1.
 (function () {
-  assert(core.APP_INFO.version === "0.6.3", "误差测试时软件版本仍是 0.6.3");
+  assert(core.APP_INFO.version === "0.7.0", "误差测试时软件版本为 0.7.0");
   assert(core.PROJECT_FORMAT_VERSION === "1.1", "误差测试不升工程格式");
   var ATOL = 1e-9;
   var RTOL = 1e-9;

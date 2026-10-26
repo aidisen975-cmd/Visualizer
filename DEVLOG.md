@@ -1262,3 +1262,56 @@ FONT-001 与 DOCK-001 不在这一版。发布后取 `releases/latest`：`0.6.2`
 - 独立浮动 Results 工具窗口，不进 Plot/Canvas 图层，也不进图窗 Dock。可开关、移动、收起；关闭不删记录。指标卡、重命名、编辑、重算、复制、摘要 CSV、逐点 CSV。
 
 验证：`node --check visualizer-core.js` PASS；`node tests/core-test.js` PASS（SPEC-070 MAE=RMSE=MaxAE=Bias=1、N=4；e=[1,-2,3] MAE=2、RMSE=sqrt(14/3)、MaxAE=3、Bias=2/3）；`node tests/icon-slot-test.js` PASS。Chrome 8771 导入 `tests/fixtures/spec070-A.csv` 与 `spec070-B.csv`，分析向导选参考 A / 预测 B / 线性插值后计算，Results 显示 MAE/RMSE/MaxAE/Bias=1、N=4。生成误差曲线两次：第一次「未放入当前画布」，第二次定位现有 `Analysis_001_error`，画布实例仍为 1。工程 `serializeProject` / `openProjectText` 往返恢复指标。公式编辑器最近邻显示容差。图层只有图窗 1 主图实例。SVG 不含 MAE。Inspector、图窗 Dock、模板菜单、PNG/SVG 按钮仍在。Edge、真机触控板、系统保存框 NOT RUN。V070-D 未做。
+
+---
+
+## 2026-10-23 V070-D 发布候选验收（未升版本、未发版）
+
+在 `0.6.3` / 工程格式 `1.1` 上做 V070-D。不改 `APP_INFO.version`，不打 tag，不发 Release。起点是 V070-C 的 `389da68b3be1141e268dd7ce3061b5a13ae8af6f`。本轮没有新的 Git 提交。验收时工作区里只有 `temperature_trajectory_visualizer.html` 的未提交修复（+43 / −9）。
+
+修复只针对验收里碰到的两处：
+
+- 画布模式下选中计算系列时，属性栏先画画布设置，再追加计算信息。原先会整栏换成计算卡片。
+- Results 默认不再压在左侧数据栏上。窗口落在左右栏之间的空隙里，底部留出 Dock 高度，窄宽度下指标改成两列。拖动位置仍由原来的偏好保存。
+
+Chrome 155.0.8059.85、headless、`file://` 打开与 `visualizer-core.js` 同目录的 HTML。非 file/data/blob 请求会被中止，启动时没有这类请求。固定夹具线性对齐后误差为 1,1,1,1，MAE=RMSE=MaxAE=Bias=1，N=4。Δt=+9.081 预览为无重叠且取消后不写入。误差曲线点两次，第二次复用，不进画布。摘要 CSV 与逐点 CSV 由浏览器下载得到，PNG 为 2720×1760，SVG 与预览相同且不含 Results。新工程字节往返恢复 y=1,1,1,1 与 MAE=1。1.0 工程打开后工作副本为 1.1。删除来源先取消再确认，失效分析不能导出。重复时间戳在分析预览里报错。温度数据回归了多选、新图窗不自动入画布、实例上移、模板不含数据、局部视图和读数游标。
+
+10 万点：Node 五条链路 214 ms，MAE=1，N=100000，对齐 100000，JSON/CSV 约 9.25 倍，RSS 约 352 MB。Chrome 导入 62 ms，公式界面 230 ms，随后页内再跑公式、对齐、分析和误差曲线共 81 ms，打开 Results 7 ms。上限分别是 20000 / 20000 / 20000 / 3000 ms。页内后三条不是再走一遍公式对话框。
+
+Edge 未安装，`playwright install msedge` 需要 sudo，file:// 记 NOT RUN，不用 localhost 代替。系统保存框、系统打开框、真机触控板、Windows 也是 NOT RUN。标注新建、复制图窗、检查更新、多条分析记录本轮没有单独点过。1920 的 Results 不压数据栏、属性栏和 Dock。760 的 Results 宽 180、高 244，指标两列可读，打开的 Dock 贴着卡片下沿，操作按钮在卡片内部滚动。
+
+`node tests/core-test.js` 与 `node tests/icon-slot-test.js` PASS。标识 `EXEC_V070-D_20261023T142348_CURSOR_389da68`。Task 保持 WIP，Done 未勾。等用户确认后才提交这处修复、打 v0.7.0 tag 或发 Release。
+
+---
+
+## 2026-10-26 V070-D 发布闸门补项（仍未升版本、未发版）
+
+继续 V070-D，不重做 A/B/C，不重跑 10-23 已通过的全量矩阵。HEAD 仍是 `389da68`。`APP_INFO.version` 仍是 `0.6.3`。两项 HTML 修复仍未提交。本轮没有新的 Git 提交，无关未提交文件保留。
+
+普通 Chrome 155（pid 81645，无 `--allow-file-access-from-files`）用 `open -a "Google Chrome"` 打开 `file:///Users/elssssa/Visualizer/temperature_trajectory_visualizer.html`，窗口标题为 `未命名工程.json · Visualizer`。同一 Chrome 下 `showSaveFilePicker` 在 Playwright 探测中为 function。完整点击导入到导出没有在该已打开窗口里做完：Computer Use 缺 Screen Recording；System Events 读不到 Chrome window 1。
+
+无 `--allow-file-access-from-files` 的 Playwright `channel: "chrome"` headless file:// 补测：导入 spec070-A/B、公式 B-A 得 1,1,1,1、分析 MAE=RMSE=MaxAE=Bias=1 N=4、两条 Results、复制图窗得到「图窗 1 副本」、数据点标注 coordinateMode=data、摘要 CSV、SVG 不含 MAE、工程文本重开、检查更新为 up-to-date v0.6.3。画布属性栏同时保留画布设置和计算信息。1920 Results 在 x=300 宽 420，与左右栏和 Dock 重叠面积 0。760 Results 宽 180、指标两列，卡片内部 overflow:auto，滚动后「删除」可见；展开 Dock 与 Results 底边重叠约 20 px。
+
+10 万点口径：Node 五链路仍是 `visualizer-core.js` API（本轮 145 ms，MAE=1，N=100000）。10-23 Chrome 导入和公式对话框是真实 UI；同一页里后三条公式/对齐/分析/误差曲线是 `VisualizerCore` 直接调用，不是再走一遍对话框；随后 `Results` 按钮是真实点击。本轮未重跑 10 万点 Chrome UI。
+
+系统保存框：headed Playwright 点「另存为」后 osascript 18 s 未见到 sheet，记 NOT RUN。10-23 的 `~/Downloads/测试工程.json` 不是本轮证据。Edge、真机触控板、Windows 仍 NOT RUN。未打 tag，未发 Release。标识 `EXEC_V070-D_20261026T103519_CURSOR_389da68`。Notion MCP 本会话不可用，报告在 `tmp/notion-handoff/`。
+
+---
+
+## v0.7.0
+
+软件版本改为 `0.7.0`。`projectFormatVersion` 仍是 `1.1`，仍可读 `1.0`。没有为发版升级工程格式。
+
+把 V070-A/B/C 已提交的公式列、跨来源对齐、MAE/RMSE 与 Results，以及 V070-D 两项已验证 UI 修复一起发出去：
+
+- 派生 Series / 公式列：受限数学表达式、计算结果虚拟数据簇、Inspector 编辑。原始 CSV 不变。
+- 跨来源时间轴对齐：默认参考 X 线性插值，支持 Exact / Nearest、正负时间偏移、有效重叠区间、时间与温度单位、非法数据及大时间缺口处理。
+- MAE / RMSE / MaxAE / Bias / N：原始数据与预测数据可来自不同 CSV，不按行号误匹配。
+- 独立 Results 浮动窗口：多条分析、摘要及逐点 CSV。误差曲线只在用户明确创建时生成。
+- 公式定义、对齐参数、分析记录随工程保存。
+- 画布模式选中派生数据时，属性栏同时保留画布设置和计算信息。
+- Results 默认落在左右栏之间，窄屏指标改两列。
+
+明确不包含 FONT-001、DOCK-001。仓库没有 LICENSE 文件，不为第三方素材赋许可。
+
+验证：`node --check visualizer-core.js` PASS；`node tests/core-test.js` PASS（`APP_INFO.version` 为 `0.7.0`，工程格式 `1.1`）；`node tests/icon-slot-test.js` PASS。普通 Chrome 无 `--allow-file-access-from-files` 打开工作树与 ZIP 解压 HTML。Playwright Chrome headless `file://` 同样未加该旗标：导入 spec070-A/B、公式 B−A 得 1,1,1,1、MAE=RMSE=MaxAE=Bias=1 N=4、CSV/SVG/PNG、1.0 工程打开后工作副本 1.1、工程文本重开。ZIP 三个文件在压缩包根目录。Edge、真机触控板、系统保存框、Windows NOT RUN。760×480 打开 Dock 时 Results 底边重叠约 20 px。

@@ -8,10 +8,10 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>Visualizer · 0.6.3 更新日志</title>
+<title>Visualizer · 0.7.0 更新日志</title>
 <meta name="author" content="{{作者}}">
-<meta name="description" content="Visualizer 0.6.3 补齐属性栏一级图标，图层能认出是哪张图。">
-<meta name="keywords" content="Visualizer、图标、属性栏、图层、画布">
+<meta name="description" content="Visualizer 0.7.0 加入公式列、跨来源对齐和误差分析。">
+<meta name="keywords" content="Visualizer、公式、对齐、误差、Results">
 <meta name="generator" content="Kami">
 <style>
   /* Regular weight */
@@ -198,33 +198,35 @@
 <div class="header">
   <div class="title-block">
     <div class="eyebrow">更新日志</div>
-    <h1>Visualizer 0.6.3</h1>
-    <div class="subtitle">属性栏一级菜单都有图标，画布图层能认出是哪张图。</div>
+    <h1>Visualizer 0.7.0</h1>
+    <div class="subtitle">用公式生成派生数据，再按时间轴对齐并查看误差。</div>
   </div>
-  <div class="meta">2026-10-19</div>
+  <div class="meta">2026-10-26</div>
 </div>
 
 <h2>新功能</h2>
 <ol class="changes">
-  <li><strong>一级图标</strong>：属性栏一级菜单全部带 28px 图标，补上图标题、背景与尺寸、导出设置。</li>
-  <li><strong>菜单层级</strong>：轴线与刻度作为一级，X Axis 和 Y Axis 收到二级。</li>
-  <li><strong>顶栏按钮</strong>：新建、打开、保存、导入等按钮带上图标。</li>
-  <li><strong>属性与图层</strong>：改成可点的 Tab，图层每一项是独立卡片。</li>
-  <li><strong>画布识别</strong>：点中的图显示真实图名，图层能区分主图、局部图、引导线和标注。</li>
+  <li><strong>公式列</strong>：可用公式从已有曲线生成派生数据，原始表格保持不变。</li>
+  <li><strong>时间对齐</strong>：不同来源的曲线可按时间轴对齐，支持偏移和有效重叠区间。</li>
+  <li><strong>误差指标</strong>：可对参考数据和预测数据计算平均误差、均方根误差和偏差。</li>
+  <li><strong>分析结果</strong>：分析结果放在独立窗口里，可导出摘要和逐点表。</li>
+  <li><strong>随工程保存</strong>：公式、对齐参数和分析记录会随工程一起保存。</li>
 </ol>
 
 <h2>修复</h2>
 <ol class="changes">
-  <li><strong>窄窗口顶栏</strong>：窗口变窄时顶栏收成图标，不把画布挤出屏幕。</li>
+  <li><strong>画布计算信息</strong>：画布里点中派生数据时，右侧同时显示画布设置和计算信息。</li>
+  <li><strong>结果窗口位置</strong>：误差结果窗口默认避开左右侧栏，窄窗口下指标改成两列。</li>
 </ol>
 
-<h2>0.6.2</h2>
+<h2>0.6.3 · 2026-10-19</h2>
 <ol class="changes">
-  <li><strong>数据簇概览</strong>：概览移到数据簇上，显示已选、已加入图窗、点数和单位。</li>
-  <li><strong>系列行更简洁</strong>：每行只剩勾选、颜色、名称和点数，悬停看详情。</li>
-  <li><strong>直接输入缩放</strong>：缩放百分比可以直接填写。</li>
-  <li><strong>簇样式</strong>：改线宽、线型或颜色立即生效，不会把其他项重置。</li>
-  <li><strong>适应窗口</strong>：图居中，四周留边，放大后能平移到每一边。</li>
+  <li><strong>一级图标</strong>：属性栏一级菜单全部带 28px 图标，补上图标题、背景与尺寸、导出设置。</li>
+  <li><strong>菜单层级</strong>：轴线与刻度作为一级，X Axis 和 Y Axis 收到二级。</li>
+  <li><strong>顶栏按钮</strong>：顶部新建、打开、保存、导入等按钮带上图标。</li>
+  <li><strong>属性与图层</strong>：属性和图层改成可点的 Tab，图层每一项是独立卡片。</li>
+  <li><strong>画布识别</strong>：画布里点中的图显示真实图名，图层能区分主图、局部图、引导线和标注。</li>
+  <li><strong>窄窗口顶栏</strong>：窗口变窄时顶栏收成图标，不把画布挤出屏幕。</li>
 </ol>
 
 <div class="changelog-footer">

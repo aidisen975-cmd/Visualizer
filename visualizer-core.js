@@ -4,7 +4,7 @@
 
   var APP_INFO = Object.freeze({
     name: "Visualizer",
-    version: "0.6.3",
+    version: "0.7.0",
     repositoryOwner: "aidisen975-cmd",
     repositoryName: "Visualizer",
     updateChannel: "stable"
