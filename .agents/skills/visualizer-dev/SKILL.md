@@ -1,6 +1,6 @@
 ---
 name: visualizer-dev
-description: 在 Visualizer 实验数据可视化工具仓库中进行开发、修改、调试、重构、配置或代码审查时使用。以本仓库 SOP 为需求基线，约束数据模型、离线交互、工程恢复及导出验收；仅用于本项目。
+description: "在 Visualizer 实验数据可视化工具仓库中进行开发、修改、调试、重构、配置或代码审查时使用。以本仓库 SOP 为需求基线，约束数据模型、离线交互、工程恢复及导出验收；仅用于本项目。正式开发、缺陷修复、回归验证、技术审计或版本发布时，同时按 references 中的 Notion 工作流读取任务并写回执行报告。"
 ---
 
 # Visualizer 项目开发 Skill
@@ -19,6 +19,23 @@ SOP 是 V1 唯一需求基线，本文件提炼约束，不复制或替代详细
 只执行当前授权范围，不因完整阅读 SOP 就启动全部开发。
 
 用户当前明确指令优先。新增需求按 SOP 第 35 节分类为 V1 必须、V1 可选、V1 后延期或 V2；说明所属对象层、工程格式、旧工程兼容性、导出、跨平台和依赖体积的影响。
+
+## Notion 协作
+
+Cursor 与 Codex 共用这一份 Skill，不要另建第二份 `visualizer-dev`。正式功能开发、较大缺陷修复、回归验证、技术审计和版本发布，按 [references/notion-workflow.md](references/notion-workflow.md) 执行。页面地址在 [references/notion-project.json](references/notion-project.json)，执行报告格式在 [references/report-template.md](references/report-template.md)。
+
+简单查询、解释和一次性小修改不强制创建 Notion Task。未确认的讨论不自动变成待执行任务。
+
+开始正式任务时读取当前 Task 和 CURRENT_STATE，并对照本地 Git。完成本地检查后再写回 Execution Report。Notion 不可用时不得声称已同步，交接报告写入仓库 `tmp/notion-handoff/`。
+
+Notion 流程不能放宽既有约束：
+
+- 不因读写 Notion 改业务代码、工程格式或软件版本。
+- 不把 SOP 或需求里的规划写成已实现功能。
+- 未跑的测试写 NOT RUN；已实现但未充分验证写 IMPLEMENTED_UNVERIFIED；失败不得标 PASS。Node 测试通过不能代替浏览器 UI 验证。
+- `DEVLOG.md` 仍只追加。Progress、README 和 `Updates/` 更新介绍的规则不变。Notion 版本说明是额外留档，不替换这些本地文件。
+- 未获当次明确授权时，不提交 Git、不推送、不打 tag、不发布 GitHub Release。
+- 不把访问密钥写入仓库或 Notion。页面以配置中的 URL / ID 定位。
 
 ## 必用技能
 
@@ -45,7 +62,7 @@ SOP 是 V1 唯一需求基线，本文件提炼约束，不复制或替代详细
 
 | 任务 | 技能 | 当前安装位置 |
 | --- | --- | --- |
-| 报错、崩溃、回归、以前是好的、截图对不上 | `hunt`，先于改代码 | `/Users/elssssa/.agents/skills/hunt/SKILL.md` |
+| 报错、崩溃、回归、调试、debug、以前是好的、截图对不上、测试失败、慢、卡顿、性能、优化 | `hunt`，先于改代码，也先于 ECC debug / optimize agent | `/Users/elssssa/.agents/skills/hunt/SKILL.md` |
 | 方案还没定、要不要做、架构选择 | `think` | `/Users/elssssa/.agents/skills/think/SKILL.md` |
 | 看 diff、合并前、发版是否值得、issue / PR | `check`，默认只审查 | `/Users/elssssa/.agents/skills/check/SKILL.md` |
 | 面向使用者的说明、`README.md` 文案、GitHub Release Notes | `write` | `/Users/elssssa/.agents/skills/write/SKILL.md` |
@@ -55,12 +72,14 @@ SOP 是 V1 唯一需求基线，本文件提炼约束，不复制或替代详细
 | 分页文档、幻灯片，以及下面的更新介绍 | `kami` | `/Users/elssssa/.agents/skills/kami/SKILL.md` |
 
 - 用户已经要求实现、继续或按计划做时，直接做，不进入 `think`。
+- 调试或修 bug：先读 `hunt` 并写出根因句，再进入 `tdd-guide` / `tdd-workflow` / `build-error-resolver` / `orch-fix-defect`。不得跳过 hunt 直接写测试或改代码。
+- 优化或性能：先读 `hunt` 的 Performance 规则，量到基线数字后再用 `performance-optimizer`。不得只凭感觉改。
 - 用户只说排查或看看时，`hunt` 只报告，不改文件。
 - `check` 不提交、不推送、不打 tag、不发 Release，除非用户当次明确要求。
 - `write` 只改面向使用者的文字。`DEVLOG.md` 旧章节、SOP 和 progress 里的事实记录不拿去润色。
 - `read` 只用于仓库以外的 URL 或 PDF。
 - 应用本身的 bug 不走 `health`。
-- 上面这些技能与本节冲突时，以本节和 SOP 为准：离线可用、不改实验曲线、`DEVLOG.md` 只追加、块公式用 `\[...\]`、发布顺序以下文为准。
+- 上面这些技能、以及 ECC 的 `tdd-guide` / `build-error-resolver` / `performance-optimizer` / `common-agents` / `common-testing` / `common-performance`，与本节冲突时以本节和 SOP 为准：先 hunt 再修或再优化；离线可用、不改实验曲线、`DEVLOG.md` 只追加、块公式用 `\[...\]`、发布顺序以下文为准。
 
 ## 产品与架构约束
 

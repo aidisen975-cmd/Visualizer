@@ -8,10 +8,10 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>Visualizer · 0.7.0 更新日志</title>
+<title>Visualizer · 0.7.2 更新日志</title>
 <meta name="author" content="{{作者}}">
-<meta name="description" content="Visualizer 0.7.0 加入公式列、跨来源对齐和误差分析。">
-<meta name="keywords" content="Visualizer、公式、对齐、误差、Results">
+<meta name="description" content="Visualizer 0.7.2 让画布上的每张图单独排版，预览和导出带上主图。">
+<meta name="keywords" content="Visualizer、画布、图例、标注、数据片段">
 <meta name="generator" content="Kami">
 <style>
   /* Regular weight */
@@ -198,23 +198,47 @@
 <div class="header">
   <div class="title-block">
     <div class="eyebrow">更新日志</div>
-    <h1>Visualizer 0.7.0</h1>
-    <div class="subtitle">用公式生成派生数据，再按时间轴对齐并查看误差。</div>
+    <h1>Visualizer 0.7.2</h1>
+    <div class="subtitle">画布上的每张图可以单独排，预览和导出带上主图。</div>
   </div>
-  <div class="meta">2026-10-26</div>
+  <div class="meta">2026-11-02</div>
 </div>
 
 <h2>新功能</h2>
+<ol class="changes">
+  <li><strong>画布副本</strong>：同一张图放进多张画布时，图例、标题、刻度和标注属于这份副本，不会改到源图。</li>
+  <li><strong>布局</strong>：布局上方排整张画布，下方把当前图放进指定格子；占住的格子可以换位，不会复制出第二张。</li>
+  <li><strong>拖角</strong>：拖动图窗角时图一起变化。靠近格子边会出现虚线并铺满；宽或高接近另一张图时吸成同宽或同高。</li>
+  <li><strong>图例分行</strong>：图例可以按列数手动分行。长图例用搜索和行标记调整，长名称不再把其他项挤开。</li>
+  <li><strong>刻度与模板</strong>：自动刻度更密，疏密会写进图表模板。保存同名模板时需选择覆盖、另存或取消。</li>
+  <li><strong>标注</strong>：点标注后可以在数据点上加文字。文字框可以拖开，数据点留在原处，悬停能看到读数。</li>
+  <li><strong>片段导出</strong>：创建片段后，底部可以直接导出刚保存的那一段；接着做下一段时，导出仍指向上一段。</li>
+</ol>
+
+<h2>修复</h2>
+<ol class="changes">
+  <li><strong>画布导出</strong>：画布预览、PNG 和 SVG 会带上主图，局部视图和引导线不再把主图弄丢。</li>
+</ol>
+
+<h2>0.7.1 · 2026-10-27</h2>
+<ol class="changes">
+  <li><strong>编码</strong>：导入 CSV 时自动识别 UTF-8 和 GBK/GB18030，中文表头按原文字显示。</li>
+  <li><strong>表头预览</strong>：拿不准编码时会先预览表头，确认后再导入。</li>
+  <li><strong>快捷公式</strong>：可用快捷公式对勾选曲线求总和、平均、最大和最小。</li>
+  <li><strong>计算结果</strong>：序列统计结果写进 Results 窗口；逐点计算结果成为新的派生曲线。</li>
+  <li><strong>数据片段</strong>：可按时间、工步、行号或图上拖选切出数据片段，连续创建不会覆盖上一段，并可导出 CSV。</li>
+  <li><strong>横轴</strong>：每张图可以为每个数据源另选绘图横轴，包括从 0 开始的相对时间，不改原始数据和公式。</li>
+  <li><strong>Windows 字体</strong>：Windows 下中文界面文字改走宋体系统字体回退，不再依赖 Mac 专用字体名。</li>
+  <li><strong>Windows 清晰度</strong>：Windows 下关闭灰阶字体平滑，改用系统默认清晰度。</li>
+</ol>
+
+<h2>0.7.0 · 2026-10-26</h2>
 <ol class="changes">
   <li><strong>公式列</strong>：可用公式从已有曲线生成派生数据，原始表格保持不变。</li>
   <li><strong>时间对齐</strong>：不同来源的曲线可按时间轴对齐，支持偏移和有效重叠区间。</li>
   <li><strong>误差指标</strong>：可对参考数据和预测数据计算平均误差、均方根误差和偏差。</li>
   <li><strong>分析结果</strong>：分析结果放在独立窗口里，可导出摘要和逐点表。</li>
   <li><strong>随工程保存</strong>：公式、对齐参数和分析记录会随工程一起保存。</li>
-</ol>
-
-<h2>修复</h2>
-<ol class="changes">
   <li><strong>画布计算信息</strong>：画布里点中派生数据时，右侧同时显示画布设置和计算信息。</li>
   <li><strong>结果窗口位置</strong>：误差结果窗口默认避开左右侧栏，窄窗口下指标改成两列。</li>
 </ol>

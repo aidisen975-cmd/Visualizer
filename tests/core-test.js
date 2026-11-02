@@ -19,6 +19,9 @@ var fixtures = path.join(__dirname, "fixtures");
 function readFixture(name) {
   return fs.readFileSync(path.join(fixtures, name), "utf8");
 }
+function readFixtureBytes(name) {
+  return fs.readFileSync(path.join(fixtures, name));
+}
 
 var expCsv = readFixture("TESTDATA_exp_25C.csv");
 var simCsv = readFixture("TESTDATA_sim_25C.csv");
@@ -167,6 +170,73 @@ var chineseDs = core.parseDatasetFromCsv(readFixture("TESTDATA_chinese.csv"), {
 });
 assert(chineseDs.xName === "时间" && chineseDs.xUnit === "s", "中文时间列表头解析");
 assert(chineseDs.series[0].name === "入口温度" && chineseDs.series[0].unit === "°C", "中文温度列解析");
+
+(function testCsvEncodingDetection() {
+  var gbkBytes = readFixtureBytes("TESTDATA_gbk_headers.csv");
+  var gb18030Bytes = readFixtureBytes("TESTDATA_gb18030_headers.csv");
+  var bomBytes = readFixtureBytes("TESTDATA_utf8_bom.csv");
+  var utf8Bytes = Buffer.from(readFixture("TESTDATA_chinese.csv"), "utf8");
+  var englishBytes = readFixtureBytes("TESTDATA_english.csv");
+  var complexBytes = readFixtureBytes("TESTDATA_complex_headers.csv");
+
+  var looseUtf8 = new TextDecoder("utf-8", { fatal: false }).decode(gbkBytes);
+  assert((looseUtf8.match(/\uFFFD/g) || []).length > 0, "GBK 直接当 UTF-8 会产生 U+FFFD");
+  assert(looseUtf8.indexOf("入口温度") < 0, "file.text() 等价路径无法恢复中文表头");
+
+  var gbk = core.detectCsvEncoding(gbkBytes);
+  assert(gbk.needsManualChoice === false, "典型 GBK 中文表头自动识别");
+  assert(gbk.encoding === "gb18030" || gbk.encoding === "gbk", "GBK 识别为 gb18030 或 gbk");
+  assert(gbk.text.indexOf("入口温度") >= 0 && gbk.text.indexOf("\uFFFD") < 0, "GBK 解码恢复中文且不含替换符");
+
+  var gb = core.detectCsvEncoding(gb18030Bytes);
+  assert(gb.needsManualChoice === false && gb.text.indexOf("出口温度") >= 0, "GB18030 中文表头自动识别");
+
+  var bom = core.detectCsvEncoding(bomBytes);
+  assert(bom.bom === "utf-8" && bom.encoding === "utf-8" && bom.needsManualChoice === false, "UTF-8 BOM 优先识别");
+  assert(bom.text.charCodeAt(0) !== 0xFEFF && bom.text.indexOf("时间") === 0, "UTF-8 BOM 被去掉且表头完整");
+
+  var utf8 = core.detectCsvEncoding(utf8Bytes);
+  assert(utf8.encoding === "utf-8" && utf8.needsManualChoice === false, "无 BOM 的合法 UTF-8 保持 UTF-8");
+  assert(utf8.text.indexOf("入口温度") >= 0, "UTF-8 中文表头不改走 GB18030");
+
+  var english = core.detectCsvEncoding(englishBytes);
+  assert(english.encoding === "utf-8" && english.needsManualChoice === false, "英文 CSV 按 UTF-8 导入");
+  var englishDs = core.parseDatasetFromCsv(english.text, { id: "ds-en", name: "en.csv" });
+  assert(englishDs.series[0].name === "Voltage" && englishDs.series[0].unit === "V", "英文表头与单位保留");
+
+  var complex = core.detectCsvEncoding(complexBytes);
+  assert(complex.encoding === "utf-8" && complex.needsManualChoice === false, "复杂中文标点表头按 UTF-8");
+  var complexDs = core.parseDatasetFromCsv(complex.text, { id: "ds-cx", name: "cx.csv" });
+  assert(complexDs.xName === "时间" && complexDs.xUnit === "s", "复杂表头时间列");
+  assert(complexDs.series[0].name === "电压（峰值）" && complexDs.series[0].unit === "V", "中文括号单位");
+  assert(complexDs.series[1].name === "电流、功率" && complexDs.series[1].unit === "W", "顿号与斜杠单位");
+
+  var gbkDs = core.parseDatasetFromCsvBytes(gbkBytes, { id: "ds-gbk", name: "gbk.csv" });
+  assert(gbkDs.sourceEncoding === "gb18030" || gbkDs.sourceEncoding === "gbk", "Dataset 记录来源编码");
+  assert(gbkDs.headers[0] === "时间[s]" && gbkDs.series[0].originalHeader.indexOf("入口温度") >= 0, "GBK 原始列名完整");
+  assert(gbkDs.series[0].unit === "°C", "GBK 单位保留");
+  assert(gbkDs.series[1].y[1] === 21.5, "数值精度不被编码转换改写");
+
+  var forced = core.decodeCsvBytes(gbkBytes, "gb18030");
+  assert(forced.encoding === "gb18030" && forced.text.indexOf("入口温度") >= 0, "允许手动指定 GB18030");
+
+  var fffdRejected = false;
+  try {
+    core.decodeCsvBytes(Buffer.from("time,value\n0,\uFFFD\n", "utf8"), "utf-8");
+  } catch (error) {
+    fffdRejected = /替换/.test(error.message);
+  }
+  assert(fffdRejected, "含 U+FFFD 的解码结果不得作为 CSV 文本提交");
+  var decodedUtf8 = core.decodeCsvBytes(utf8Bytes, "utf-8");
+  assert(decodedUtf8.text.indexOf("\uFFFD") < 0, "接受的解码不含 U+FFFD");
+
+  var junk = core.detectCsvEncoding(Buffer.from([0x00, 0x01, 0x02, 0xff, 0xfe, 0x80, 0x81, 0x82]));
+  assert(junk.needsManualChoice === true && !junk.text, "低置信度不提交文本");
+  assert(Array.isArray(junk.candidates) && junk.candidates.length >= 2, "低置信度提供候选预览");
+
+  var textSubmitBlocked = junk.needsManualChoice && !junk.text;
+  assert(textSubmitBlocked, "未经正确解码不得得到可提交文本");
+}());
 
 var mixedDs = core.parseDatasetFromCsv(readFixture("TESTDATA_mixed_units.csv"), {
   id: "ds-mixed",
@@ -339,7 +409,7 @@ assert(legend.columns >= 2, "大量图例自动多列");
 assert(legend.placed.length >= 20, "多列后尽量保留图例项");
 
 var v021 = core.parseProject(core.serializeProject(elecProject));
-assert(v021.softwareVersion === "0.7.0", "新工程写入 0.7.0");
+assert(v021.softwareVersion === "0.7.2", "新工程写入 0.7.2");
 assert(v021.schemaVersion === 2, "新工程写入 schemaVersion 2");
 assert(v021.plots[0].legend.visible === true, "legend 随工程保存");
 assert(v021.ui.leftPanelWidth >= 220, "ui layout 随工程保存");
@@ -473,7 +543,7 @@ var oldMigrated = core.parseProject(readFixture("TESTDATA_v010.tvproj.json"));
 assert(oldMigrated.plots[0].seriesRefs[0].style && oldMigrated.plots[0].seriesRefs[0].style.lineWidth === 1.5, "旧工程补齐 series.style");
 assert(oldMigrated.plots[0].xAxis.time && oldMigrated.plots[0].xAxis.time.displayUnit, "旧工程补齐 per-chart time");
 assert(oldMigrated.plots[0].textStyles && oldMigrated.plots[0].textStyles.title.fontSize === 14, "旧工程补齐 textStyles");
-assert(oldMigrated.softwareVersion === "0.7.0", "打开后 working copy 版本为 0.7.0，源文件未改");
+assert(oldMigrated.softwareVersion === "0.7.2", "打开后 working copy 版本为 0.7.2，源文件未改");
 assert(oldMigrated.plots[0].type === "normal" && oldMigrated.plots[0].topEdge.showLine === false, "旧工程补上普通图和默认关闭的上边轴");
 assert(oldMigrated.plots[0].xAxis.showLine === true && oldMigrated.plots[0].xAxis.showTickLabels === true && oldMigrated.plots[0].xAxis.tickDirection === "out", "旧工程底轴默认轴线、刻度标签和向外刻度");
 assert(oldMigrated.plots[0].showTitle === true && oldMigrated.plots[0].title !== "未命名图", "旧工程有标题时显示标题，不回写成未命名图");
@@ -583,7 +653,7 @@ assert(huge.grown, "文字过大时允许增大 Figure");
 assert(huge.plotArea.width >= core.FIGURE_LAYOUT.minPlotWidth, "Plot Area 不低于最小宽度");
 assert(huge.plotArea.height >= core.FIGURE_LAYOUT.minPlotHeight, "Plot Area 不低于最小高度");
 
-assert(core.APP_INFO.version === "0.7.0", "APP version 为 0.7.0");
+assert(core.APP_INFO.version === "0.7.2", "APP version 为 0.7.2");
 assert(core.SOFTWARE_VERSION === core.APP_INFO.version, "SOFTWARE_VERSION 与 APP_INFO.version 相同");
 assert(core.PROJECT_FORMAT_VERSION === "1.1", "工程格式为 1.1");
 assert(core.APP_INFO.version !== core.PROJECT_FORMAT_VERSION, "软件版本与工程格式分离");
@@ -813,6 +883,22 @@ assert(inspectBack.plots[0].xAxis.mode === "manual" && inspectBack.plots[0].xAxi
 assert(inspectBack.plots[0].exportCursors === false, "游标默认不导出");
 var yFit = core.insetYExtent(inspectProject, inspectPlot, inspectPlot.insets[0]);
 assert(yFit[0] < yFit[1], "Inset 自动 Y 有有效范围");
+var t1 = inspectDs.series[0];
+var readoutFrame = core.createPlotFrame(
+  [t1.x[0], t1.x[t1.x.length - 1]],
+  [Math.min.apply(null, t1.y) - 1, Math.max.apply(null, t1.y) + 1],
+  { x: 40, y: 20, width: 400, height: 200 }
+);
+var nearHit = core.pickReadoutCandidate(
+  inspectProject,
+  inspectPlot,
+  readoutFrame,
+  readoutFrame.dataToPixelX(t1.x[0]),
+  readoutFrame.dataToPixelY(t1.y[0]),
+  18
+);
+assert(nearHit && nearHit.nearestSeriesId && nearHit.y != null, "G-FIX03 靠近曲线给出读数候选");
+assert(!core.pickReadoutCandidate(inspectProject, inspectPlot, readoutFrame, 8, 8, 18), "G-FIX03 远离曲线不给出候选");
 
 var history = core.createHistory(2);
 var historyValue = 0;
@@ -1099,6 +1185,29 @@ var savedPoint = annBack.plots[0].annotations[0];
 var savedFree = annBack.plots[0].annotations[1];
 assert(savedPoint.type === "point" && savedPoint.seriesId === styleDs.series[0].id && savedPoint.anchor.x === 10 && savedPoint.anchor.y === 4, "数据点标注保存 seriesId 和数据坐标");
 assert(savedFree.coordinateMode === "plot" && savedFree.anchor.x === 0.2, "自由文本保存图内归一化坐标");
+var offsetAnn = core.normalizeAnnotation({
+  type: "point",
+  coordinateMode: "data",
+  seriesId: styleDs.series[0].id,
+  anchor: { x: 10, y: 4 },
+  end: { x: 12, y: 8 },
+  labelOffset: { x: 0.08, y: -0.12 },
+  text: "T45"
+}, stylePlot.id);
+assert(offsetAnn.labelOffset.x === 0.08 && offsetAnn.labelOffset.y === -0.12, "标注保存独立标签偏移");
+core.setAnnotationLabelOffset(offsetAnn, 40, -24, { width: 400, height: 300 });
+assert(Math.abs(offsetAnn.labelOffset.x - 0.1) < 1e-9 && Math.abs(offsetAnn.labelOffset.y + 0.08) < 1e-9, "拖动标签只改偏移不改锚点");
+assert(offsetAnn.anchor.x === 10 && offsetAnn.anchor.y === 4, "拖动标签不改数据锚点");
+var labelPx = core.annotationLabelPoint(offsetAnn, { x: 100, y: 200 }, { width: 400, height: 300 });
+assert(Math.abs(labelPx.x - 140) < 1e-6 && Math.abs(labelPx.y - 176) < 1e-6, "标签位置由锚点加偏移得到");
+var oldPoint = core.normalizeAnnotation({
+  type: "point",
+  coordinateMode: "data",
+  anchor: { x: 1, y: 2 },
+  end: { x: 3, y: 4 },
+  text: "旧"
+}, stylePlot.id);
+assert(oldPoint.labelOffset == null && oldPoint.end.x === 3, "旧工程无 labelOffset 仍可读 end");
 assert(!JSON.parse(core.serializeProject(styleProject)).plots[0].readoutCursor, "游标不写入工程");
 
 var page = fs.readFileSync(path.join(__dirname, "../temperature_trajectory_visualizer.html"), "utf8");
@@ -1118,6 +1227,8 @@ assert(page.indexOf('section("画布 ') >= 0, "右侧有画布尺寸");
 assert(page.indexOf("tv-snap-pop") >= 0, "Figure 有 Snap Layout");
 assert(page.indexOf("visualizer.templates.figure.v1") >= 0 || page.indexOf("TEMPLATE_STORAGE_KEY") >= 0, "模板库使用约定的存储键");
 assert(page.indexOf("reorderPlotLayers") >= 0 && page.indexOf("applyFigureTemplate") >= 0, "图层排序和模板应用走核心函数");
+assert(page.indexOf("pickReadoutCandidate") >= 0 && page.indexOf("tv-ann-hit") >= 0 && page.indexOf("tv-ann-preview") >= 0 && page.indexOf("dragAnnotationLabel") >= 0, "G-FIX03 标注悬停预览与标签命中层");
+assert(page.indexOf("同宽") >= 0 && page.indexOf("disableSnap") >= 0 && page.indexOf("sizeMatches") >= 0, "C-FIX03 等宽等高吸附与 Alt 绕过");
 
 var objectProject = core.createProject({ projectName: "v0.5 objects" });
 var objectMain = core.createPlot(objectProject, {
@@ -1303,7 +1414,8 @@ var secondWindow = core.createPlot(workspaceProject, { name: "图窗 2", title: 
 assert(!workspaceProject.canvases[0].instances.some(function (item) { return item.plotId === secondWindow.id; }), "新建图窗不自动进入画布");
 var placed = core.createInstance(workspaceProject, workspaceProject.canvases[0].id, secondWindow.id, { x: 80, y: 90, width: 400, height: 280 });
 assert(placed.x === 80 && placed.width === 400, "实例保存自己的位置和尺寸");
-assert(core.createInstance(workspaceProject, workspaceProject.canvases[0].id, secondWindow.id) === placed, "同一画布不重复放置同一图窗");
+var placedAgainSame = core.createInstance(workspaceProject, workspaceProject.canvases[0].id, secondWindow.id, { x: 90, y: 100 });
+assert(placedAgainSame.id !== placed.id && placedAgainSame.plotId === secondWindow.id, "同一源图可在同一画布放多个独立副本");
 var secondCanvas = core.createCanvas(workspaceProject, { name: "画布 2" });
 var placedAgain = core.createInstance(workspaceProject, secondCanvas.id, secondWindow.id, { x: 20, y: 30, width: 500, height: 300 });
 assert(placedAgain.id !== placed.id && placedAgain.plotId === secondWindow.id, "同一图窗可被另一张画布引用");
@@ -1311,6 +1423,7 @@ var blocked = core.deletePlotWindow(workspaceProject, secondWindow.id, false);
 assert(blocked.ok === false && blocked.canvases.length === 2, "删除被引用图窗时返回画布名称且不删除");
 assert(core.findPlot(workspaceProject, secondWindow.id), "未确认时图窗仍在");
 core.removeInstance(workspaceProject, workspaceProject.canvases[0].id, placed.id);
+core.removeInstance(workspaceProject, workspaceProject.canvases[0].id, placedAgainSame.id);
 assert(core.plotWindowUsage(workspaceProject, secondWindow.id).length === 1, "移除实例不删除图窗资产");
 var copied = core.duplicatePlotWindow(workspaceProject, workspaceProject.plots[0].id);
 assert(copied.id !== workspaceProject.plots[0].id, "复制图窗生成新 ID");
@@ -1679,7 +1792,7 @@ var updateChecks = [
 
 // V070-B: Alignment Engine. Fixed SPEC-070 fixture. atol = 1e-9, rtol = 1e-9. APP 0.7.0, project format 1.1.
 (function () {
-  assert(core.APP_INFO.version === "0.7.0", "对齐测试时软件版本为 0.7.0");
+  assert(core.APP_INFO.version === "0.7.2", "对齐测试时软件版本为 0.7.2");
   assert(core.PROJECT_FORMAT_VERSION === "1.1", "对齐测试不升工程格式");
   var ATOL = 1e-9;
   var RTOL = 1e-9;
@@ -1833,7 +1946,7 @@ var updateChecks = [
 
 // V070-C: MAE/RMSE/MaxAE/Bias + AnalysisRecord. Shares alignSeries. APP 0.7.0, project format 1.1.
 (function () {
-  assert(core.APP_INFO.version === "0.7.0", "误差测试时软件版本为 0.7.0");
+  assert(core.APP_INFO.version === "0.7.2", "误差测试时软件版本为 0.7.2");
   assert(core.PROJECT_FORMAT_VERSION === "1.1", "误差测试不升工程格式");
   var ATOL = 1e-9;
   var RTOL = 1e-9;
@@ -1932,6 +2045,919 @@ var updateChecks = [
     plots: []
   }));
   assert((oldOpened.analyses || []).length === 0, "旧工程缺 analyses 可打开");
+}());
+
+(function testQuickFormula() {
+  var p = core.createProject({ projectName: "quick" });
+  core.addDataset(p, core.parseDatasetFromCsv("Time(s),A(°C),B(°C)\n0,1,4\n1,2,5\n2,3,6\n", { id: "ds-q", name: "q", sourceFilename: "q.csv" }));
+  assert(core.quickFormulaExpression("sum", 2) === "sum(A, B)", "SUM 走现有 sum 函数");
+  assert(core.quickFormulaExpression("average", 2) === "average(A, B)", "AVERAGE 走现有 average 函数");
+  assert(core.quickFormulaExpression("max", 3) === "max(A, B, C)", "MAX 复用现有 max");
+  assert(core.quickFormulaExpression("min", 2) === "min(A, B)", "MIN 复用现有 min");
+
+  var sums = core.applyQuickFormula(p, { mode: "stat", op: "sum", seriesIds: ["ds-q::A", "ds-q::B"] });
+  assert(sums.length === 2 && sums[0].kind === "stat" && sums[0].metrics.value === 6 && sums[0].metrics.n === 3, "SUM 序列统计写 Results 标量");
+  assert(sums[1].metrics.value === 15, "第二条独立 SUM");
+  assert(!(p.datasets.filter(function (d) { return d.kind === "computed"; })[0]), "序列统计不创建常数曲线");
+
+  var avg = core.applySeriesStat(p, { seriesId: "ds-q::A", op: "average" });
+  assert(avg.metrics.value === 2, "AVERAGE 序列统计");
+  var mx = core.applySeriesStat(p, { seriesId: "ds-q::A", op: "max" });
+  assert(mx.metrics.value === 3, "MAX 序列统计");
+  var mn = core.applySeriesStat(p, { seriesId: "ds-q::A", op: "min" });
+  assert(mn.metrics.value === 1, "MIN 序列统计");
+
+  var windowed = core.applySeriesStat(p, { seriesId: "ds-q::A", op: "sum", alignment: { rangeMin: 1, rangeMax: 2 } });
+  assert(windowed.metrics.value === 5 && windowed.metrics.n === 2, "时间窗序列统计");
+
+  var emptyThrew = false;
+  try {
+    core.applySeriesStat(p, { seriesId: "ds-q::A", op: "sum", alignment: { rangeMin: 10, rangeMax: 12 } });
+  } catch (error) {
+    emptyThrew = /没有有效样本/.test(error.message);
+  }
+  assert(emptyThrew, "空窗口序列统计不输出伪零");
+
+  var one = core.createProject({ projectName: "one" });
+  core.addDataset(one, core.parseDatasetFromCsv("Time(s),A\n0,1\n5,9\n", { id: "ds-one", name: "one.csv" }));
+  one.datasets[0].series[0].x = [5];
+  one.datasets[0].series[0].y = [9];
+  var single = core.applySeriesStat(one, { seriesId: "ds-one::A", op: "sum" });
+  assert(single.metrics.value === 9 && single.metrics.n === 1, "单点序列统计");
+
+  var derived = core.applyQuickFormula(p, { mode: "pointwise", op: "sum", seriesIds: ["ds-q::A", "ds-q::B"] });
+  assert(derived.kind === "computed" && derived.y[0] === 5 && derived.y[1] === 7 && derived.y[2] === 9, "逐点 SUM 写入计算结果簇");
+  assert(p.datasets.some(function (d) { return d.kind === "computed" && d.series.some(function (s) { return s.id === derived.id; }); }), "派生 Series 在计算结果簇");
+  assert(p.datasets.filter(function (d) { return d.id === "ds-q"; })[0].series.length === 2, "原始 Series 不被覆盖");
+
+  var avgSeries = core.applyQuickFormula(p, { mode: "pointwise", op: "average", seriesIds: ["ds-q::A", "ds-q::B"] });
+  assert(avgSeries.y[0] === 2.5, "逐点 AVERAGE");
+  var maxSeries = core.applyQuickFormula(p, { mode: "pointwise", op: "max", seriesIds: ["ds-q::A", "ds-q::B"] });
+  assert(maxSeries.y[2] === 6, "逐点 MAX");
+
+  var pointwiseOneThrew = false;
+  try { core.applyQuickFormula(p, { mode: "pointwise", op: "sum", seriesIds: ["ds-q::A"] }); }
+  catch (error) { pointwiseOneThrew = /至少需要两条/.test(error.message); }
+  assert(pointwiseOneThrew, "逐点计算拒绝单系列");
+
+  var other = core.createProject({ projectName: "cross" });
+  core.addDataset(other, core.parseDatasetFromCsv("Time(s),A(°C)\n0,1\n1,2\n2,3\n", { id: "ds-a", name: "A", sourceFilename: "a.csv" }));
+  core.addDataset(other, core.parseDatasetFromCsv("Time(s),B(°C)\n0,10\n2,30\n", { id: "ds-b", name: "B", sourceFilename: "b.csv" }));
+  var cross = core.applyQuickFormula(other, { mode: "pointwise", op: "sum", seriesIds: ["ds-a::A", "ds-b::B"] });
+  assert(cross.y.length === 3 && cross.y[1] === 22, "跨 Dataset 逐点 SUM 走现有对齐");
+
+  var unitP = core.createProject({ projectName: "unit" });
+  core.addDataset(unitP, core.parseDatasetFromCsv("Time(s),A(°C)\n0,1\n1,2\n", { id: "ds-u1", name: "u1" }));
+  core.addDataset(unitP, core.parseDatasetFromCsv("Time(s),B(V)\n0,1\n1,2\n", { id: "ds-u2", name: "u2" }));
+  var unitThrew = false;
+  try { core.applyQuickFormula(unitP, { mode: "pointwise", op: "sum", seriesIds: ["ds-u1::A", "ds-u2::B"] }); }
+  catch (error) { unitThrew = /单位不匹配/.test(error.message); }
+  assert(unitThrew, "逐点计算检查物理单位");
+
+  var none = core.createProject({ projectName: "none" });
+  core.addDataset(none, core.parseDatasetFromCsv("Time(s),A\n0,1\n1,2\n", { id: "ds-n1", name: "n1" }));
+  core.addDataset(none, core.parseDatasetFromCsv("Time(s),B\n10,1\n11,2\n", { id: "ds-n2", name: "n2" }));
+  var overlapThrew = false;
+  try { core.applyQuickFormula(none, { mode: "pointwise", op: "sum", seriesIds: ["ds-n1::A", "ds-n2::B"] }); }
+  catch (error) { overlapThrew = /重叠|区间/.test(error.message); }
+  assert(overlapThrew, "无共同时间区间不能静默外插");
+
+  var dirty = core.applySeriesStat(p, { seriesId: "ds-q::A", op: "sum" });
+  p.datasets[0].series[0].y = [10, 20, 30];
+  core.auditAnalyses(p);
+  var after = core.findAnalysis(p, dirty.id);
+  assert(after.status === "dirty", "源数据变化后统计记录变 dirty");
+  var recomputed = core.recomputeAnalysis(p, after);
+  assert(recomputed.metrics.value === 60 && recomputed.status === "ready", "统计记录重算");
+
+  var saved = core.serializeProject(p);
+  var restored = core.parseProject(saved);
+  assert(restored.analyses.some(function (item) { return item.kind === "stat" && item.op === "sum"; }), "工程往返恢复序列统计");
+  assert((restored.formulas || []).length >= 1, "工程往返恢复快捷公式定义");
+}());
+
+(function testQuickFormulaManySeries() {
+  function almost(actual, expected, message) {
+    assert(Number.isFinite(actual) && Math.abs(actual - expected) <= 1e-9, message);
+  }
+  function makeCounted(project, id, count, points, yAt) {
+    var headers = ["Time(s)"];
+    var i;
+    var p;
+    for (i = 0; i < count; i += 1) headers.push("T" + i + "(°C)");
+    var lines = [headers.join(",")];
+    var seedPoints = Math.min(points, 2);
+    for (p = 0; p < seedPoints; p += 1) {
+      var row = [String(p)];
+      for (i = 0; i < count; i += 1) row.push(String(yAt(i, p)));
+      lines.push(row.join(","));
+    }
+    var ds = core.parseDatasetFromCsv(lines.join("\n") + "\n", {
+      id: id,
+      name: id,
+      sourceFilename: id + ".csv"
+    });
+    if (points > seedPoints) {
+      for (i = 0; i < count; i += 1) {
+        var xs = new Array(points);
+        var ys = new Array(points);
+        for (p = 0; p < points; p += 1) {
+          xs[p] = p;
+          ys[p] = yAt(i, p);
+        }
+        ds.series[i].x = xs;
+        ds.series[i].y = ys;
+      }
+    }
+    core.addDataset(project, ds);
+    return ds;
+  }
+  function seriesIds(ds) {
+    return ds.series.map(function (item) { return item.id; });
+  }
+
+  assert(core.excelColumnAlias(0) === "A", "第 1 个别名 A");
+  assert(core.excelColumnAlias(25) === "Z", "第 26 个别名 Z");
+  assert(core.excelColumnAlias(26) === "AA", "26→27 跨界 AA");
+  assert(core.excelColumnAlias(27) === "AB", "第 28 个别名 AB");
+  assert(core.excelColumnAlias(51) === "AZ", "第 52 个别名 AZ");
+  assert(core.excelColumnAlias(52) === "BA", "52→53 跨界 BA");
+  assert(core.excelColumnAlias(56) === "BE", "第 57 个别名 BE");
+
+  var counts = [1, 2, 26, 27, 52, 53, 57, 100, 200];
+  counts.forEach(function (count) {
+    var aliases = core.quickFormulaAliases(count);
+    assert(aliases.length === count, count + " 条别名数量完整，不截断");
+    assert(new Set(aliases).size === count, count + " 条别名唯一");
+    assert(aliases.indexOf("[") < 0 && aliases.every(function (alias) { return /^[A-Z]+$/.test(alias); }), count + " 条别名只含 A-Z");
+    var expr = core.quickFormulaExpression(count === 1 ? "sum" : "average", count);
+    var ast = core.parseFormulaExpression(expr);
+    assert(core.formulaAliases(ast).length === count, count + " 条公式解析出全部变量");
+    ["sum", "average", "max", "min"].forEach(function (op) {
+      core.parseFormulaExpression(core.quickFormulaExpression(op, count));
+    });
+  });
+  assert(core.quickFormulaAliases(27)[25] === "Z" && core.quickFormulaAliases(27)[26] === "AA", "26→27 跨界变量名");
+  assert(core.quickFormulaAliases(53)[51] === "AZ" && core.quickFormulaAliases(53)[52] === "BA", "52→53 跨界变量名");
+  assert(core.parseFormulaExpression("A + B").type === "binary", "旧单字母加法仍可解析");
+  assert(core.parseFormulaExpression("AA + AB").type === "binary", "多字符变量可解析");
+  almost(core.evaluateFormulaAst(core.parseFormulaExpression("average(A, B, C)"), { A: 1, B: 3, C: 5 }), 3, "average 函数数值");
+  almost(core.evaluateFormulaAst(core.parseFormulaExpression("sum(A, B, C)"), { A: 1, B: 3, C: 5 }), 9, "sum 函数数值");
+  almost(core.evaluateFormulaAst(core.parseFormulaExpression("average(A, B, C)"), { A: 1, B: NaN, C: 5 }, "ignore"), 3, "忽略缺失按有效条数平均，不把缺失当 0");
+  assert(!Number.isFinite(core.evaluateFormulaAst(core.parseFormulaExpression("average(A, B, C)"), { A: 1, B: NaN, C: 5 }, "strict")), "严格模式缺一即 NaN");
+
+  var reserved = core.quickFormulaAliases(200);
+  assert(reserved.indexOf("max") < 0 && reserved.indexOf("sum") < 0 && reserved.indexOf("average") < 0 && reserved.indexOf("min") < 0, "变量名不与函数名冲突");
+
+  var missP = core.createProject({ projectName: "miss" });
+  var missDs = makeCounted(missP, "ds-miss", 3, 2, function (s, t) {
+    return (s + 1) * 10 + t;
+  });
+  missDs.series[2].y[0] = NaN;
+  var missIds = seriesIds(missDs);
+  var strictAvg = core.applyQuickFormula(missP, { mode: "pointwise", op: "average", seriesIds: missIds, missingValueMode: "strict" });
+  assert(!Number.isFinite(strictAvg.y[0]), "严格 AVERAGE 缺一时刻为 NaN");
+  almost(strictAvg.y[1], 21, "严格 AVERAGE 完整时刻仍除以 N");
+  var ignoreAvg = core.applyQuickFormula(missP, { mode: "pointwise", op: "average", seriesIds: missIds, missingValueMode: "ignore", name: "T_mean" });
+  almost(ignoreAvg.y[0], 15, "忽略缺失 AVERAGE=(10+20)/2，不是 /3");
+  almost(ignoreAvg.y[1], 21, "忽略缺失完整时刻仍除以 N");
+  assert(ignoreAvg.displayName === "T_mean", "自定义输出名称");
+  var ignoreSum = core.applyQuickFormula(missP, { mode: "pointwise", op: "sum", seriesIds: missIds, missingValueMode: "ignore" });
+  almost(ignoreSum.y[0], 30, "忽略缺失 SUM 不加 0");
+  var ignoreMax = core.applyQuickFormula(missP, { mode: "pointwise", op: "max", seriesIds: missIds, missingValueMode: "ignore" });
+  almost(ignoreMax.y[0], 20, "忽略缺失 MAX 跳过 NaN");
+  var ignoreMin = core.applyQuickFormula(missP, { mode: "pointwise", op: "min", seriesIds: missIds, missingValueMode: "ignore" });
+  almost(ignoreMin.y[0], 10, "忽略缺失 MIN 跳过 NaN");
+  assert((missP.analyses || []).length === 0, "逐点计算不写 Results");
+
+  counts.filter(function (count) { return count >= 2; }).forEach(function (count) {
+    var p = core.createProject({ projectName: "n" + count });
+    var ds = makeCounted(p, "ds-" + count, count, 3, function (s, t) { return s + t; });
+    var ids = seriesIds(ds);
+    var draft = core.quickFormulaDraft(p, { op: "average", seriesIds: ids });
+    assert(Object.keys(draft.bindings).length === count, count + " 条绑定完整");
+    ids.forEach(function (id) {
+      var used = Object.keys(draft.bindings).some(function (alias) { return draft.bindings[alias] === id; });
+      assert(used, count + " 条绑定使用稳定 Series ID " + id);
+    });
+    ["sum", "average", "max", "min"].forEach(function (op) {
+      var series = core.applyQuickFormula(p, { mode: "pointwise", op: op, seriesIds: ids });
+      var t;
+      for (t = 0; t < 3; t += 1) {
+        var values = [];
+        var s;
+        for (s = 0; s < count; s += 1) values.push(s + t);
+        var expected;
+        if (op === "sum") expected = values.reduce(function (acc, value) { return acc + value; }, 0);
+        else if (op === "average") expected = expectedSum(values) / count;
+        else if (op === "max") expected = count - 1 + t;
+        else expected = t;
+        almost(series.y[t], expected, count + " 条逐点 " + op + " t=" + t);
+      }
+      assert(series.kind === "computed", count + " 条 " + op + " 写入计算结果簇");
+    });
+  });
+
+  function expectedSum(values) {
+    return values.reduce(function (acc, value) { return acc + value; }, 0);
+  }
+
+  var big = core.createProject({ projectName: "scale57" });
+  var nPoints = 60319;
+  var nSeries = 57;
+  var bigDs = makeCounted(big, "ds-57", nSeries, nPoints, function (s, t) { return t * 0.001 + s; });
+  var bigIds = seriesIds(bigDs);
+  assert(bigIds.length === 57 && bigDs.series[0].x.length === nPoints, "57×60319 输入规模");
+  var mean = core.applyQuickFormula(big, {
+    mode: "pointwise",
+    op: "average",
+    seriesIds: bigIds,
+    name: "T_mean"
+  });
+  assert(mean.y.length === nPoints && mean.validCount === nPoints, "57 路平均输出 60319 点");
+  almost(mean.y[0], 28, "独立基准 t=0 平均为 28");
+  almost(mean.y[100], 100 * 0.001 + 28, "独立基准 t=100");
+  almost(mean.y[nPoints - 1], (nPoints - 1) * 0.001 + 28, "独立基准末点");
+  var mismatch = 0;
+  var i;
+  for (i = 0; i < nPoints; i += 1) {
+    if (Math.abs(mean.y[i] - (i * 0.001 + 28)) > 1e-9) mismatch += 1;
+  }
+  assert(mismatch === 0, "60319 点均与独立基准一致");
+  assert(big.formulas[0].bindings.BE === "ds-57::T56", "BE 绑定第 57 条稳定 ID");
+
+  var histP = core.createProject({ projectName: "hist" });
+  var histDs = makeCounted(histP, "ds-h", 27, 3, function (s, t) { return s + t; });
+  var histIds = seriesIds(histDs);
+  var before = core.captureEditorState(histP);
+  var named = core.applyQuickFormula(histP, {
+    mode: "pointwise",
+    op: "average",
+    seriesIds: histIds,
+    name: "T_mean_27"
+  });
+  assert(named.displayName === "T_mean_27" && named.y.length === 3, "27 路平均写入");
+  almost(named.y[0], 13, "27 路 t=0 平均 13");
+  core.applyQuickFormula(histP, { mode: "pointwise", op: "sum", seriesIds: histIds.slice(0, 2) });
+  assert(core.computedDatasetOf(histP).series.length === 2, "再算一条 SUM");
+  core.restoreEditorState(histP, before);
+  assert(!core.computedDatasetOf(histP) || core.computedDatasetOf(histP).series.length === 0, "Undo 恢复快捷公式前状态");
+
+  core.applyQuickFormula(histP, {
+    mode: "pointwise",
+    op: "average",
+    seriesIds: histIds,
+    name: "T_mean_27",
+    missingValueMode: "ignore"
+  });
+  var saved = core.serializeProject(histP);
+  var opened = core.parseProject(saved);
+  var openedMean = opened.datasets.reduce(function (found, dataset) {
+    return found || (dataset.series || []).filter(function (item) { return item.displayName === "T_mean_27"; })[0] || null;
+  }, null);
+  assert(openedMean && openedMean.y.length === 3, "工程重开恢复派生 Series");
+  almost(openedMean.y[1], 14, "工程重开数值一致");
+  assert(opened.formulas[0].missingValueMode === "ignore", "工程往返保留缺失值策略");
+  assert(opened.formulas[0].bindings.AA === "ds-h::T26", "AA 绑定第 27 条稳定 ID");
+
+  var manual = core.applyFormula(opened, {
+    name: "BminusA",
+    expression: "B - A",
+    bindings: { A: "ds-h::T0", B: "ds-h::T1" }
+  });
+  almost(manual.y[0], 1, "手动单字母公式不退化");
+}());
+
+(function testSegmentsAndCsvExport() {
+  var p = core.createProject({ projectName: "segments" });
+  var source = core.parseDatasetFromCsv(readFixture("TESTDATA_steps.csv"), {
+    id: "ds-steps",
+    name: "steps.csv",
+    sourceFilename: "steps.csv",
+    sourceEncoding: "utf-8"
+  });
+  core.addDataset(p, source);
+  var originalSeriesCount = source.series.length;
+  var originalX = source.series[0].x.slice();
+  assert(source.headers.length === 8, "切段夹具保留全部表头");
+  assert(source.warnings.some(function (item) { return /工步名称|日历|状态|备注/.test(item); }), "非数值列被跳过但仍留在 headers/rawCsv");
+
+  var runs = core.detectStepRuns(source);
+  assert(runs.length === 3, "同名不连续工步分成独立区间");
+  assert(runs[0].name === "静置" && runs[0].rowCount === 2, "第一段静置 2 行");
+  assert(runs[1].name === "放电 CC" && runs[1].index === "2" && runs[1].rowCount === 3, "放电 CC 3 行");
+  assert(runs[2].name === "静置" && runs[2].index === "3", "第二段静置单独识别");
+
+  var discharge = core.createSegment(p, {
+    id: "seg-cc",
+    name: "放电 CC",
+    sourceDatasetId: "ds-steps",
+    rangeType: "step",
+    rangeDefinition: { stepIndex: "2" }
+  });
+  assert(discharge.kind === "segment" && discharge.sourceDatasetId === "ds-steps", "Segment 不是计算结果簇");
+  assert(p.datasets.some(function (item) { return item.kind === "computed"; }) === false, "切段不创建计算结果簇");
+  assert(core.rowRangeCount(discharge.selectedRowRanges) === 3, "工步 2 命中 3 行");
+  assert(discharge.series[0].x.join(",") === "2,3,4", "片段系列只含切段区间");
+  assert(source.series[0].x.join(",") === originalX.join(","), "原始 Dataset 不被修改");
+  assert(source.series.length === originalSeriesCount, "原始系列数量不变");
+
+  var byTime = core.createSegment(p, {
+    id: "seg-time",
+    name: "时间 2-4",
+    sourceDatasetId: "ds-steps",
+    rangeType: "time",
+    rangeDefinition: { column: "时间(s)", start: 2, end: 4 }
+  });
+  assert(core.rowRangeCount(byTime.selectedRowRanges) === 3, "时间区间含端点且不插值");
+
+  var byRow = core.createSegment(p, {
+    id: "seg-row",
+    name: "行 3-5",
+    sourceDatasetId: "ds-steps",
+    rangeType: "row",
+    rangeDefinition: { startRow: 3, endRow: 5 }
+  });
+  assert(core.rowRangeCount(byRow.selectedRowRanges) === 3, "1 基行号含端点");
+
+  var split = core.splitDatasetBySteps(p, "ds-steps");
+  assert(split.length === 3, "一键按工步拆出全部连续区间");
+
+  var plot = core.createPlot(p, { name: "片段图" });
+  core.addSeriesToPlot(p, plot, [discharge.series[0].id]);
+  assert(plot.seriesRefs[0].seriesId.indexOf("seg-cc::") === 0, "片段可作为独立数据源绘图");
+
+  var voltage = discharge.series.find(function (item) { return item.name === "电压"; });
+  assert(voltage && voltage.y.join(",") === "3.6,3.5,3.4", "放电片段保留电压列");
+  var derived = core.applyFormula(p, {
+    name: "SegDiff",
+    expression: "A * 2",
+    bindings: { A: voltage.id }
+  });
+  assert(derived.y.join(",") === "7.2,7,6.8", "片段可作为公式输入");
+
+  core.updateSegment(p, "seg-cc", {
+    rangeType: "row",
+    rangeDefinition: { startRow: 3, endRow: 4 }
+  });
+  var afterUpdate = core.findSeries(p, voltage.id);
+  assert(afterUpdate.x.join(",") === "2,3", "修改切段边界刷新片段数据");
+  var recomputed = core.findSeries(p, derived.id);
+  assert(recomputed.y.join(",") === "7.2,7", "片段边界变化后刷新派生结果");
+
+  var exported = core.exportSegmentCsv(p, "seg-time", { encoding: "utf-8", relativeTime: true });
+  assert(exported.headers[0] === "序号" && exported.headers.indexOf("工步名称") >= 0, "导出保留原始非数值列");
+  assert(exported.headers.indexOf("相对时间(s)") >= 0, "可选相对时间列");
+  assert(exported.rowCount === 3, "导出行数等于片段行数");
+  assert(exported.text.indexOf("放电 CC") >= 0, "导出保留工步名称原文");
+  assert(/3\.60/.test(exported.text), "导出不改写原始数值文本");
+  var quoted = core.serializeCsvRows(["备注"], [["含,逗号"], ["line\nbreak"], ['say "hi"']]);
+  assert(quoted.indexOf('"含,逗号"') >= 0, "CSV 正确转义逗号");
+  assert(quoted.indexOf('"line\nbreak"') >= 0 || quoted.indexOf('"line\r\nbreak"') >= 0, "CSV 正确转义换行");
+  assert(quoted.indexOf('"say ""hi"""') >= 0, "CSV 正确转义引号");
+  var reimported = core.parseDatasetFromCsv(exported.text, { id: "ds-re", name: "re.csv" });
+  assert(reimported.headers.indexOf("工步名称") >= 0, "再导入仍能看到中文表头");
+  var reVoltage = reimported.series.find(function (item) { return item.name === "电压"; });
+  assert(reVoltage && reVoltage.y[0] === 3.6, "再导入数值一致");
+
+  var gbkBytes = core.encodeCsvText("工步名称,电压(V)\n放电 CC,3.6\n", "gb18030");
+  var decoded = new TextDecoder("gb18030").decode(gbkBytes);
+  assert(decoded.indexOf("放电 CC") >= 0 && decoded.indexOf("\uFFFD") < 0, "GB18030 导出可逆");
+  var bom = core.encodeCsvText("a,b\n1,2\n", "utf-8-bom");
+  assert(bom[0] === 0xEF && bom[1] === 0xBB && bom[2] === 0xBF, "UTF-8 BOM 导出");
+
+  var zip = core.exportSegmentsZip(p, ["seg-time", "seg-row"], { encoding: "utf-8" });
+  assert(zip.bytes[0] === 0x50 && zip.bytes[1] === 0x4B, "ZIP 本地实现不以 CDN 为依赖");
+  assert(zip.files.length === 2, "多片段各自输出 CSV");
+
+  var json = core.serializeProject(p);
+  var opened = core.parseProject(json);
+  var restoredSeg = core.findDataset(opened, "seg-cc");
+  assert(restoredSeg && restoredSeg.kind === "segment" && restoredSeg.sourceDatasetId === "ds-steps", "工程打开恢复片段");
+  assert(core.findSeries(opened, derived.id).y.join(",") === "7.2,7", "工程打开恢复片段公式依赖");
+
+  var impact = core.datasetDeleteImpact(p, "ds-steps");
+  assert(impact.segments.length >= 3, "删除源数据前检查片段依赖");
+  var computedStill = core.findSeries(p, derived.id);
+  assert(computedStill.status !== "invalid", "未删除前不得把派生标失效");
+  core.removeDataset(p, "ds-steps");
+  assert(!core.findDataset(p, "seg-cc"), "删除源数据时移除其片段");
+  var afterDelete = core.findSeries(p, derived.id);
+  assert(!afterDelete || afterDelete.status === "invalid", "删除后派生不得静默保持有效");
+}());
+
+(function testSameSourceMultipleSegmentsCreateAndSaveAs() {
+  var p = core.createProject({ projectName: "multi-seg" });
+  var source = core.parseDatasetFromCsv(readFixture("TESTDATA_steps.csv"), {
+    id: "ds-multi",
+    name: "steps.csv",
+    sourceFilename: "steps.csv"
+  });
+  core.addDataset(p, source);
+  var originalX = source.series[0].x.slice();
+  var originalY = source.series[0].y.slice();
+  var ids = {};
+  var i;
+  for (i = 1; i <= 5; i += 1) {
+    var seg = core.createSegment(p, {
+      name: "段 " + i,
+      sourceDatasetId: "ds-multi",
+      rangeType: "row",
+      rangeDefinition: { startRow: i, endRow: i + 3 }
+    });
+    assert(seg.kind === "segment", "第 " + i + " 段是 segment");
+    assert(seg.id.indexOf("seg") === 0, "自动分配 segmentId");
+    assert(!ids[seg.id], "segmentId 唯一");
+    ids[seg.id] = true;
+  }
+  var listed = core.listSegments(p, "ds-multi");
+  assert(listed.length === 5, "同源五个独立片段");
+  assert(listed[0].selectedRowRanges[0].start === 0 && listed[4].selectedRowRanges[0].start === 4, "区间允许重叠且各自独立");
+  assert(source.series[0].x.join(",") === originalX.join(","), "连续创建不改原始 X");
+  assert(source.series[0].y.join(",") === originalY.join(","), "连续创建不改原始 Y");
+
+  var second = listed[1];
+  var third = listed[2];
+  var secondRows = core.rowRangeCount(second.selectedRowRanges);
+  var thirdRows = core.rowRangeCount(third.selectedRowRanges);
+  var thirdX = third.series[0].x.slice();
+  core.updateSegment(p, second.id, {
+    rangeType: "row",
+    rangeDefinition: { startRow: 1, endRow: 2 }
+  });
+  var secondAfter = core.findDataset(p, second.id);
+  var thirdAfter = core.findDataset(p, third.id);
+  assert(core.rowRangeCount(secondAfter.selectedRowRanges) === 2, "编辑第 2 段只改自己的行范围");
+  assert(core.rowRangeCount(thirdAfter.selectedRowRanges) === thirdRows, "编辑第 2 段不改第 3 段行数");
+  assert(thirdAfter.series[0].x.join(",") === thirdX.join(","), "编辑第 2 段不改第 3 段数据");
+  assert(secondRows !== 2, "第 2 段编辑前后范围确实变化");
+
+  var savedAs = core.createSegment(p, {
+    name: "段 6",
+    sourceDatasetId: "ds-multi",
+    rangeType: thirdAfter.rangeType,
+    rangeDefinition: thirdAfter.rangeDefinition,
+    columnSelection: thirdAfter.columnSelection
+  });
+  assert(savedAs.id !== thirdAfter.id, "另存为分配新的 segmentId");
+  assert(core.findDataset(p, thirdAfter.id), "另存为后旧段仍在");
+  assert(core.listSegments(p, "ds-multi").length === 6, "另存为后共 6 段");
+  assert(core.rowRangeCount(savedAs.selectedRowRanges) === core.rowRangeCount(thirdAfter.selectedRowRanges), "另存为复制当前区间");
+  assert(savedAs.series[0].x.join(",") === thirdAfter.series[0].x.join(","), "另存为数据与旧段一致");
+
+  var exported = core.exportSegmentCsv(p, savedAs.id, { encoding: "utf-8" });
+  assert(exported.headers[0] === "序号", "另存片段导出保留原始列");
+  assert(exported.rowCount === core.rowRangeCount(savedAs.selectedRowRanges), "导出行数等于片段行数");
+
+  var json = core.serializeProject(p);
+  var opened = core.parseProject(json);
+  assert(core.listSegments(opened, "ds-multi").length === 6, "工程重开保留全部片段");
+  var snap = core.captureEditorState(p);
+  core.removeDataset(p, savedAs.id);
+  assert(core.listSegments(p, "ds-multi").length === 5, "删除另存段后剩 5");
+  core.restoreEditorState(p, snap);
+  assert(core.listSegments(p, "ds-multi").length === 6, "Undo 恢复另存段");
+}());
+
+(function testSegmentExportTargetStaysOnSavedSegment() {
+  var p = core.createProject({ projectName: "export-target" });
+  var source = core.parseDatasetFromCsv(readFixture("TESTDATA_steps.csv"), {
+    id: "ds-src",
+    name: "25_2C放电",
+    sourceFilename: "25_2C放电.csv"
+  });
+  core.addDataset(p, source);
+  var other = core.parseDatasetFromCsv(readFixture("TESTDATA_steps.csv"), {
+    id: "ds-other",
+    name: "25_2C放电",
+    sourceFilename: "other.csv"
+  });
+  core.addDataset(p, other);
+  var none = core.segmentPanelExportState(p, "");
+  assert(none.enabled === false && none.reason === "none" && none.segmentId === "", "没有已保存目标时不导出草稿");
+  var raw = core.segmentPanelExportState(p, "ds-src");
+  assert(raw.enabled === false && raw.segmentId === "", "同名原始 Dataset 不能当作导出目标");
+  var created = core.createSegment(p, {
+    name: "25_2C放电",
+    sourceDatasetId: "ds-src",
+    rangeType: "row",
+    rangeDefinition: { startRow: 1, endRow: 2 }
+  });
+  var sameName = core.createSegment(p, {
+    name: "25_2C放电",
+    sourceDatasetId: "ds-other",
+    rangeType: "row",
+    rangeDefinition: { startRow: 3, endRow: 4 }
+  });
+  var state = core.segmentPanelExportState(p, created.id);
+  assert(state.enabled === true && state.segmentId === created.id && state.name === "25_2C放电", "创建后导出目标是刚保存的片段");
+  assert(state.segmentId !== sameName.id, "同名片段按 id 区分来源");
+  assert(core.rowRangeCount(core.findDataset(p, state.segmentId).selectedRowRanges) === 2, "导出目标保持 A 的已保存区间");
+  var exported = core.exportSegmentCsv(p, state.segmentId, {
+    encoding: "utf-8-bom",
+    filename: "25_2C放电",
+    keepOriginalTime: true,
+    relativeTime: true,
+    timeColumn: "时间(s)",
+    columnSelection: { mode: "all", columns: [] }
+  });
+  assert(exported.filename === "25_2C放电.csv", "导出名补 .csv，不改片段名");
+  assert(exported.bytes[0] === 0xEF && exported.bytes[1] === 0xBB && exported.bytes[2] === 0xBF, "底部选项 UTF-8 BOM");
+  assert(exported.headers[0] === "序号" && exported.headers.indexOf("工步名称") >= 0, "全部列保留中文表头和列序");
+  var timeAt = exported.headers.indexOf("时间(s)");
+  var relAt = exported.headers.indexOf("相对时间(s)");
+  assert(timeAt >= 0 && relAt === timeAt + 1, "原始时间保留，相对时间紧随其后");
+  var first = exported.text.split("\r\n")[1].split(",");
+  assert(first[timeAt] === "0" && first[relAt] === "0", "绝对时间未改，相对时间从 0 开始");
+  var picked = core.exportSegmentCsv(p, state.segmentId, {
+    encoding: "gb18030",
+    columnSelection: { mode: "selected", columns: ["时间(s)", "电压(V)"] },
+    keepOriginalTime: true,
+    relativeTime: false
+  });
+  assert(picked.headers.join(",") === "时间(s),电压(V)", "指定列只导出选中列");
+  assert(new TextDecoder("gb18030").decode(picked.bytes).indexOf("电压") >= 0, "GB18030 中文表头可逆");
+  var zip = core.exportSegmentsZip(p, [created.id, sameName.id], {
+    encoding: "utf-8-bom",
+    keepOriginalTime: true,
+    relativeTime: true,
+    timeColumn: "时间(s)"
+  });
+  assert(zip.files.length === 2 && zip.bytes[0] === 0x50 && zip.bytes[1] === 0x4B, "ZIP 只含两个已保存片段");
+  var orphan = core.createSegment(p, {
+    name: "孤儿",
+    sourceDatasetId: "ds-src",
+    rangeType: "row",
+    rangeDefinition: { startRow: 1, endRow: 1 }
+  });
+  orphan.sourceDatasetId = "missing-source";
+  var stale = core.segmentPanelExportState(p, orphan.id);
+  assert(stale.enabled === false && stale.reason === "missing", "来源失效的片段不能导出");
+  core.removeDataset(p, created.id);
+  var gone = core.segmentPanelExportState(p, created.id);
+  assert(gone.enabled === false && gone.reason === "missing", "删除后的目标不能导出");
+  var page = fs.readFileSync(path.join(__dirname, "..", "temperature_trajectory_visualizer.html"), "utf8");
+  assert(page.indexOf("exportBtn.disabled = !editing") < 0, "底部 CSV 不再因创建模式禁用");
+  assert(page.indexOf("segmentPanelExportState") >= 0, "底部导出复用已保存目标判定");
+  assert(page.indexOf("exportOneSegment") >= 0, "底部与左侧共用 exportOneSegment");
+}());
+
+(function testCustomXColumnMapping() {
+  function dsFrom(text, id, name) {
+    return core.parseDatasetFromCsv(text, { id: id, name: name, sourceFilename: name + ".csv" });
+  }
+  var csvA = [
+    "时间(s),相对时间(s),电压(V)",
+    "5000,0,3.7",
+    "6000,1000,3.6",
+    "7000,2000,3.5",
+    "8000,3000,3.4",
+    ""
+  ].join("\n");
+  var csvB = [
+    "时间(s),相对时间(s),电压(V)",
+    "20000,0,3.1",
+    "21000,1000,3.0",
+    "22000,2000,2.9",
+    "23000,3000,2.8",
+    ""
+  ].join("\n");
+  var p = core.createProject({ projectName: "xmap" });
+  var dsA = dsFrom(csvA, "ds-a", "segA");
+  var dsB = dsFrom(csvB, "ds-b", "segB");
+  core.addDataset(p, dsA);
+  core.addDataset(p, dsB);
+  assert(dsA.xHeader === "时间(s)", "双时间列自动识别绝对时间");
+  assert(dsB.xHeader === "时间(s)", "B 文件同样自动识别绝对时间");
+  assert(core.suggestRelativeXColumn(p, dsA) === "相对时间(s)", "建议相对时间列");
+  var voltA = dsA.series.find(function (item) { return item.name === "电压"; });
+  var voltB = dsB.series.find(function (item) { return item.name === "电压"; });
+  assert(voltA.x.join(",") === "5000,6000,7000,8000", "导入后 series.x 仍是绝对时间");
+  assert(voltA.y.join(",") === "3.7,3.6,3.5,3.4", "Y 原值");
+
+  var plot = core.createPlot(p, { name: "叠加" });
+  core.addSeriesToPlot(p, plot, [voltA.id, voltB.id]);
+  var autoXs = core.seriesXForPlot(p, plot, voltA, dsA);
+  assert(autoXs.join(",") === "5000,6000,7000,8000", "未改映射时绘图 X 仍是绝对时间");
+
+  core.setDatasetDefaultXColumn(p, "ds-a", "相对时间(s)");
+  core.setDatasetDefaultXColumn(p, "ds-b", "相对时间(s)");
+  var relA = core.seriesXForPlot(p, plot, voltA, dsA);
+  var relB = core.seriesXForPlot(p, plot, voltB, dsB);
+  assert(relA.join(",") === "0,1000,2000,3000", "A 改用相对时间后从 0 开始");
+  assert(relB.join(",") === "0,1000,2000,3000", "B 改用相对时间后从 0 开始");
+  assert(voltA.y.join(",") === "3.7,3.6,3.5,3.4", "改 X 不改 Y");
+  assert(voltA.x.join(",") === "5000,6000,7000,8000", "改绘图 X 不改 series.x");
+  var extents = core.plotExtents(p, plot);
+  assert(extents.x[0] <= 0 && extents.x[1] >= 3000, "相对时间后轴范围覆盖 0–3000");
+  assert(/相对时间/.test(plot.xAxis.autoTitle), "自动轴标题跟随映射列");
+
+  core.setDatasetDefaultXColumn(p, "ds-a", "时间(s)");
+  core.setDatasetDefaultXColumn(p, "ds-b", "时间(s)");
+  assert(core.seriesXForPlot(p, plot, voltA, dsA).join(",") === "5000,6000,7000,8000", "切回绝对时间");
+  assert(core.seriesXForPlot(p, plot, voltB, dsB)[0] === 20000, "B 切回绝对时间");
+
+  var plot2 = core.createPlot(p, { name: "相对图" });
+  core.addSeriesToPlot(p, plot2, [voltA.id, voltB.id]);
+  core.setPlotXColumnOverride(p, plot2, "ds-a", "相对时间(s)");
+  core.setPlotXColumnOverride(p, plot2, "ds-b", "相对时间(s)");
+  assert(core.seriesXForPlot(p, plot, voltA, dsA).join(",") === "5000,6000,7000,8000", "图窗覆盖不影响另一图窗");
+  assert(core.seriesXForPlot(p, plot2, voltA, dsA).join(",") === "0,1000,2000,3000", "第二图窗使用相对时间");
+  plot.xAxis.mode = "manual";
+  plot.xAxis.min = 100;
+  plot.xAxis.max = 200;
+  plot.xAxis.titleMode = "custom";
+  plot.xAxis.customTitle = "固定标题";
+  core.setPlotXColumnOverride(p, plot, "ds-a", "相对时间(s)");
+  assert(plot.xAxis.min === 100 && plot.xAxis.max === 200, "手动轴范围不被映射覆盖");
+  assert(core.resolvedAxisTitle(plot.xAxis) === "固定标题", "自定义轴标题保留");
+
+  var derived = core.applyFormula(p, {
+    name: "AlignCheck",
+    expression: "A + 1",
+    bindings: { A: voltA.id }
+  });
+  var beforeY = derived.y.slice();
+  core.setPlotXColumnOverride(p, plot, "ds-a", "相对时间(s)");
+  var afterDerived = core.findSeries(p, derived.id);
+  assert(afterDerived.y.join(",") === beforeY.join(","), "改图窗 X 不改公式结果");
+  assert(afterDerived.x.join(",") === voltA.x.join(","), "公式对齐轴仍用原 series.x");
+
+  var json = core.serializeProject(p);
+  assert(JSON.parse(json).projectFormatVersion === "1.1", "不升 projectFormatVersion");
+  var opened = core.parseProject(json);
+  var openedA = core.findDataset(opened, "ds-a");
+  var openedPlot2 = opened.plots.find(function (item) { return item.name === "相对图"; });
+  assert(openedA.defaultXColumnRef === "时间(s)", "工程恢复数据源默认 X");
+  assert(openedPlot2.xColumnByDataset["ds-a"] === "相对时间(s)", "工程恢复图窗覆盖");
+  var openedVolt = core.findSeries(opened, voltA.id);
+  assert(core.seriesXForPlot(opened, openedPlot2, openedVolt, openedA).join(",") === "0,1000,2000,3000", "重开后映射仍生效");
+
+  var beforeMap = core.captureEditorState(p);
+  core.setDatasetDefaultXColumn(p, "ds-a", "相对时间(s)");
+  core.restoreEditorState(p, beforeMap);
+  assert(core.findDataset(p, "ds-a").defaultXColumnRef === "时间(s)", "Undo 恢复数据源默认 X");
+
+  var csvSoc = "SOC,电压(V)\n0.2,3.5\n0.5,3.7\n0.8,4.0\n";
+  var dsSoc = dsFrom(csvSoc, "ds-soc", "soc");
+  core.addDataset(p, dsSoc);
+  assert(dsSoc.xHeader === "SOC" || dsSoc.xName === "SOC", "无时间列时用第一数值列");
+  var voltSoc = dsSoc.series.find(function (item) { return item.name === "电压"; });
+  var plotSoc = core.createPlot(p, { name: "XY" });
+  core.addSeriesToPlot(p, plotSoc, [voltSoc.id]);
+  assert(core.seriesXForPlot(p, plotSoc, voltSoc, dsSoc).join(",") === "0.2,0.5,0.8", "电压–SOC 图用 SOC 作 X");
+
+  var invalidX = false;
+  try {
+    core.setDatasetDefaultXColumn(p, "ds-a", "不存在");
+  } catch (error) {
+    invalidX = /不能作为 X|找不到/.test(error.message);
+  }
+  assert(invalidX, "无效 X 列报错");
+
+  var csvPlain = "Step,Value\n1,10\n2,20\n3,30\n";
+  var dsPlain = dsFrom(csvPlain, "ds-plain", "plain");
+  assert(dsPlain.xHeader === "Step", "普通单数值 X 不退化");
+  assert(!core.suggestRelativeXColumn(p, dsPlain), "无相对时间则不建议");
+}());
+
+(function () {
+  var p = core.createProject({ projectName: "v072" });
+  core.ensureWorkspace(p);
+  var src = core.plotWindows(p)[0];
+  src.legend.fontSize = 18;
+  src.xAxis.tickMode = "manual";
+  src.xAxis.majorTick = 100;
+  src.layout.width = 900;
+  src.layout.height = 500;
+  var canvas = p.canvases[0];
+  var inst = canvas.instances[0];
+  assert(inst.display && inst.display.legend && inst.plotId === src.id && inst.sourcePlotId === src.id, "实例带显示快照和 sourcePlotId");
+  inst.display.legend.fontSize = 11;
+  inst.display.xAxis.tickMode = "auto";
+  src.legend.fontSize = 22;
+  assert(inst.display.legend.fontSize === 11 && src.legend.fontSize === 22, "改副本图例不改源图");
+  var view = core.bindPlotView(src, inst);
+  assert(view.legend.fontSize === 11 && view.__instanceId === inst.id, "bindPlotView 读副本图例");
+  var copy = core.createInstance(p, canvas.id, src.id, { x: 40, y: 40, width: 320, height: 240 });
+  copy.display.legend.fontSize = 9;
+  assert(copy.id !== inst.id && inst.display.legend.fontSize === 11, "双副本图例互不影响");
+  var titled = core.bindPlotView(src, inst);
+  titled.title = "副本标题";
+  assert(inst.display.title === "副本标题" && src.title !== "副本标题", "改副本标题不改源图");
+  titled.annotations.push(core.normalizeAnnotation({
+    type: "free",
+    coordinateMode: "plot",
+    anchor: { x: 0.2, y: 0.2 },
+    text: "副本标注"
+  }, src.id));
+  assert(inst.display.annotations.length === 1 && (src.annotations || []).length === 0, "副本标注不写回源图");
+  core.removeInstance(p, canvas.id, copy.id);
+  assert(core.findPlot(p, src.id) && canvas.instances.some(function (item) { return item.id === inst.id; }), "删副本保留源图和另一副本");
+
+  var laid = [
+    { id: "a", x: 10, y: 10, width: 100, height: 100 },
+    { id: "b", x: 20, y: 20, width: 100, height: 100 }
+  ];
+  var layoutResult = core.applyLayoutToInstances(laid, "splitH", { width: 1280, height: 800, padding: 40, gap: 24 });
+  assert(layoutResult.placed === 2 && layoutResult.overflow === 0 && layoutResult.emptySlots === 0, "1:1 左右排两张");
+  assert(laid[0].x < laid[1].x && laid[0].width === laid[1].width, "左右布局改实例几何");
+  var four = [];
+  for (var i = 0; i < 4; i += 1) four.push({ id: "n" + i, x: 1, y: 1, width: 80, height: 80 });
+  var grid = core.applyLayoutToInstances(four, "grid2x2", { width: 1280, height: 800, padding: 40, gap: 24 });
+  assert(grid.placed === 4 && grid.overflow === 0, "2×2 排四张");
+  var six = four.concat([{ id: "e1", x: 9, y: 9, width: 80, height: 80 }, { id: "e2", x: 11, y: 11, width: 90, height: 90 }]);
+  var overflowed = core.applyLayoutToInstances(six, "grid2x2", { width: 1280, height: 800, padding: 40, gap: 24 });
+  assert(overflowed.placed === 4 && overflowed.overflow === 2, "6 张用 2×2 溢出 2 张");
+  assert(six[4].width === 80 && six[5].width === 90, "未排入实例保持原几何");
+  var empty = core.applyLayoutToInstances([{ id: "one", x: 1, y: 1, width: 120, height: 80 }], "grid2x2", { width: 1280, height: 800, padding: 40, gap: 24 });
+  assert(empty.placed === 1 && empty.emptySlots === 3, "少于槽位留下空槽");
+  var sixGrid = [];
+  for (var j = 0; j < 6; j += 1) sixGrid.push({ id: "g" + j, x: 1, y: 1, width: 80, height: 80 });
+  var grid32 = core.applyLayoutToInstances(sixGrid, "grid3x2", { width: 1280, height: 800, padding: 40, gap: 24 });
+  assert(grid32.placed === 6 && grid32.overflow === 0, "3×2 排六张");
+  src.layout.width = 900;
+  core.applyLayoutToInstances(canvas.instances, "splitH", { width: 1280, height: 800, padding: 40, gap: 24 });
+  assert(src.layout.width === 900, "快捷布局不改源图尺寸");
+  var countBefore = canvas.instances.length;
+  for (var repeat = 0; repeat < 10; repeat += 1) {
+    core.applyLayoutToInstances(canvas.instances, "grid2x2", { width: 1280, height: 800, padding: 40, gap: 24 });
+  }
+  assert(canvas.instances.length === countBefore, "同一布局连点 10 次不增加实例");
+
+  var slotP = core.createProject({ projectName: "v072-slots" });
+  core.ensureWorkspace(slotP);
+  var plotA = core.plotWindows(slotP)[0];
+  plotA.name = "A";
+  plotA.layout.width = 640;
+  plotA.layout.height = 400;
+  var plotB = core.createPlot(slotP, { name: "B", title: "B" });
+  var plotC = core.createPlot(slotP, { name: "C", title: "C" });
+  var plotD = core.createPlot(slotP, { name: "D", title: "D" });
+  var plotE = core.createPlot(slotP, { name: "E", title: "E" });
+  var srcAWidth = plotA.layout.width;
+  var srcBWidth = plotB.layout.width;
+  var srcEWidth = plotE.layout.width;
+  var slotCanvas = slotP.canvases[0];
+  var instA = slotCanvas.instances[0];
+  var instB = core.createInstance(slotP, slotCanvas.id, plotB.id, { x: 80, y: 500, width: 180, height: 120 });
+  var instC = core.createInstance(slotP, slotCanvas.id, plotC.id, { x: 280, y: 500, width: 190, height: 120 });
+  var instD = core.createInstance(slotP, slotCanvas.id, plotD.id, { x: 480, y: 500, width: 200, height: 120 });
+  var gridSlots = core.layoutSlots("grid2x2", core.canvasLayoutArea(slotCanvas));
+  var top = core.applyLayoutToInstances(slotCanvas.instances.slice(), "grid2x2", core.canvasLayoutArea(slotCanvas));
+  assert(top.placed === 4 && slotCanvas.instances.length === 4, "上方 2×2 仍是 4 张");
+  assert(instA.x === gridSlots[0].x && instD.x === gridSlots[3].x, "上方 2×2 按槽位排布全部图窗");
+  assert(plotA.layout.width === srcAWidth && plotB.layout.width === srcBWidth, "上方布局不改源图尺寸");
+
+  instA.x = 40; instA.y = 40; instA.width = 200; instA.height = 160;
+  instB.x = 80; instB.y = 500; instB.width = 180; instB.height = 120;
+  instC.x = 280; instC.y = 500; instC.width = 190; instC.height = 120;
+  instD.x = 480; instD.y = 500; instD.width = 200; instD.height = 120;
+  var keepB = { x: instB.x, y: instB.y, width: instB.width, height: instB.height };
+  var keepC = { x: instC.x, y: instC.y, width: instC.width, height: instC.height };
+  var keepD = { x: instD.x, y: instD.y, width: instD.width, height: instD.height };
+  var rightBox = core.layoutSlots("splitH", core.canvasLayoutArea(slotCanvas))[1];
+  var placedA = core.placePrimaryInSlot(slotP, slotCanvas, plotA.id, "splitH", 1, { action: "place" });
+  assert(placedA.ok && placedA.instance.id === instA.id && !placedA.created, "下方把已有 A 放入右槽");
+  assert(instA.x === rightBox.x && instA.width === rightBox.width, "A 几何等于右槽");
+  assert(instB.x === keepB.x && instC.x === keepC.x && instD.x === keepD.x, "下方放置不重排其他图");
+  assert(plotA.layout.width === srcAWidth, "下方放置不改源图 A 尺寸");
+  var againA = core.placePrimaryInSlot(slotP, slotCanvas, plotA.id, "splitH", 1, { action: "place" });
+  assert(againA.ok && againA.unchanged && slotCanvas.instances.length === 4, "重复点同一槽不复制 A");
+  var emptyE = core.placePrimaryInSlot(slotP, slotCanvas, plotE.id, "grid2x2", 0, { action: "place" });
+  assert(emptyE.ok && emptyE.created && slotCanvas.instances.length === 5, "未入画布的 E 只新增这一张");
+  assert(plotE.layout.width === srcEWidth, "新增 E 副本不改源图尺寸");
+  var againE = core.placePrimaryInSlot(slotP, slotCanvas, plotE.id, "grid2x2", 0, { action: "place" });
+  assert(againE.unchanged && slotCanvas.instances.length === 5, "重复放入 E 不复制");
+  var occupy = core.placePrimaryInSlot(slotP, slotCanvas, plotB.id, "splitH", 1, { action: "place" });
+  assert(occupy.needsChoice && occupy.occupant.id === instA.id, "右槽已有 A 时要求确认");
+  assert(instB.x === keepB.x && instA.x === rightBox.x, "未确认时不覆盖占用槽");
+  var swapped = core.placePrimaryInSlot(slotP, slotCanvas, plotB.id, "splitH", 1, { action: "swap" });
+  assert(swapped.ok && swapped.swapped && slotCanvas.instances.length === 5, "确认后交换且不丢实例");
+  assert(instB.x === rightBox.x && instA.x === keepB.x, "交换后 A/B 几何对调");
+  assert(plotA.layout.width === srcAWidth && plotB.layout.width === srcBWidth, "交换不改源图配置");
+
+  var overlapP = core.createProject({ projectName: "v072-b-fix03" });
+  core.ensureWorkspace(overlapP);
+  var oA = core.plotWindows(overlapP)[0];
+  oA.name = "A";
+  var oB = core.createPlot(overlapP, { name: "B", title: "B" });
+  var oC = core.createPlot(overlapP, { name: "C", title: "C" });
+  var oD = core.createPlot(overlapP, { name: "D", title: "D" });
+  var oCanvas = overlapP.canvases[0];
+  var oInstA = oCanvas.instances[0];
+  oInstA.x = 80; oInstA.y = 40; oInstA.width = 320; oInstA.height = 220;
+  var oInstB = core.createInstance(overlapP, oCanvas.id, oB.id, { x: 200, y: 60, width: 300, height: 200 });
+  var oInstC = core.createInstance(overlapP, oCanvas.id, oC.id, { x: 320, y: 50, width: 280, height: 210 });
+  var oInstD = core.createInstance(overlapP, oCanvas.id, oD.id, { x: 720, y: 480, width: 280, height: 220 });
+  var largeSlot = core.layoutSlots("onePlusTwo", core.canvasLayoutArea(oCanvas))[0];
+  var aCenter = { x: oInstA.x + oInstA.width / 2, y: oInstA.y + oInstA.height / 2 };
+  assert(aCenter.x >= largeSlot.x && aCenter.x <= largeSlot.x + largeSlot.width && aCenter.y >= largeSlot.y && aCenter.y <= largeSlot.y + largeSlot.height, "B-FIX03 夹具：A 中心落在左大槽内");
+  var inspectOverlap = core.inspectSlotPlacement(oCanvas, oA.id, "onePlusTwo", 0);
+  assert(inspectOverlap.ok && !inspectOverlap.alreadyThere, "中心落在槽内但尺寸不匹配时不得报已在该分区");
+  assert(!inspectOverlap.occupant, "部分相交的小图不是完整占用者");
+  assert(inspectOverlap.overlaps && inspectOverlap.overlaps.length >= 2, "左大槽标出部分相交的其他图");
+  var fillA = core.placePrimaryInSlot(overlapP, oCanvas, oA.id, "onePlusTwo", 0, { action: "place" });
+  assert(fillA.ok && !fillA.unchanged, "放入左大槽会改 A 的几何");
+  assert(core.geometryMatches(oInstA, largeSlot, 2), "A 铺满左大槽 x/y/w/h");
+  assert(oInstB.width === 300 && oInstC.width === 280 && oInstD.width === 280, "未确认交换时其他图保持原尺寸");
+  var inspectFilled = core.inspectSlotPlacement(oCanvas, oA.id, "onePlusTwo", 0);
+  assert(inspectFilled.alreadyThere, "铺满后才算已在该分区");
+  var againFill = core.placePrimaryInSlot(overlapP, oCanvas, oA.id, "onePlusTwo", 0, { action: "place" });
+  assert(againFill.unchanged && oCanvas.instances.length === 4, "已完整匹配时重复放入不复制");
+  var nearSlot = { x: largeSlot.x + 4, y: largeSlot.y + 3, width: largeSlot.width - 6, height: largeSlot.height - 5 };
+  var fillPreview = core.matchFillSlot(nearSlot, oCanvas, 1);
+  assert(fillPreview && core.geometryMatches(fillPreview, largeSlot, 2), "接近槽位四边时给出填充预览");
+  var farSlot = { x: largeSlot.x + 80, y: largeSlot.y + 90, width: 200, height: 140 };
+  assert(!core.matchFillSlot(farSlot, oCanvas, 1), "尺寸差很大时不强制填充");
+
+  var sizeA = { id: "plot-a", name: "图A", layout: { x: 40, y: 40, width: 680, height: 410 } };
+  var sizeB = { layout: { x: 800, y: 500, width: 672, height: 300 } };
+  var sized = core.snapPlotResize(sizeB, [sizeA], { width: 2000, height: 1200 }, 1);
+  assert(sized.plot.layout.width === 680, "C-FIX03 拖宽接近邻图时吸附为等宽");
+  assert(sized.plot.layout.height === 300, "只接近宽度时不改高度");
+  assert(sized.sizeMatches.some(function (item) { return item.kind === "width" && item.value === 680; }), "等宽吸附返回同宽匹配");
+  var sizeH = { layout: { x: 800, y: 500, width: 520, height: 403 } };
+  var tall = core.snapPlotResize(sizeH, [sizeA], { width: 2000, height: 1200 }, 1);
+  assert(tall.plot.layout.height === 410 && tall.plot.layout.width === 520, "C-FIX03 拖高接近邻图时吸附为等高且不改宽度");
+  var corner = { layout: { x: 800, y: 500, width: 674, height: 404 } };
+  var both = core.snapPlotResize(corner, [sizeA], { width: 2000, height: 1200 }, 1);
+  assert(both.plot.layout.width === 680 && both.plot.layout.height === 410, "四角接近时可双轴等宽等高");
+  var skipped = core.snapPlotResize({ layout: { x: 800, y: 500, width: 672, height: 300 } }, [sizeA], { width: 2000, height: 1200 }, 1, { disableSnap: true });
+  assert(skipped.plot.layout.width === 672 && skipped.plot.layout.height === 300, "Option/Alt 关闭尺寸吸附");
+  var farSize = core.snapPlotResize({ layout: { x: 800, y: 500, width: 520, height: 300 } }, [sizeA], { width: 2000, height: 1200 }, 1);
+  assert(farSize.plot.layout.width === 520 && farSize.plot.layout.height === 300, "离等宽等高较远时不吸附");
+  assert(core.snapThresholdWorld(1) === 8, "尺寸吸附视觉阈值 8 CSS px");
+
+  var ticksOld = core.autoTicks(0, 100, 5);
+  var ticksNew = core.autoTicks(0, 100, core.DEFAULT_TICK_COUNT);
+  assert(ticksNew.length >= ticksOld.length, "默认自动刻度不少于旧的 5 档");
+  var sized = core.autoTickCountForSize(800, 12);
+  assert(sized >= 6 && sized <= 10, "宽图自动目标约 6–8 个刻度");
+  src.xAxis.tickTargetCount = 8;
+  var extracted = core.extractFigureTemplate(src, { name: "tick-tpl" });
+  assert(extracted.xAxis.tickMode === "manual" && extracted.xAxis.majorTick === 100 && extracted.xAxis.tickTargetCount === 8, "模板保存刻度模式和目标数");
+  var fresh = core.createPlot(p, { name: "new", title: "new" });
+  core.applyFigureTemplate(fresh, extracted);
+  assert(fresh.xAxis.tickMode === "manual" && fresh.xAxis.majorTick === 100, "套用模板恢复手动步长");
+
+  var items = [];
+  for (var n = 0; n < 8; n += 1) items.push({ label: n < 5 ? ("T" + (n + 1)) : ("长名称" + n) });
+  var autoLegend = core.layoutLegendItems(items, { fontSize: 12, columns: 4, layoutMode: "auto", measure: function (text) { return String(text).length * 8; } });
+  var manualLegend = core.layoutLegendItems(items, { fontSize: 12, columns: 8, layoutMode: "manual-rows", rowBreaks: [5], measure: function (text) { return String(text).length * 8; } });
+  assert(manualLegend.rows === 2 && manualLegend.placed[5].y > manualLegend.placed[0].y, "手动分行把长名称放到第二行");
+  assert(manualLegend.columns === 8, "手动分行仍使用列数");
+  assert(autoLegend.layoutMode === "auto", "自动模式不吃手动分行");
+  var longItems = [];
+  var n;
+  for (n = 1; n <= 52; n += 1) longItems.push({ label: "T" + n });
+  ["冷板温度", "进水口温度", "出水口温度", "冷板测点1", "冷板测点2"].forEach(function (name) { longItems.push({ label: name }); });
+  var grid8 = core.layoutLegendItems(longItems, { fontSize: 12, columns: 8, layoutMode: "manual-rows", rowBreaks: [52], measure: function (text) { return String(text).length * 8; } });
+  assert(grid8.columns === 8 && grid8.placed[7].row === 0 && grid8.placed[8].row === 1, "列数=8 时前 52 项按 8 列网格");
+  assert(grid8.placed[52].row > grid8.placed[51].row, "长名称从断点起换到后续行");
+  var grid6 = core.layoutLegendItems(longItems, { fontSize: 12, columns: 6, layoutMode: "manual-rows", rowBreaks: [52], measure: function (text) { return String(text).length * 8; } });
+  assert(grid6.placed[6].row === 1 && grid6.columns === 6, "列数 8→6 时首行只排 6 项");
+  var autoIgnore = core.layoutLegendItems(longItems, { fontSize: 12, columns: 8, layoutMode: "auto", rowBreaks: [52], measure: function (text) { return String(text).length * 8; } });
+  assert(autoIgnore.layoutMode === "auto" && autoIgnore.placed[52].row === Math.floor(52 / 8), "自动模式忽略手动断点");
+  var measureLen = function (text) { return String(text).length * 8; };
+  var gridX = [];
+  for (n = 0; n < 52; n += 1) gridX.push(grid8.placed[n].x);
+  var stretched = longItems.slice();
+  stretched[52] = { label: "非常非常非常非常长的冷板温度名称" };
+  var afterStretch = core.layoutLegendItems(stretched, { fontSize: 12, columns: 8, layoutMode: "manual-rows", rowBreaks: [52], measure: measureLen });
+  for (n = 0; n < 52; n += 1) {
+    assert(afterStretch.placed[n].x === gridX[n], "D-FIX03 长名称变长不改上方 T 项 x");
+  }
+  assert(afterStretch.placed[52].rowKind === "independent", "手动断点后的长名称行独立测宽");
+  assert(afterStretch.placed[1].x === grid8.placed[1].x, "独立行不得进入共享列宽");
+  var splitLong = core.layoutLegendItems(stretched, { fontSize: 12, columns: 8, layoutMode: "manual-rows", rowBreaks: [52, 53], measure: measureLen });
+  for (n = 0; n < 52; n += 1) {
+    assert(splitLong.placed[n].x === gridX[n], "长名称从一行变两行仍不改 T 项 x");
+  }
+
+  var lib = { templates: [] };
+  var first = core.saveFigureTemplate(lib, extracted, { action: "create", now: "2026-10-29T00:00:00.000Z" });
+  lib = first.library;
+  assert(first.ok && lib.templates.length === 1, "新建模板");
+  var clash = core.saveFigureTemplate(lib, extracted, { action: "create" });
+  assert(clash.needsChoice && lib.templates.length === 1, "同名不静默新增");
+  extracted.xAxis.majorTick = 50;
+  var over = core.saveFigureTemplate(lib, extracted, { action: "overwrite", templateId: first.template.id, now: "2026-10-29T01:00:00.000Z" });
+  lib = over.library;
+  assert(over.ok && over.overwritten && lib.templates.length === 1 && lib.templates[0].xAxis.majorTick === 50, "覆盖同名保留 ID");
+  var renamed = core.saveFigureTemplate(lib, extracted, { action: "rename", name: "tick-tpl-2" });
+  assert(renamed.ok && renamed.library.templates.length === 2, "另存新名称增加一条");
+  var oldDup = core.normalizeTemplateLibrary({
+    templates: [
+      { templateFormatVersion: 1, id: "old-a", name: "重复", updatedAt: "2026-01-01T00:00:00.000Z" },
+      { templateFormatVersion: 1, id: "old-b", name: "重复", updatedAt: "2026-02-01T00:00:00.000Z" }
+    ]
+  });
+  assert(oldDup.templates.length === 2 && core.templateListLabel(oldDup.templates[0]) !== core.templateListLabel(oldDup.templates[1]), "历史同名模板可辨认");
+
+  var round = core.parseProject(core.serializeProject(p));
+  assert(round.canvases[0].instances[0].display && round.canvases[0].instances[0].display.legend.fontSize === 11, "工程往返保留副本图例");
+  assert(round.projectFormatVersion === "1.1", "v0.7.2 不升工程格式");
 }());
 
 Promise.all(updateChecks).then(function () {

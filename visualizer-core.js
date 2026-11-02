@@ -4,7 +4,7 @@
 
   var APP_INFO = Object.freeze({
     name: "Visualizer",
-    version: "0.7.0",
+    version: "0.7.2",
     repositoryOwner: "aidisen975-cmd",
     repositoryName: "Visualizer",
     updateChannel: "stable"
@@ -14,17 +14,26 @@
   var SCHEMA_VERSION = 2;
   var COMPUTED_DATASET_ID = "ds-computed";
   var COMPUTED_DATASET_NAME = "计算结果";
+  var SEGMENT_RANGE_TYPES = ["x", "time", "step", "row"];
+  var CSV_EXPORT_ENCODINGS = ["utf-8-bom", "utf-8", "gb18030"];
+  var csvRowCache = typeof WeakMap !== "undefined" ? new WeakMap() : null;
   var FORMULA_STATUSES = ["ready", "dirty", "computing", "invalid", "error"];
-  var FORMULA_FUNCTIONS = { abs: 1, sqrt: 1, ln: 1, log10: 1, exp: 1, min: 2, max: 2 };
+  var FORMULA_FUNCTIONS = { abs: 1, sqrt: 1, ln: 1, log10: 1, exp: 1, min: 2, max: 2, sum: 1, average: 1, mean: 1 };
   var FORMULA_CONSTANTS = { pi: Math.PI, e: Math.E };
+  var MAX_FORMULA_LENGTH = 20000;
   var TEMPLATE_FORMAT_VERSION = 1;
   var TEMPLATE_STORAGE_KEY = "visualizer.templates.figure.v1";
   var SELECTED_OBJECT_TYPES = ["plot", "detail", "legend", "annotation", "source-box", "connector", "inset"];
   var AXIS_STYLE_KEYS = [
     "showLine", "lineColor", "lineWidth",
     "showMajorTicks", "showMinorTicks", "showTickLabels", "tickDirection",
-    "showTitle", "formatMode", "decimals"
+    "showTitle", "formatMode", "decimals",
+    "tickMode", "majorTick", "tickTargetCount"
   ];
+  var AXIS_TICK_KEYS = ["tickMode", "majorTick", "tickTargetCount"];
+  var DEFAULT_TICK_COUNT = 7;
+  var MIN_INSTANCE_WIDTH = 160;
+  var MIN_INSTANCE_HEIGHT = 110;
   var SUPPORTED_PROJECT_FORMATS = ["1.0", "1.1"];
   var TIME_IN_SECONDS = { ms: 0.001, s: 1, min: 60, h: 3600 };
   var TIME_LABELS = { ms: "ms", s: "s", min: "min", h: "h" };
@@ -39,6 +48,9 @@
   var WHEEL_ZOOM_GAIN = 0.0015;
   var WHEEL_ZOOM_MAX_STEP = 0.2;
   var SNAP_SCREEN_PX = 8;
+  var SNAP_RELEASE_PX = 12;
+  var READOUT_HIT_PX = 18;
+  var SLOT_MATCH_PX = 2;
   var DEFAULT_FIGURE_WIDTH = 1280;
   var DEFAULT_FIGURE_HEIGHT = 800;
   var LAYOUT_PADDING = 40;
@@ -76,7 +88,7 @@
   var LINE_TYPES = LINE_STYLES.map(function (item) { return item.id; });
   var LINE_DASH = {};
   LINE_STYLES.forEach(function (item) { LINE_DASH[item.id] = item.dash; });
-  var DEFAULT_FONT = "Aptos, Helvetica Neue, Noto Sans SC, sans-serif";
+  var DEFAULT_FONT = "Aptos, Helvetica Neue, Segoe UI, Noto Sans SC, sans-serif";
   var FONT_FAMILIES = [
     { value: DEFAULT_FONT, label: "系统默认" },
     { value: '"Microsoft YaHei", "微软雅黑", Arial, sans-serif', label: "微软雅黑" },
@@ -326,6 +338,18 @@
     );
   }
 
+  function isRelativeTimeHeader(metaOrString) {
+    var meta = typeof metaOrString === "object" && metaOrString
+      ? metaOrString
+      : parseColumnHeader(metaOrString);
+    var normalized = normalizeHeader(meta.name || meta.originalHeader || "");
+    return /相对时间|relativetime|reltime|^trel$/.test(normalized);
+  }
+
+  function isTimeLikeHeader(metaOrString) {
+    return isTimeHeader(metaOrString) || isRelativeTimeHeader(metaOrString);
+  }
+
   function sensorIdFromHeader(header) {
     var match = String(header || "").match(/(?:^|[^a-z0-9])t\s*(\d+)(?!\d)/i);
     return match ? Number(match[1]) : null;
@@ -377,6 +401,184 @@
       if (Number.isFinite(parseNumericCell(cell))) numeric += 1;
     }
     return seen > 0 && numeric / seen >= 0.8;
+  }
+
+  var CSV_ENCODING_LABELS = ["utf-8", "gb18030", "gbk"];
+  var CSV_ENCODING_AUTO_MIN = 0.75;
+
+  function asCsvBytes(input) {
+    if (input instanceof Uint8Array) return input;
+    if (typeof ArrayBuffer !== "undefined" && input instanceof ArrayBuffer) return new Uint8Array(input);
+    if (input && typeof input.byteLength === "number" && input.buffer) {
+      return new Uint8Array(input.buffer, input.byteOffset || 0, input.byteLength);
+    }
+    throw new Error("CSV 需要二进制内容，不能对未知编码直接按文本读取。");
+  }
+
+  function sniffCsvBom(bytes) {
+    if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) return "utf-8";
+    if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) return "utf-16le";
+    if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) return "utf-16be";
+    return "";
+  }
+
+  function csvFirstLine(text) {
+    var source = String(text || "");
+    var end = source.search(/[\r\n]/);
+    return end < 0 ? source : source.slice(0, end);
+  }
+
+  function csvHeaderPreview(text) {
+    var header = csvFirstLine(text);
+    var cells = header.split(",").slice(0, 8);
+    var preview = cells.join(", ");
+    return preview.length > 180 ? preview.slice(0, 177) + "..." : preview;
+  }
+
+  function csvTextLooksReplaced(text) {
+    return String(text || "").indexOf("\uFFFD") >= 0;
+  }
+
+  function scoreDecodedCsv(text) {
+    var source = String(text || "");
+    if (!source) {
+      return { confidence: 0, columns: 0, cjkCount: 0, controlCount: 0, replacementCount: 0, headerPreview: "" };
+    }
+    var replacementCount = 0;
+    var cjkCount = 0;
+    var controlCount = 0;
+    var i;
+    var limit = Math.min(source.length, 8192);
+    for (i = 0; i < source.length; i += 1) {
+      var code = source.charCodeAt(i);
+      if (code === 0xFFFD) replacementCount += 1;
+      if (i < limit) {
+        if (code >= 0x4E00 && code <= 0x9FFF) cjkCount += 1;
+        if (code < 32 && code !== 9 && code !== 10 && code !== 13) controlCount += 1;
+      }
+    }
+    var header = csvFirstLine(source);
+    var columns = header ? header.split(",").length : 0;
+    var confidence = 0;
+    if (replacementCount === 0) confidence += 0.35;
+    if (columns >= 2) confidence += 0.25;
+    if (cjkCount > 0) confidence += 0.25;
+    else if (controlCount === 0 && columns >= 2) confidence += 0.15;
+    if (controlCount === 0) confidence += 0.15;
+    else confidence -= Math.min(0.45, controlCount * 0.08);
+    if (replacementCount > 0) confidence = 0;
+    if (confidence < 0) confidence = 0;
+    if (confidence > 1) confidence = 1;
+    return {
+      confidence: confidence,
+      columns: columns,
+      cjkCount: cjkCount,
+      controlCount: controlCount,
+      replacementCount: replacementCount,
+      headerPreview: csvHeaderPreview(source)
+    };
+  }
+
+  function decodeCsvLabel(bytes, label) {
+    try {
+      var text = new TextDecoder(label, { fatal: true }).decode(bytes);
+      if (csvTextLooksReplaced(text)) {
+        return { ok: false, encoding: label, text: "", error: "解码结果含替换字符，未提交。" };
+      }
+      return { ok: true, encoding: label, text: text, error: "" };
+    } catch (error) {
+      return {
+        ok: false,
+        encoding: label,
+        text: "",
+        error: (error && error.message) ? error.message : "解码失败"
+      };
+    }
+  }
+
+  function candidateFromDecode(label, decoded) {
+    var scored = decoded.ok ? scoreDecodedCsv(decoded.text) : {
+      confidence: 0,
+      columns: 0,
+      cjkCount: 0,
+      controlCount: 0,
+      replacementCount: 0,
+      headerPreview: ""
+    };
+    return {
+      encoding: label,
+      ok: !!(decoded.ok && scored.replacementCount === 0 && scored.confidence > 0),
+      confidence: decoded.ok ? scored.confidence : 0,
+      headerPreview: decoded.ok ? scored.headerPreview : "",
+      columns: scored.columns,
+      cjkCount: scored.cjkCount,
+      controlCount: scored.controlCount,
+      replacementCount: scored.replacementCount,
+      error: decoded.ok ? "" : decoded.error
+    };
+  }
+
+  function detectCsvEncoding(input) {
+    var bytes = asCsvBytes(input);
+    var bom = sniffCsvBom(bytes);
+    var labels = [];
+    if (bom === "utf-8") labels.push("utf-8");
+    else if (bom === "utf-16le" || bom === "utf-16be") labels.push(bom);
+    CSV_ENCODING_LABELS.forEach(function (label) {
+      if (labels.indexOf(label) < 0) labels.push(label);
+    });
+    var candidates = labels.map(function (label) {
+      return candidateFromDecode(label, decodeCsvLabel(bytes, label));
+    });
+    var chosen = null;
+    if (bom) {
+      chosen = candidates.find(function (item) { return item.encoding === bom && item.ok && item.confidence >= CSV_ENCODING_AUTO_MIN; }) || null;
+    }
+    if (!chosen) {
+      var utf8 = candidates.find(function (item) { return item.encoding === "utf-8"; });
+      if (utf8 && utf8.ok && utf8.confidence >= CSV_ENCODING_AUTO_MIN) chosen = utf8;
+    }
+    if (!chosen) {
+      candidates.forEach(function (item) {
+        if (!item.ok) return;
+        if (!chosen || item.confidence > chosen.confidence) chosen = item;
+      });
+      if (chosen && chosen.confidence < CSV_ENCODING_AUTO_MIN) chosen = null;
+    }
+    var decoded = chosen ? decodeCsvLabel(bytes, chosen.encoding) : { ok: false, text: "" };
+    return {
+      encoding: chosen ? chosen.encoding : "",
+      bom: bom,
+      text: chosen && decoded.ok ? decoded.text : "",
+      confidence: chosen ? chosen.confidence : 0,
+      needsManualChoice: !chosen,
+      candidates: candidates
+    };
+  }
+
+  function decodeCsvBytes(input, encoding) {
+    var bytes = asCsvBytes(input);
+    var label = String(encoding || "").trim().toLowerCase();
+    if (!label) {
+      var detected = detectCsvEncoding(bytes);
+      if (detected.needsManualChoice || !detected.text) {
+        throw new Error("无法可靠识别 CSV 编码，请手动选择。");
+      }
+      return { encoding: detected.encoding, text: detected.text, confidence: detected.confidence, bom: detected.bom };
+    }
+    if (label === "utf8") label = "utf-8";
+    var decoded = decodeCsvLabel(bytes, label);
+    if (!decoded.ok) throw new Error("无法按 " + label + " 解码 CSV：" + decoded.error);
+    var scored = scoreDecodedCsv(decoded.text);
+    if (scored.replacementCount > 0) throw new Error("解码结果含替换字符，未提交。");
+    return { encoding: label, text: decoded.text, confidence: scored.confidence, bom: sniffCsvBom(bytes) };
+  }
+
+  function parseDatasetFromCsvBytes(input, options) {
+    var decoded = decodeCsvBytes(input, options && options.encoding);
+    var next = options ? Object.assign({}, options) : {};
+    next.sourceEncoding = decoded.encoding;
+    return parseDatasetFromCsv(decoded.text, next);
   }
 
   function parseCsv(text) {
@@ -527,7 +729,9 @@
     return {
       id: datasetId,
       name: String(name).replace(/\.[^.]+$/, "") || "未命名数据",
+      kind: "raw",
       sourceFilename: (options && options.sourceFilename) || "",
+      sourceEncoding: (options && options.sourceEncoding) || "",
       importedAt: (options && options.importedAt) || new Date().toISOString(),
       headers: headers,
       timeUnit: (options && options.timeUnit) || "s",
@@ -638,11 +842,18 @@
     if (!items.length) return "Value";
     var metas = items.map(function (item) {
       var dataset = findDataset(project, item.series.datasetId);
+      var header = resolvedXColumnRef(project, sourcePlotOf(project, plot) || plot, dataset);
+      var parsed = parseColumnHeader(header || (dataset && dataset.xHeader) || (dataset && dataset.xName) || "");
+      var mappedIsOriginal = !header || !dataset || header === dataset.xHeader;
+      var mappedIsTime = mappedIsOriginal
+        ? (!dataset || dataset.xIsTime !== false)
+        : isTimeLikeHeader(parsed);
       var time = plotTimeSettings(plot, dataset);
+      var useTime = time.enabled && mappedIsTime;
       return {
-        name: dataset && dataset.xName ? dataset.xName : (time.enabled ? "Time" : ""),
-        unit: time.enabled ? (TIME_LABELS[time.displayUnit] || time.displayUnit) : ((dataset && dataset.xUnit) || ""),
-        xIsTime: time.enabled
+        name: parsed.name || (dataset && dataset.xName) || (useTime ? "Time" : ""),
+        unit: useTime ? (TIME_LABELS[time.displayUnit] || time.displayUnit) : (parsed.unit || (dataset && dataset.xUnit) || ""),
+        xIsTime: useTime
       };
     });
     var first = metas[0];
@@ -790,6 +1001,7 @@
       background: partial && partial.background ? String(partial.background) : "",
       groupStyles: normalizeGroupStyles(partial && partial.groupStyles),
       defaultSeriesStyle: normalizeDefaultSeriesStyle(partial && partial.defaultSeriesStyle),
+      xColumnByDataset: normalizeXColumnMap(partial && partial.xColumnByDataset),
       templateMeta: normalizeTemplateMeta(partial && partial.templateMeta),
       accentColor: normalizeHexColor(partial && partial.accentColor) || "",
       annotations: normalizeAnnotations(partial && partial.annotations, (partial && partial.id) || ""),
@@ -835,11 +1047,18 @@
   function removeDataset(project, datasetId) {
     var dataset = findDataset(project, datasetId);
     if (!dataset) return;
+    if (dataset.kind !== "segment" && dataset.kind !== "computed") {
+      listSegments(project, datasetId).slice().forEach(function (segment) {
+        removeDataset(project, segment.id);
+      });
+    }
+    dataset = findDataset(project, datasetId);
+    if (!dataset) return;
     var removedIds = dataset.series.map(function (series) { return series.id; });
     markDependentsInvalid(project, removedIds);
     markAnalysesInvalid(project, removedIds, "来源系列已删除，未改绑同名列。");
     project.datasets = project.datasets.filter(function (item) { return item.id !== datasetId; });
-    if (dataset.kind === "computed") {
+    if (dataset.kind === "computed" || dataset.kind === "segment") {
       applySeriesRemoval(project, removedIds);
       return;
     }
@@ -1108,6 +1327,16 @@
     return out;
   }
 
+  function normalizeXColumnMap(raw) {
+    var out = {};
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+    Object.keys(raw).forEach(function (key) {
+      if (raw[key] == null || raw[key] === "") return;
+      out[String(key)] = String(raw[key]);
+    });
+    return out;
+  }
+
   function normalizeDefaultSeriesStyle(raw) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
     var style = {
@@ -1287,9 +1516,127 @@
     return numericExtent(values, paddingRatio);
   }
 
+  function xColumnSourceDataset(project, dataset) {
+    if (!dataset) return null;
+    if (dataset.kind === "segment") return sourceDatasetOfSegment(project, dataset) || dataset;
+    return dataset;
+  }
+
+  function listNumericXColumns(project, dataset) {
+    if (!dataset || dataset.kind === "computed") return [];
+    var source = xColumnSourceDataset(project, dataset);
+    var headers = (source && source.headers) || dataset.headers || [];
+    var rows = datasetCsvRows(source || dataset);
+    return headers.map(function (header, index) {
+      var parsed = parseColumnHeader(header);
+      var numeric = !rows.length || isMostlyNumericColumn(rows, index, 0);
+      return {
+        header: header,
+        name: parsed.name || header,
+        unit: parsed.unit || "",
+        isTime: isTimeLikeHeader(parsed),
+        isRelative: isRelativeTimeHeader(parsed),
+        isAuto: header === (dataset.xHeader || (source && source.xHeader) || ""),
+        numeric: numeric
+      };
+    }).filter(function (item) {
+      return item.numeric || item.isAuto;
+    });
+  }
+
+  function suggestRelativeXColumn(project, dataset) {
+    var found = listNumericXColumns(project, dataset).filter(function (item) { return item.isRelative; });
+    return found.length ? found[0].header : "";
+  }
+
+  function resolvedXColumnRef(project, plot, dataset) {
+    if (!dataset) return "";
+    var plotMap = plot && plot.xColumnByDataset;
+    if (plotMap && Object.prototype.hasOwnProperty.call(plotMap, dataset.id) && plotMap[dataset.id]) {
+      return String(plotMap[dataset.id]);
+    }
+    if (dataset.defaultXColumnRef) return String(dataset.defaultXColumnRef);
+    return dataset.xHeader || "";
+  }
+
+  function mappedSeriesX(project, plot, series, dataset) {
+    if (!series) return [];
+    if (!dataset || dataset.kind === "computed") return (series.x || []).slice();
+    var header = resolvedXColumnRef(project, plot, dataset);
+    if (!header || header === dataset.xHeader) return (series.x || []).slice();
+    var source = xColumnSourceDataset(project, dataset);
+    var colIndex = datasetHeaderIndex(source || dataset, header);
+    if (colIndex < 0) colIndex = datasetHeaderIndex(dataset, header);
+    var expected = (series.y || series.x || []).length;
+    if (colIndex < 0) {
+      var missing = [];
+      var i;
+      for (i = 0; i < expected; i += 1) missing.push(NaN);
+      return missing;
+    }
+    var rows = datasetCsvRows(source || dataset);
+    var indexMap = datasetCsvIndexMap(source || dataset);
+    var ranges = dataset.kind === "segment"
+      ? (dataset.selectedRowRanges || [])
+      : [{ start: 0, end: Math.max(0, rows.length - 1) }];
+    var values = [];
+    ranges.forEach(function (range) {
+      var row;
+      for (row = range.start; row <= range.end; row += 1) {
+        if (indexMap[row] == null || indexMap[row] < 0) continue;
+        values.push(parseNumericCell((rows[row] || [])[colIndex]));
+      }
+    });
+    if (values.length === expected) return values;
+    if (values.length > expected) return values.slice(0, expected);
+    while (values.length < expected) values.push(NaN);
+    return values;
+  }
+
+  function setDatasetDefaultXColumn(project, datasetId, header) {
+    var dataset = findDataset(project, datasetId);
+    if (!dataset || dataset.kind === "computed") throw new Error("计算结果没有可映射的数据列。");
+    var ref = header ? String(header) : "";
+    if (ref) {
+      var allowed = listNumericXColumns(project, dataset);
+      if (!allowed.some(function (item) { return item.header === ref; })) {
+        throw new Error("该列不能作为 X：" + ref);
+      }
+    }
+    dataset.defaultXColumnRef = ref;
+    syncAllPlotAxisAutoTitles(project);
+    return dataset;
+  }
+
+  function setPlotXColumnOverride(project, plot, datasetId, header) {
+    if (!plot.xColumnByDataset) plot.xColumnByDataset = {};
+    var ref = header ? String(header) : "";
+    if (!ref) {
+      delete plot.xColumnByDataset[datasetId];
+    } else {
+      var dataset = findDataset(project, datasetId);
+      if (!dataset) throw new Error("找不到数据源。");
+      var allowed = listNumericXColumns(project, dataset);
+      if (!allowed.some(function (item) { return item.header === ref; })) {
+        throw new Error("该列不能作为 X：" + ref);
+      }
+      plot.xColumnByDataset[datasetId] = ref;
+    }
+    syncPlotAxisAutoTitles(project, plot);
+    return plot;
+  }
+
   function seriesXForPlot(project, plot, series, dataset) {
+    var host = sourcePlotOf(project, plot) || plot;
+    var xs = mappedSeriesX(project, host, series, dataset);
+    var header = resolvedXColumnRef(project, host, dataset);
+    var parsed = parseColumnHeader(header || (dataset && dataset.xHeader) || "");
+    var mappedIsOriginal = !header || !dataset || header === dataset.xHeader;
+    var mappedIsTime = mappedIsOriginal
+      ? (!dataset || dataset.xIsTime !== false)
+      : isTimeLikeHeader(parsed);
     var time = plotTimeSettings(plot, dataset);
-    return convertSeriesX(series, time.sourceUnit, time.displayUnit, time.enabled);
+    return convertSeriesX({ x: xs }, time.sourceUnit, time.displayUnit, time.enabled && mappedIsTime);
   }
 
   function seriesExtents(project, plot) {
@@ -1358,6 +1705,10 @@
       titleMode: axis.titleMode === "custom" ? "custom" : "auto",
       tickMode: axis.tickMode === "manual" ? "manual" : "auto",
       majorTick: Number.isFinite(majorTick) && majorTick > 0 ? majorTick : null,
+      tickTargetCount: (function () {
+        var count = axis.tickTargetCount == null || axis.tickTargetCount === "" ? null : Number(axis.tickTargetCount);
+        return Number.isFinite(count) && count >= 2 ? Math.min(20, Math.round(count)) : null;
+      }()),
       minorTickMode: axis.minorTickMode === "off" || axis.minorTickMode === "custom" ? axis.minorTickMode : "auto",
       minorTick: Number.isFinite(minorTick) && minorTick > 0 ? minorTick : null,
       formatMode: axis.formatMode === "fixed" || axis.formatMode === "scientific" ? axis.formatMode : "auto",
@@ -1389,11 +1740,11 @@
 
   function normalizeSeries(raw, datasetId) {
     if (!raw || typeof raw !== "object") throw new Error("曲线必须是对象。");
-    var kind = raw.kind === "computed" ? "computed" : "raw";
+    var kind = raw.kind === "computed" ? "computed" : (raw.kind === "segment" ? "segment" : "raw");
     if (!Array.isArray(raw.x) || !Array.isArray(raw.y) || raw.x.length !== raw.y.length) {
       throw new Error("曲线必须提供长度一致的独立 x/y。");
     }
-    if (kind !== "computed" && raw.x.length < 2) {
+    if (kind === "raw" && raw.x.length < 2) {
       throw new Error("曲线必须提供长度一致且至少两点的独立 x/y。");
     }
     var localId = String(raw.localId || raw.id || "series");
@@ -1444,17 +1795,18 @@
   function normalizeDataset(raw) {
     if (!raw || typeof raw !== "object") throw new Error("数据源必须是对象。");
     var datasetId = String(raw.id || makeId("ds"));
-    var kind = raw.kind === "computed" ? "computed" : "raw";
-    if (!Array.isArray(raw.series) || (kind !== "computed" && !raw.series.length)) {
+    var kind = raw.kind === "computed" ? "computed" : (raw.kind === "segment" ? "segment" : "raw");
+    if (!Array.isArray(raw.series) || (kind === "raw" && !raw.series.length)) {
       throw new Error("数据源至少需要一条曲线。");
     }
     var xMeta = parseColumnHeader(raw.xHeader || raw.xName || "");
     var xIsTime = raw.xIsTime === false ? false : (raw.xIsTime === true ? true : (xMeta.name ? isTimeHeader(xMeta) : true));
-    return {
+    var dataset = {
       id: datasetId,
       name: kind === "computed" ? String(raw.name || COMPUTED_DATASET_NAME) : String(raw.name || "未命名数据"),
       kind: kind,
       sourceFilename: String(raw.sourceFilename || ""),
+      sourceEncoding: String(raw.sourceEncoding || ""),
       importedAt: String(raw.importedAt || ""),
       headers: Array.isArray(raw.headers) ? raw.headers.map(String) : [],
       timeUnit: TIME_IN_SECONDS[raw.timeUnit] ? raw.timeUnit : "s",
@@ -1462,10 +1814,20 @@
       xName: String(raw.xName || xMeta.name || (xIsTime ? "Time" : "")),
       xUnit: raw.xUnit == null ? (xMeta.unit || "") : String(raw.xUnit),
       xIsTime: xIsTime,
-      rawCsv: kind === "computed" ? "" : String(raw.rawCsv || ""),
+      defaultXColumnRef: String(raw.defaultXColumnRef || ""),
+      rawCsv: kind === "computed" || kind === "segment" ? "" : String(raw.rawCsv || ""),
       warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : [],
       series: (raw.series || []).map(function (item) { return normalizeSeries(item, datasetId); })
     };
+    if (kind === "segment") {
+      dataset.sourceDatasetId = String(raw.sourceDatasetId || "");
+      dataset.rangeType = normalizeSegmentRangeType(raw.rangeType);
+      dataset.rangeDefinition = normalizeSegmentRangeDefinition(raw.rangeDefinition);
+      dataset.selectedRowRanges = normalizeRowRanges(raw.selectedRowRanges);
+      dataset.createdAt = String(raw.createdAt || "");
+      dataset.columnSelection = normalizeColumnSelection(raw.columnSelection);
+    }
+    return dataset;
   }
 
   function normalizeUi(raw) {
@@ -1543,8 +1905,20 @@
       borderWidth: Number.isFinite(borderWidth) ? clamp(borderWidth, 0, 8) : 1,
       borderRadius: Number.isFinite(borderRadius) ? clamp(borderRadius, 0, 16) : 4,
       padding: Number.isFinite(padding) ? clamp(padding, 0, 24) : 6,
-      wrap: legend.wrap !== false
+      wrap: legend.wrap !== false,
+      layoutMode: legend.layoutMode === "manual-rows" ? "manual-rows" : "auto",
+      rowBreaks: normalizeLegendRowBreaks(legend.rowBreaks)
     };
+  }
+
+  function normalizeLegendRowBreaks(raw) {
+    if (!Array.isArray(raw)) return [];
+    var seen = {};
+    return raw.map(function (value) { return Math.round(Number(value)); }).filter(function (value) {
+      if (!Number.isFinite(value) || value < 1 || seen[value]) return false;
+      seen[value] = true;
+      return true;
+    }).sort(function (a, b) { return a - b; });
   }
 
   function normalizeSeriesRef(ref) {
@@ -1613,6 +1987,7 @@
       background: raw.background ? String(raw.background) : "",
       groupStyles: normalizeGroupStyles(raw.groupStyles),
       defaultSeriesStyle: normalizeDefaultSeriesStyle(raw.defaultSeriesStyle),
+      xColumnByDataset: normalizeXColumnMap(raw.xColumnByDataset),
       templateMeta: normalizeTemplateMeta(raw.templateMeta),
       annotations: normalizeAnnotations(raw.annotations, raw.id),
       insets: normalizeInsets(raw.insets, raw.id),
@@ -1710,6 +2085,12 @@
     project.plots.forEach(function (plot) { finalizePlotInspection(project, plot); });
     syncAllPlotAxisAutoTitles(project);
     syncCanvasToPlots(project);
+    (project.canvases || []).forEach(function (canvas) {
+      (canvas.instances || []).forEach(function (instance) {
+        var plot = findPlot(project, instance.plotId);
+        if (plot) ensureInstanceDisplay(instance, plot);
+      });
+    });
     auditAnalyses(project);
     return project;
   }
@@ -2860,16 +3241,22 @@
   }
 
   function pickAxisStyle(axis) {
+    var raw = axis && typeof axis === "object" ? axis : {};
     var src = normalizeAxis(axis);
     var out = {};
-    AXIS_STYLE_KEYS.forEach(function (key) { out[key] = src[key]; });
+    AXIS_STYLE_KEYS.forEach(function (key) {
+      if (AXIS_TICK_KEYS.indexOf(key) >= 0 && raw[key] == null) return;
+      out[key] = src[key];
+    });
     return out;
   }
 
   function applyAxisStyle(axis, style) {
     if (!axis || !style) return axis;
-    var patch = pickAxisStyle(style);
-    AXIS_STYLE_KEYS.forEach(function (key) { axis[key] = patch[key]; });
+    AXIS_STYLE_KEYS.forEach(function (key) {
+      if (!Object.prototype.hasOwnProperty.call(style, key)) return;
+      axis[key] = style[key];
+    });
     return axis;
   }
 
@@ -3089,6 +3476,66 @@
     return copy;
   }
 
+  function normalizeTemplateNameKey(name) {
+    return String(name || "").trim().toLowerCase();
+  }
+
+  function templatesWithName(library, name) {
+    var key = normalizeTemplateNameKey(name);
+    if (!key) return [];
+    return ((library && library.templates) || []).filter(function (tpl) {
+      return !tpl.system && normalizeTemplateNameKey(tpl.name) === key;
+    });
+  }
+
+  function templateListLabel(template) {
+    if (!template) return "";
+    var stamp = template.updatedAt || template.createdAt || "";
+    var when = "";
+    if (stamp) {
+      var date = new Date(stamp);
+      if (!Number.isNaN(date.getTime())) {
+        when = date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0");
+      }
+    }
+    var tail = String(template.id || "").slice(-4);
+    return (template.name || "未命名模板") + (when ? " · " + when : "") + (tail ? " · " + tail : "");
+  }
+
+  function saveFigureTemplate(library, template, decision) {
+    var lib = normalizeTemplateLibrary(library);
+    var tpl = normalizeFigureTemplate(template);
+    if (!tpl) return { ok: false, library: lib, error: "无法保存无效模板。", conflict: [] };
+    var name = String(tpl.name || "").trim();
+    if (!name) return { ok: false, library: lib, error: "模板名称不能为空。", conflict: [] };
+    tpl.name = name;
+    var action = decision && decision.action ? decision.action : "create";
+    var matches = templatesWithName(lib, name);
+    if (action === "cancel") return { ok: false, library: lib, error: "", cancelled: true, conflict: matches };
+    if (action === "create" && matches.length) {
+      return { ok: false, library: lib, error: "已有同名模板。", conflict: matches, needsChoice: true };
+    }
+    var now = (decision && decision.now) || new Date().toISOString();
+    if (action === "overwrite") {
+      var targetId = (decision && decision.templateId) || (matches[0] && matches[0].id);
+      var target = lib.templates.find(function (item) { return item.id === targetId; });
+      if (!target) return { ok: false, library: lib, error: "找不到要覆盖的模板。", conflict: matches };
+      var keptId = target.id;
+      var createdAt = target.createdAt;
+      Object.keys(tpl).forEach(function (key) { target[key] = tpl[key]; });
+      target.id = keptId;
+      target.createdAt = createdAt;
+      target.updatedAt = now;
+      target.name = name;
+      return { ok: true, library: lib, template: target, overwritten: true };
+    }
+    tpl.updatedAt = now;
+    if (!tpl.createdAt) tpl.createdAt = now;
+    if (action === "rename" && decision && decision.name) tpl.name = String(decision.name).trim() || tpl.name;
+    lib.templates.push(tpl);
+    return { ok: true, library: lib, template: tpl, overwritten: false };
+  }
+
   function detailChildren(project, plotId) {
     return (project.plots || []).filter(function (plot) {
       return plot.detailSource && plot.detailSource.sourceFigureId === plotId;
@@ -3127,6 +3574,10 @@
     return SNAP_SCREEN_PX / clampZoom(zoom);
   }
 
+  function snapReleaseWorld(zoom) {
+    return SNAP_RELEASE_PX / clampZoom(zoom);
+  }
+
   function nearestSnap(value, candidates, threshold) {
     var best = null;
     (candidates || []).forEach(function (candidate) {
@@ -3136,12 +3587,76 @@
     return best;
   }
 
-  function collectEdgeGuides(plot, others, canvas) {
+  function instanceBox(instance) {
+    return {
+      x: Number(instance && instance.x) || 0,
+      y: Number(instance && instance.y) || 0,
+      width: Math.max(0, Number(instance && instance.width) || 0),
+      height: Math.max(0, Number(instance && instance.height) || 0)
+    };
+  }
+
+  function geometryMatches(a, b, tol) {
+    if (!a || !b) return false;
+    var slack = Number.isFinite(Number(tol)) ? Number(tol) : SLOT_MATCH_PX;
+    return Math.abs(Number(a.x) - Number(b.x)) <= slack
+      && Math.abs(Number(a.y) - Number(b.y)) <= slack
+      && Math.abs(Number(a.width) - Number(b.width)) <= slack
+      && Math.abs(Number(a.height) - Number(b.height)) <= slack;
+  }
+
+  function boxesOverlap(a, b) {
+    if (!a || !b) return false;
+    return a.x < b.x + b.width && a.x + a.width > b.x
+      && a.y < b.y + b.height && a.y + a.height > b.y;
+  }
+
+  function collectLayoutSlotBoxes(canvas) {
+    var area = canvasLayoutArea(canvas || {});
+    var boxes = [];
+    Object.keys(LAYOUT_TEMPLATES).forEach(function (id) {
+      layoutSlots(id, area).forEach(function (slot, index) {
+        boxes.push({
+          templateId: id,
+          slotIndex: index,
+          x: slot.x,
+          y: slot.y,
+          width: slot.width,
+          height: slot.height
+        });
+      });
+    });
+    return boxes;
+  }
+
+  function matchFillSlot(box, canvas, zoom) {
+    if (!box) return null;
+    var threshold = snapThresholdWorld(zoom) * 2;
+    var best = null;
+    collectLayoutSlotBoxes(canvas).forEach(function (slot) {
+      var left = Math.abs(box.x - slot.x);
+      var top = Math.abs(box.y - slot.y);
+      var right = Math.abs(box.x + box.width - (slot.x + slot.width));
+      var bottom = Math.abs(box.y + box.height - (slot.y + slot.height));
+      if (left > threshold || top > threshold || right > threshold || bottom > threshold) return;
+      var score = left + top + right + bottom;
+      if (!best || score < best.score) best = { slot: slot, score: score };
+    });
+    return best ? best.slot : null;
+  }
+
+  function collectEdgeGuides(plot, others, canvas, options) {
     var vertical = [0];
     var horizontal = [0];
     if (canvas) {
       vertical.push(canvas.width || 0, (canvas.width || 0) / 2);
       horizontal.push(canvas.height || 0, (canvas.height || 0) / 2);
+    }
+    if (!(options && options.omitSlots)) {
+      collectLayoutSlotBoxes(canvas).forEach(function (slot) {
+        vertical.push(slot.x, slot.x + slot.width);
+        horizontal.push(slot.y, slot.y + slot.height);
+      });
     }
     (others || []).forEach(function (other) {
       if (!other || !other.layout) return;
@@ -3211,29 +3726,95 @@
     }
     plot.layout.x = Math.round(plot.layout.x);
     plot.layout.y = Math.round(plot.layout.y);
-    return { plot: plot, guides: lines };
+    return {
+      plot: plot,
+      guides: lines,
+      fillSlot: matchFillSlot(plot.layout, canvas, zoom)
+    };
   }
 
-  function snapPlotResize(plot, others, canvas, zoom) {
-    var threshold = snapThresholdWorld(zoom);
-    var guides = collectEdgeGuides(plot, others, canvas);
-    var right = nearestSnap(plot.layout.x + plot.layout.width, guides.vertical, threshold);
-    var bottom = nearestSnap(plot.layout.y + plot.layout.height, guides.horizontal, threshold);
-    var lines = [];
-    if (right) {
-      plot.layout.width = Math.max(240, Math.round(right.value - plot.layout.x));
-      lines.push({ axis: "x", value: right.value });
+  function collectSizeCandidates(others, axis) {
+    var results = [];
+    (others || []).forEach(function (other) {
+      if (!other) return;
+      var layout = other.layout || other;
+      var value = axis === "height" ? Number(layout.height) : Number(layout.width);
+      if (!(value > 0)) return;
+      results.push({ value: value, id: other.id, name: other.name || "" });
+    });
+    return results;
+  }
+
+  function nearestSizeMatch(value, candidates, threshold) {
+    var best = null;
+    (candidates || []).forEach(function (item) {
+      var size = Number(item && item.value);
+      if (!(size > 0)) return;
+      var delta = Math.abs(value - size);
+      if (delta <= threshold && (!best || delta < best.delta)) {
+        best = { value: size, delta: delta, id: item.id, name: item.name || "" };
+      }
+    });
+    return best;
+  }
+
+  function sizeSnapThreshold(current, prev, enter, leave) {
+    if (prev && Number.isFinite(Number(prev.value)) && Math.abs(current - prev.value) <= leave) return leave;
+    return enter;
+  }
+
+  function snapPlotResize(plot, others, canvas, zoom, options) {
+    var opts = options || {};
+    var minW = Number.isFinite(Number(opts.minWidth)) ? Number(opts.minWidth) : MIN_INSTANCE_WIDTH;
+    var minH = Number.isFinite(Number(opts.minHeight)) ? Number(opts.minHeight) : MIN_INSTANCE_HEIGHT;
+    if (opts.disableSnap) {
+      return { plot: plot, guides: [], sizeMatches: [] };
     }
-    if (bottom) {
-      plot.layout.height = Math.max(180, Math.round(bottom.value - plot.layout.y));
-      lines.push({ axis: "y", value: bottom.value });
+    var enter = snapThresholdWorld(zoom);
+    var leave = snapReleaseWorld(zoom);
+    var widthHit = nearestSizeMatch(
+      plot.layout.width,
+      collectSizeCandidates(others, "width"),
+      sizeSnapThreshold(plot.layout.width, opts.prevWidthMatch, enter, leave)
+    );
+    var heightHit = nearestSizeMatch(
+      plot.layout.height,
+      collectSizeCandidates(others, "height"),
+      sizeSnapThreshold(plot.layout.height, opts.prevHeightMatch, enter, leave)
+    );
+    var lines = [];
+    var sizeMatches = [];
+    if (widthHit) {
+      plot.layout.width = Math.max(minW, Math.round(widthHit.value));
+      lines.push({ axis: "x", value: plot.layout.x + plot.layout.width, kind: "size" });
+      sizeMatches.push({ kind: "width", value: plot.layout.width, id: widthHit.id, name: widthHit.name });
+    }
+    if (heightHit) {
+      plot.layout.height = Math.max(minH, Math.round(heightHit.value));
+      lines.push({ axis: "y", value: plot.layout.y + plot.layout.height, kind: "size" });
+      sizeMatches.push({ kind: "height", value: plot.layout.height, id: heightHit.id, name: heightHit.name });
+    }
+    var guides = collectEdgeGuides(plot, others, canvas, { omitSlots: true });
+    if (!widthHit) {
+      var right = nearestSnap(plot.layout.x + plot.layout.width, guides.vertical, enter);
+      if (right) {
+        plot.layout.width = Math.max(minW, Math.round(right.value - plot.layout.x));
+        lines.push({ axis: "x", value: right.value });
+      }
+    }
+    if (!heightHit) {
+      var bottom = nearestSnap(plot.layout.y + plot.layout.height, guides.horizontal, enter);
+      if (bottom) {
+        plot.layout.height = Math.max(minH, Math.round(bottom.value - plot.layout.y));
+        lines.push({ axis: "y", value: bottom.value });
+      }
     }
     if (plot.lockAspect && plot.aspectRatio > 0) {
-      plot.layout.height = Math.max(180, Math.round(plot.layout.width / plot.aspectRatio));
+      plot.layout.height = Math.max(minH, Math.round(plot.layout.width / plot.aspectRatio));
     } else {
       plot.aspectRatio = plot.layout.height ? plot.layout.width / plot.layout.height : plot.aspectRatio;
     }
-    return { plot: plot, guides: lines };
+    return { plot: plot, guides: lines, sizeMatches: sizeMatches };
   }
 
   function niceStep(rawStep) {
@@ -3244,13 +3825,26 @@
   }
 
   function autoTicks(low, high, count) {
-    var step = niceStep((high - low) / Math.max(1, (count || 5) - 1));
+    var step = niceStep((high - low) / Math.max(1, (count || DEFAULT_TICK_COUNT) - 1));
     var first = Math.ceil(low / step) * step;
     var results = [];
     for (var value = first; value <= high + step * 0.2; value += step) {
       results.push(Number(value.toPrecision(8)));
     }
     return results.length ? results : [low, high];
+  }
+
+  function autoTickCountForSize(px, fontSize) {
+    var size = Number(px) || 0;
+    var label = Math.max(14, (Number(fontSize) || 12) * 2.4);
+    return clamp(Math.round(size / label) + 1, 4, 10);
+  }
+
+  function resolvedTickCount(axis, fallbackCount) {
+    if (axis && Number.isFinite(Number(axis.tickTargetCount)) && Number(axis.tickTargetCount) >= 2) {
+      return clamp(Math.round(Number(axis.tickTargetCount)), 2, 20);
+    }
+    return fallbackCount || DEFAULT_TICK_COUNT;
   }
 
   function validateTickInterval(interval, min, max) {
@@ -3264,7 +3858,7 @@
   function ticksFromInterval(low, high, interval) {
     var step = Number(interval);
     var error = validateTickInterval(step, low, high);
-    if (error) return { values: autoTicks(low, high, 5), error: error };
+    if (error) return { values: autoTicks(low, high, DEFAULT_TICK_COUNT), error: error };
     var start = Math.ceil(low / step - 1e-9) * step;
     var values = [];
     var guard = 0;
@@ -3280,7 +3874,7 @@
     if (axis && axis.tickMode === "manual" && Number.isFinite(Number(axis.majorTick)) && Number(axis.majorTick) > 0) {
       major = ticksFromInterval(low, high, axis.majorTick);
     } else {
-      major = { values: autoTicks(low, high, fallbackCount || 5), error: null };
+      major = { values: autoTicks(low, high, resolvedTickCount(axis, fallbackCount)), error: null };
     }
     var minor = [];
     var minorMode = axis && axis.minorTickMode ? axis.minorTickMode : "auto";
@@ -3378,6 +3972,8 @@
     var itemCount = (items || []).length;
     var explicitCols = opts.columns && opts.columns !== "auto";
     var explicitRows = opts.rows && opts.rows !== "auto";
+    var rowBreaks = normalizeLegendRowBreaks(opts.rowBreaks);
+    var manualRows = opts.layoutMode === "manual-rows";
     var colCount = resolveLegendColumns(opts, itemCount, orientation);
     var rowH = fontSize + 4;
     var widths = (items || []).map(function (item) {
@@ -3388,37 +3984,73 @@
       colCount = Math.max(1, Math.ceil(itemCount / Math.max(1, Number(opts.rows) || 1)));
     }
     var rows = Math.max(1, Math.ceil(itemCount / Math.max(1, colCount)));
-    if (!explicitCols && !explicitRows && orientation !== "vertical") {
+    if (!manualRows && !explicitCols && !explicitRows && orientation !== "vertical") {
       while (colCount < 12 && rows * rowH + (rows - 1) * rowGap > maxHeight) {
         colCount += 1;
         rows = Math.ceil(itemCount / colCount);
       }
     }
-    var colWidths = [];
-    for (var col = 0; col < colCount; col += 1) colWidths[col] = 0;
+    var groups = [];
+    var current = [];
+    var currentKind = "grid";
     (items || []).forEach(function (item, index) {
-      var column = index % colCount;
-      colWidths[column] = Math.max(colWidths[column], widths[index]);
+      var forceBreak = manualRows && index > 0 && rowBreaks.indexOf(index) >= 0;
+      var wrapBreak = current.length >= colCount;
+      if (index > 0 && (forceBreak || wrapBreak)) {
+        groups.push({ indices: current, kind: currentKind });
+        current = [];
+        currentKind = forceBreak ? "independent" : currentKind;
+      }
+      current.push(index);
+    });
+    if (current.length) groups.push({ indices: current, kind: currentKind });
+    var gridColWidths = [];
+    groups.forEach(function (group) {
+      if (group.kind !== "grid") return;
+      group.indices.forEach(function (index, column) {
+        gridColWidths[column] = Math.max(gridColWidths[column] || 0, widths[index]);
+      });
     });
     var placed = [];
     var overflow = 0;
-    (items || []).forEach(function (item, index) {
-      var column = index % colCount;
-      var row = Math.floor(index / colCount);
+    var width = 0;
+    groups.forEach(function (group, row) {
       var x = 0;
-      for (var c = 0; c < column; c += 1) x += colWidths[c] + columnGap;
-      var y = row * (rowH + rowGap);
-      if (opts.wrap === false && y + rowH > maxHeight + 0.5) {
-        overflow += 1;
-        return;
-      }
-      placed.push({ x: x, y: y, width: colWidths[column], height: rowH, item: item });
+      group.indices.forEach(function (index, column) {
+        var itemWidth = group.kind === "grid" ? (gridColWidths[column] || widths[index]) : widths[index];
+        var y = row * (rowH + rowGap);
+        if (opts.wrap === false && y + rowH > maxHeight + 0.5) {
+          overflow += 1;
+          return;
+        }
+        placed.push({
+          x: x,
+          y: y,
+          width: itemWidth,
+          height: rowH,
+          item: items[index],
+          row: row,
+          column: column,
+          rowKind: group.kind
+        });
+        x += itemWidth + columnGap;
+      });
+      width = Math.max(width, Math.max(0, x - columnGap));
     });
-    var width = colWidths.reduce(function (sum, value) { return sum + value; }, 0) + columnGap * Math.max(0, colCount - 1);
     var height = placed.length ? Math.max.apply(null, placed.map(function (entry) { return entry.y + entry.height; })) : 0;
     if (!explicitCols) width = Math.min(maxWidth, Math.max(width, 0));
     else width = Math.max(width, 0);
-    return { placed: placed, width: width, height: height, overflow: overflow, columns: colCount, rows: rows };
+    return {
+      placed: placed,
+      width: width,
+      height: height,
+      overflow: overflow,
+      columns: colCount,
+      rows: groups.length,
+      layoutMode: manualRows ? "manual-rows" : "auto",
+      groups: groups.map(function (group) { return group.indices; }),
+      rowKinds: groups.map(function (group) { return group.kind; })
+    };
   }
 
   function dockLegendPosition(localX, localY, width, height) {
@@ -3590,6 +4222,9 @@
     var titleSpan = (title.width || 0) + G.outerPadding * 2;
     if (titleSpan > neededWidth) neededWidth = titleSpan;
     var neededHeight = top + G.minPlotHeight + bottom;
+    if (slot === "overlay" && legendH > G.minPlotHeight) {
+      neededHeight = Math.max(neededHeight, top + legendH + bottom);
+    }
     var width = Math.max(Number(figureWidth) || 0, neededWidth);
     var height = Math.max(Number(figureHeight) || 0, neededHeight);
     var plotWidth = Math.max(G.minPlotWidth, width - left - right);
@@ -3823,13 +4458,35 @@
       var sample = findNearestPoint(xs, item.series.y, dataX);
       if (!sample || !frame) return;
       var dist = Math.hypot(frame.dataToPixelX(sample.x) - pixelX, frame.dataToPixelY(sample.y) - pixelY);
-      if (!best || dist < best.dist) best = { dist: dist, seriesId: item.series.id, x: sample.x, y: sample.y };
+      if (!best || dist < best.dist) {
+        best = {
+          dist: dist,
+          seriesId: item.series.id,
+          name: seriesDisplayName(item.series),
+          unit: String(item.series.unit || ""),
+          color: item.color,
+          x: sample.x,
+          y: sample.y
+        };
+      }
     });
     return {
       x: best ? best.x : dataX,
+      y: best ? best.y : null,
       nearestSeriesId: best ? best.seriesId : "",
+      dist: best ? best.dist : Infinity,
+      name: best ? best.name : "",
+      unit: best ? best.unit : "",
+      color: best ? best.color : "",
       rows: readPlotAtX(project, plot, best ? best.x : dataX, "nearest")
     };
+  }
+
+  function pickReadoutCandidate(project, plot, frame, pixelX, pixelY, maxScreenPx) {
+    var snap = snapReadout(project, plot, frame, pixelX, pixelY);
+    var limit = Number.isFinite(Number(maxScreenPx)) ? Number(maxScreenPx) : READOUT_HIT_PX;
+    if (!snap || !snap.nearestSeriesId || !(snap.dist <= limit)) return null;
+    return snap;
   }
 
   function detailConnectorLines(sourceBox, figureRect) {
@@ -4003,8 +4660,36 @@
         borderWidth: Number.isFinite(Number(style.borderWidth)) ? clamp(Number(style.borderWidth), 0, 8) : 1,
         fillColor: style.fillColor ? String(style.fillColor) : "#1e6eaa",
         fillOpacity: unitOpacity(style.fillOpacity, 0.16)
-      }
+      },
+      labelOffset: normalizeAnnotationLabelOffset(raw.labelOffset)
     };
+  }
+
+  function normalizeAnnotationLabelOffset(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    var x = Number(raw.x);
+    var y = Number(raw.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    return { x: x, y: y };
+  }
+
+  function setAnnotationLabelOffset(ann, pixelDx, pixelDy, area) {
+    if (!ann) return null;
+    var width = Math.max(1, Number(area && area.width) || 1);
+    var height = Math.max(1, Number(area && area.height) || 1);
+    ann.labelOffset = { x: Number(pixelDx) / width, y: Number(pixelDy) / height };
+    return ann.labelOffset;
+  }
+
+  function annotationLabelPoint(ann, anchorPixels, area) {
+    var offset = ann && ann.labelOffset;
+    if (offset && Number.isFinite(Number(offset.x)) && Number.isFinite(Number(offset.y)) && area) {
+      return {
+        x: anchorPixels.x + Number(offset.x) * Math.max(1, area.width),
+        y: anchorPixels.y + Number(offset.y) * Math.max(1, area.height)
+      };
+    }
+    return null;
   }
 
   function normalizeAnnotations(raw, plotId) {
@@ -4114,7 +4799,11 @@
       canvas: cloneJson(project.canvas || {}),
       formulas: cloneJson(project.formulas || []),
       analyses: cloneJson(project.analyses || []),
-      computed: cloneJson((project.datasets || []).filter(function (dataset) { return dataset.kind === "computed"; }))
+      computed: cloneJson((project.datasets || []).filter(function (dataset) { return dataset.kind === "computed"; })),
+      segments: cloneJson((project.datasets || []).filter(function (dataset) { return dataset.kind === "segment"; })),
+      datasetXMaps: (project.datasets || []).map(function (dataset) {
+        return { id: dataset.id, defaultXColumnRef: dataset.defaultXColumnRef || "" };
+      })
     };
   }
 
@@ -4136,6 +4825,19 @@
     }
     if (Object.prototype.hasOwnProperty.call(copy, "analyses")) {
       project.analyses = (copy.analyses || []).map(normalizeAnalysisRecord);
+    }
+    if (Object.prototype.hasOwnProperty.call(copy, "segments")) {
+      project.datasets = (project.datasets || []).filter(function (dataset) { return dataset.kind !== "segment"; });
+      (copy.segments || []).forEach(function (dataset) {
+        project.datasets.push(normalizeDataset(dataset));
+      });
+    }
+    if (Object.prototype.hasOwnProperty.call(copy, "datasetXMaps")) {
+      (copy.datasetXMaps || []).forEach(function (item) {
+        var dataset = findDataset(project, item && item.id);
+        if (!dataset) return;
+        dataset.defaultXColumnRef = item.defaultXColumnRef ? String(item.defaultXColumnRef) : "";
+      });
     }
     if (Object.prototype.hasOwnProperty.call(copy, "computed")) {
       project.datasets = (project.datasets || []).filter(function (dataset) { return dataset.kind !== "computed"; });
@@ -4178,21 +4880,263 @@
     return PLOT_ACCENT_COLORS[index % PLOT_ACCENT_COLORS.length];
   }
 
+  function extractPlotDisplay(plot) {
+    if (!plot) return null;
+    return {
+      name: plot.name,
+      showTitle: plot.showTitle !== false,
+      title: plot.title == null ? "" : String(plot.title),
+      subtitle: plot.subtitle == null ? "" : String(plot.subtitle),
+      note: plot.note == null ? "" : String(plot.note),
+      seriesRefs: cloneJson(plot.seriesRefs || []),
+      xAxis: cloneJson(plot.xAxis),
+      yAxis: cloneJson(plot.yAxis),
+      topEdge: cloneJson(plot.topEdge),
+      rightEdge: cloneJson(plot.rightEdge),
+      layout: {
+        width: plot.layout && plot.layout.width,
+        height: plot.layout && plot.layout.height
+      },
+      legendVisible: plot.legendVisible,
+      legend: cloneJson(plot.legend),
+      textStyles: cloneJson(plot.textStyles),
+      background: plot.background || "",
+      groupStyles: cloneJson(plot.groupStyles || {}),
+      defaultSeriesStyle: cloneJson(plot.defaultSeriesStyle),
+      xColumnByDataset: cloneJson(plot.xColumnByDataset || {}),
+      annotations: cloneJson(plot.annotations || []),
+      insets: cloneJson(plot.insets || []),
+      lockAspect: !!plot.lockAspect,
+      aspectRatio: plot.aspectRatio
+    };
+  }
+
+  function normalizePlotDisplay(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    var width = Number(raw.layout && raw.layout.width);
+    var height = Number(raw.layout && raw.layout.height);
+    return {
+      name: raw.name == null ? "" : String(raw.name),
+      showTitle: raw.showTitle !== false,
+      title: raw.title == null ? "" : String(raw.title),
+      subtitle: raw.subtitle == null ? "" : String(raw.subtitle),
+      note: raw.note == null ? "" : String(raw.note),
+      seriesRefs: Array.isArray(raw.seriesRefs) ? raw.seriesRefs.map(normalizeSeriesRef) : [],
+      xAxis: normalizeAxis(raw.xAxis),
+      yAxis: normalizeAxis(raw.yAxis),
+      topEdge: normalizeEdge(raw.topEdge, "top"),
+      rightEdge: normalizeEdge(raw.rightEdge, "right"),
+      layout: {
+        width: Number.isFinite(width) ? Math.max(MIN_INSTANCE_WIDTH, Math.round(width)) : DEFAULT_FIGURE_WIDTH,
+        height: Number.isFinite(height) ? Math.max(MIN_INSTANCE_HEIGHT, Math.round(height)) : DEFAULT_FIGURE_HEIGHT
+      },
+      legendVisible: raw.legendVisible,
+      legend: normalizeLegend(raw.legend, raw.legendVisible),
+      textStyles: normalizePlotTextStyles(raw.textStyles),
+      background: raw.background ? String(raw.background) : "",
+      groupStyles: normalizeGroupStyles(raw.groupStyles),
+      defaultSeriesStyle: normalizeDefaultSeriesStyle(raw.defaultSeriesStyle),
+      xColumnByDataset: normalizeXColumnMap(raw.xColumnByDataset),
+      annotations: normalizeAnnotations(raw.annotations, raw.plotId),
+      insets: normalizeInsets(raw.insets, raw.plotId),
+      lockAspect: !!raw.lockAspect,
+      aspectRatio: Number.isFinite(Number(raw.aspectRatio)) ? Number(raw.aspectRatio) : 1.6
+    };
+  }
+
+  function ensureInstanceDisplay(instance, plot) {
+    if (!instance || !plot) return instance;
+    if (!instance.display) instance.display = extractPlotDisplay(plot);
+    instance.sourcePlotId = plot.id;
+    instance.plotId = plot.id;
+    if (instance.display.layout) {
+      if (!Number.isFinite(Number(instance.display.layout.width))) instance.display.layout.width = instance.width;
+      if (!Number.isFinite(Number(instance.display.layout.height))) instance.display.layout.height = instance.height;
+    }
+    return instance;
+  }
+
+  function syncInstanceDisplaySize(instance) {
+    if (!instance) return instance;
+    if (!instance.display) instance.display = {};
+    if (!instance.display.layout) instance.display.layout = {};
+    instance.display.layout.width = instance.width;
+    instance.display.layout.height = instance.height;
+    return instance;
+  }
+
+  var DISPLAY_PRIMITIVE_KEYS = ["name", "showTitle", "title", "subtitle", "note", "background", "legendVisible", "lockAspect", "aspectRatio"];
+
+  function bindPlotView(plot, instance) {
+    if (!plot) return plot;
+    if (!instance) return plot;
+    ensureInstanceDisplay(instance, plot);
+    var view = Object.assign({}, plot, instance.display);
+    view.id = plot.id;
+    view.type = plot.type;
+    view.detailSource = plot.detailSource;
+    view.accentColor = plot.accentColor;
+    syncInstanceDisplaySize(instance);
+    view.layout = instance.display.layout;
+    view.layout.x = instance.x;
+    view.layout.y = instance.y;
+    view.layout.width = instance.width;
+    view.layout.height = instance.height;
+    view.__instanceId = instance.id;
+    view.__sourcePlotId = plot.id;
+    DISPLAY_PRIMITIVE_KEYS.forEach(function (key) {
+      Object.defineProperty(view, key, {
+        configurable: true,
+        enumerable: true,
+        get: function () { return instance.display[key]; },
+        set: function (value) { instance.display[key] = value; }
+      });
+    });
+    return view;
+  }
+
+  function applyLayoutToInstances(instances, templateId, area, options) {
+    var slots = layoutSlots(templateId, area || {});
+    var list = (instances || []).slice();
+    var primaryId = options && options.primaryInstanceId;
+    if (primaryId) {
+      var primaryIndex = list.findIndex(function (item) { return item.id === primaryId; });
+      if (primaryIndex > 0) {
+        var primary = list.splice(primaryIndex, 1)[0];
+        list.unshift(primary);
+      }
+    }
+    var placed = 0;
+    var overflow = [];
+    list.forEach(function (instance, index) {
+      var slot = slots[index];
+      if (!slot) {
+        overflow.push(instance);
+        return;
+      }
+      setInstanceGeometry(instance, slot);
+      syncInstanceDisplaySize(instance);
+      placed += 1;
+    });
+    return {
+      placed: placed,
+      overflow: overflow.length,
+      emptySlots: Math.max(0, slots.length - placed),
+      slotCount: slots.length,
+      instanceCount: list.length
+    };
+  }
+
+  function placeInstanceInSlot(instance, templateId, slotIndex, canvas) {
+    var spec = LAYOUT_TEMPLATES[templateId];
+    if (!instance || !spec) return null;
+    var slots = layoutSlots(templateId, canvasLayoutArea(canvas));
+    var slot = slots[slotIndex];
+    if (!slot) return null;
+    setInstanceGeometry(instance, slot);
+    syncInstanceDisplaySize(instance);
+    return instance;
+  }
+
+  function instanceCenter(instance) {
+    var box = instanceBox(instance);
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  }
+
+  function slotContainsInstance(slot, instance) {
+    return !!(slot && instance && geometryMatches(slot, instanceBox(instance), SLOT_MATCH_PX));
+  }
+
+  function findSlotOccupant(instances, slot, exceptId) {
+    return (instances || []).find(function (item) {
+      if (!item || item.visible === false) return false;
+      if (exceptId && item.id === exceptId) return false;
+      return slotContainsInstance(slot, item);
+    }) || null;
+  }
+
+  function findSlotOverlaps(instances, slot, exceptId) {
+    return (instances || []).filter(function (item) {
+      if (!item || item.visible === false) return false;
+      if (exceptId && item.id === exceptId) return false;
+      if (slotContainsInstance(slot, item)) return false;
+      return boxesOverlap(slot, instanceBox(item));
+    });
+  }
+
+  function inspectSlotPlacement(canvas, plotId, templateId, slotIndex) {
+    var spec = LAYOUT_TEMPLATES[templateId];
+    if (!canvas || !spec) return { ok: false };
+    var slots = layoutSlots(templateId, canvasLayoutArea(canvas));
+    var slot = slots[slotIndex];
+    if (!slot) return { ok: false };
+    var instance = findInstance(canvas, plotId);
+    var alreadyThere = !!(instance && slotContainsInstance(slot, instance));
+    var occupant = alreadyThere ? null : findSlotOccupant(canvas.instances, slot, instance && instance.id);
+    var overlaps = alreadyThere ? [] : findSlotOverlaps(canvas.instances, slot, instance && instance.id);
+    return {
+      ok: true,
+      slot: slot,
+      instance: instance || null,
+      occupant: occupant,
+      overlaps: overlaps,
+      alreadyThere: alreadyThere,
+      wouldCreate: !instance
+    };
+  }
+
+  function placePrimaryInSlot(project, canvas, plotId, templateId, slotIndex, options) {
+    var action = (options && options.action) || "place";
+    var inspect = inspectSlotPlacement(canvas, plotId, templateId, slotIndex);
+    if (!inspect.ok) return { ok: false, reason: "invalid" };
+    var plot = findPlot(project, plotId);
+    if (!plot || plot.type === "detail") return { ok: false, reason: "invalid-plot" };
+    if (inspect.alreadyThere) {
+      return { ok: true, unchanged: true, created: false, instance: inspect.instance };
+    }
+    if (inspect.occupant && action !== "swap") {
+      return {
+        ok: false,
+        needsChoice: true,
+        instance: inspect.instance,
+        occupant: inspect.occupant,
+        created: false
+      };
+    }
+    var created = false;
+    var instance = inspect.instance;
+    if (!instance) {
+      instance = createInstance(project, canvas.id, plot.id);
+      created = true;
+    }
+    if (inspect.occupant && action === "swap") {
+      var previous = { x: instance.x, y: instance.y, width: instance.width, height: instance.height };
+      setInstanceGeometry(instance, inspect.slot);
+      setInstanceGeometry(inspect.occupant, previous);
+      return { ok: true, swapped: true, created: created, instance: instance, occupant: inspect.occupant };
+    }
+    setInstanceGeometry(instance, inspect.slot);
+    return { ok: true, created: created, instance: instance, occupant: null };
+  }
+
   function normalizeInstance(raw) {
     var item = raw && typeof raw === "object" ? raw : {};
     var width = Number(item.width);
     var height = Number(item.height);
     var zOrder = Number(item.zOrder);
+    var plotId = String(item.plotId || item.sourcePlotId || "");
     return {
       id: String(item.id || makeId("inst")),
-      plotId: String(item.plotId || ""),
+      plotId: plotId,
+      sourcePlotId: String(item.sourcePlotId || plotId),
       x: Number.isFinite(Number(item.x)) ? Math.round(Number(item.x)) : LAYOUT_PADDING,
       y: Number.isFinite(Number(item.y)) ? Math.round(Number(item.y)) : LAYOUT_PADDING,
       width: Number.isFinite(width) ? Math.max(80, Math.round(width)) : DEFAULT_FIGURE_WIDTH,
       height: Number.isFinite(height) ? Math.max(60, Math.round(height)) : DEFAULT_FIGURE_HEIGHT,
       zOrder: Number.isFinite(zOrder) ? zOrder : 1,
       locked: !!item.locked,
-      visible: item.visible !== false
+      visible: item.visible !== false,
+      display: item.display ? normalizePlotDisplay(Object.assign({}, item.display, { plotId: plotId })) : null
     };
   }
 
@@ -4314,6 +5258,12 @@
     }
     fillAccentColors(project);
     pruneInstances(project);
+    (project.canvases || []).forEach(function (canvas) {
+      (canvas.instances || []).forEach(function (instance) {
+        var plot = findPlot(project, instance.plotId);
+        if (plot) ensureInstanceDisplay(instance, plot);
+      });
+    });
     if (project.canvases[0]) mirrorCanvas(project, project.canvases[0].id);
     return project;
   }
@@ -4388,20 +5338,26 @@
     var plot = findPlot(project, plotId);
     if (!canvas) throw new Error("找不到画布");
     if (!plot || plot.type === "detail") throw new Error("只能把图窗放进画布");
-    var existing = findInstance(canvas, plot.id);
-    if (existing) return existing;
     var given = partial || {};
+    if (given.reuseExisting) {
+      var existing = findInstance(canvas, plot.id);
+      if (existing) return existing;
+    }
     var instance = normalizeInstance({
       id: makeId("inst"),
       plotId: plot.id,
+      sourcePlotId: plot.id,
       x: given.x != null ? given.x : plot.layout.x,
       y: given.y != null ? given.y : plot.layout.y,
       width: given.width != null ? given.width : plot.layout.width,
       height: given.height != null ? given.height : plot.layout.height,
       zOrder: nextInstanceZ(canvas),
       locked: !!given.locked,
-      visible: given.visible !== false
+      visible: given.visible !== false,
+      display: given.display || extractPlotDisplay(plot)
     });
+    ensureInstanceDisplay(instance, plot);
+    syncInstanceDisplaySize(instance);
     canvas.instances.push(instance);
     assignInstanceOrder(canvas);
     return instance;
@@ -4426,6 +5382,7 @@
     if (box.y != null && Number.isFinite(Number(box.y))) instance.y = Math.round(Number(box.y));
     if (box.width != null && Number.isFinite(Number(box.width))) instance.width = Math.max(80, Math.round(Number(box.width)));
     if (box.height != null && Number.isFinite(Number(box.height))) instance.height = Math.max(60, Math.round(Number(box.height)));
+    syncInstanceDisplaySize(instance);
     return instance;
   }
 
@@ -4751,6 +5708,7 @@
     var columns = {};
     prepared.forEach(function (source) { columns[source.id] = []; });
     var mask = [];
+    var failReasons = [];
     var exclusions = [];
     var excludedByReason = {};
     function bump(reason) {
@@ -4767,22 +5725,25 @@
       if (!Number.isFinite(refY[i])) reasons.push("nan");
       prepared.forEach(function (source) {
         var hit = sampleAt(source.x, source.y, refX[i], config, source.maxGap);
-        if (!hit.ok) reasons.push(hit.reason);
-        else values[source.id] = hit.y;
+        if (!hit.ok) {
+          reasons.push(hit.reason);
+          values[source.id] = NaN;
+        } else {
+          values[source.id] = hit.y;
+        }
       });
       x.push(refX[i]);
+      referenceY.push(Number.isFinite(refY[i]) ? refY[i] : NaN);
+      prepared.forEach(function (source) { columns[source.id].push(values[source.id]); });
       if (reasons.length) {
         var reason = reasons[0];
         bump(reason);
-        exclusions.push({ index: i, x: refX[i], reason: reason });
-        referenceY.push(NaN);
-        prepared.forEach(function (source) { columns[source.id].push(NaN); });
+        exclusions.push({ index: i, x: refX[i], reason: reason, reasons: reasons.slice() });
         mask.push(false);
       } else {
-        referenceY.push(refY[i]);
-        prepared.forEach(function (source) { columns[source.id].push(values[source.id]); });
         mask.push(true);
       }
+      failReasons.push(reasons.slice());
     }
     var geometric = mask.filter(Boolean).length + exclusions.filter(function (item) {
       return item.reason === "nan" || item.reason === "gap";
@@ -4798,6 +5759,7 @@
       referenceY: referenceY,
       columns: columns,
       mask: mask,
+      failReasons: failReasons,
       validCount: validCount,
       excludedCount: refX.length - validCount,
       exclusions: exclusions,
@@ -4857,8 +5819,30 @@
       bindings: bindings,
       alignment: normalizeAlignmentConfig(raw.alignment),
       outputUnit: raw.outputUnit == null ? "" : String(raw.outputUnit),
+      missingValueMode: normalizeMissingValueMode(raw.missingValueMode),
       updatedAt: String(raw.updatedAt || "")
     };
+  }
+
+  function normalizeMissingValueMode(value) {
+    return value === "ignore" ? "ignore" : "strict";
+  }
+
+  function isReservedFormulaName(name) {
+    return Object.prototype.hasOwnProperty.call(FORMULA_FUNCTIONS, name)
+      || Object.prototype.hasOwnProperty.call(FORMULA_CONSTANTS, name);
+  }
+
+  function excelColumnAlias(index) {
+    var n = Math.floor(Number(index)) + 1;
+    var out = "";
+    if (!(n > 0) || !Number.isFinite(n)) return "A";
+    while (n > 0) {
+      var rem = (n - 1) % 26;
+      out = String.fromCharCode(65 + rem) + out;
+      n = Math.floor((n - 1) / 26);
+    }
+    return out;
   }
 
   function findFormula(project, formulaId) {
@@ -4895,7 +5879,7 @@
 
   function tokenizeFormula(text) {
     var src = String(text || "").replace(/[\u2212\u2013\u2014]/g, "-");
-    if (src.length > 500) throw new Error("公式过长。");
+    if (src.length > MAX_FORMULA_LENGTH) throw new Error("公式过长。");
     var tokens = [];
     var i = 0;
     while (i < src.length) {
@@ -5051,7 +6035,24 @@
     return found;
   }
 
-  function evaluateFormulaAst(ast, env) {
+  function evaluateFormulaAst(ast, env, missingValueMode) {
+    var missingMode = normalizeMissingValueMode(missingValueMode);
+    function reduceFinite(args, name) {
+      var values = args;
+      if (missingMode === "ignore") {
+        values = args.filter(function (value) { return Number.isFinite(value); });
+        if (!values.length) return NaN;
+      } else if (args.some(function (value) { return !Number.isFinite(value); })) {
+        return NaN;
+      }
+      var i;
+      if (name === "min") return Math.min.apply(null, values);
+      if (name === "max") return Math.max.apply(null, values);
+      var acc = 0;
+      for (i = 0; i < values.length; i += 1) acc += values[i];
+      if (name === "sum") return acc;
+      return acc / values.length;
+    }
     function evalNode(node) {
       if (node.type === "num") return node.value;
       if (node.type === "ident") {
@@ -5079,8 +6080,9 @@
         if (node.name === "ln") return args[0] <= 0 ? NaN : Math.log(args[0]);
         if (node.name === "log10") return args[0] <= 0 ? NaN : Math.log(args[0]) / Math.LN10;
         if (node.name === "exp") return Math.exp(args[0]);
-        if (node.name === "min") return Math.min.apply(null, args);
-        if (node.name === "max") return Math.max.apply(null, args);
+        if (node.name === "min" || node.name === "max" || node.name === "sum" || node.name === "average" || node.name === "mean") {
+          return reduceFinite(args, node.name);
+        }
       }
       return NaN;
     }
@@ -5280,7 +6282,10 @@
     var y = [];
     var validCount = 0;
     for (var i = 0; i < aligned.x.length; i += 1) {
-      if (!aligned.mask[i]) {
+      var missingMode = formula.missingValueMode;
+      var reasons = (aligned.failReasons && aligned.failReasons[i]) || [];
+      var alignmentBlocked = reasons.some(function (reason) { return reason !== "nan"; });
+      if (!aligned.mask[i] && (missingMode === "strict" || alignmentBlocked)) {
         y.push(NaN);
         continue;
       }
@@ -5288,10 +6293,10 @@
       var failed = false;
       samples.forEach(function (item) {
         var value = item.id === reference.id ? aligned.referenceY[i] : aligned.columns[item.id][i];
-        if (!Number.isFinite(value)) failed = true;
+        if (!Number.isFinite(value) && missingMode === "strict") failed = true;
         env[item.alias] = value;
       });
-      var value = failed ? NaN : evaluateFormulaAst(ast, env);
+      var value = failed ? NaN : evaluateFormulaAst(ast, env, missingMode);
       if (!Number.isFinite(value)) y.push(NaN);
       else {
         y.push(value);
@@ -5440,7 +6445,8 @@
       expression: draft.expression,
       bindings: bindings,
       alignment: draft && draft.alignment,
-      outputUnit: draft && draft.outputUnit
+      outputUnit: draft && draft.outputUnit,
+      missingValueMode: draft && draft.missingValueMode
     });
     var formula = normalizeFormulaDefinition({
       id: existing ? existing.id : makeId("formula"),
@@ -5449,6 +6455,7 @@
       bindings: bindings,
       alignment: draft && draft.alignment,
       outputUnit: draft && draft.outputUnit,
+      missingValueMode: draft && draft.missingValueMode,
       updatedAt: new Date().toISOString()
     });
     if (existing) {
@@ -5525,15 +6532,25 @@
     var src = raw && typeof raw === "object" ? raw : {};
     var n = Number(src.n);
     if (!Number.isFinite(n) || n <= 0) {
-      return { mae: null, rmse: null, maxAe: null, bias: null, n: 0 };
+      return { mae: null, rmse: null, maxAe: null, bias: null, value: null, n: 0 };
     }
     return {
       mae: finiteOrNull(src.mae),
       rmse: finiteOrNull(src.rmse),
       maxAe: finiteOrNull(src.maxAe),
       bias: finiteOrNull(src.bias),
+      value: finiteOrNull(src.value),
       n: n
     };
+  }
+
+  function normalizeAnalysisKind(value) {
+    return value === "stat" ? "stat" : "error";
+  }
+
+  function normalizeAnalysisOp(value) {
+    var op = String(value || "").toLowerCase();
+    return op === "sum" || op === "average" || op === "max" || op === "min" ? op : "";
   }
 
   function normalizeAnalysisRecord(raw) {
@@ -5541,6 +6558,8 @@
     return {
       id: String(src.id || makeId("analysis")),
       name: String(src.name || "Analysis_001"),
+      kind: normalizeAnalysisKind(src.kind),
+      op: normalizeAnalysisOp(src.op),
       referenceSeriesId: String(src.referenceSeriesId || ""),
       predictionSeriesId: String(src.predictionSeriesId || ""),
       alignment: normalizeAlignmentConfig(src.alignment),
@@ -5593,6 +6612,9 @@
   }
 
   function analysisSourceStamp(project, record) {
+    if (record && record.kind === "stat") {
+      return seriesStamp(findSeries(project, record.referenceSeriesId)) + "|" + String(record.op || "");
+    }
     return seriesStamp(findSeries(project, record && record.referenceSeriesId))
       + "|"
       + seriesStamp(findSeries(project, record && record.predictionSeriesId));
@@ -5611,7 +6633,7 @@
     record.status = normalizeAnalysisStatus(status, record.status);
     record.errorMessage = message ? String(message) : "";
     if (status === "invalid" || status === "error") {
-      record.metrics = { mae: null, rmse: null, maxAe: null, bias: null, n: 0 };
+      record.metrics = { mae: null, rmse: null, maxAe: null, bias: null, value: null, n: 0 };
       record.validCount = 0;
       record.alignmentSummary = null;
     }
@@ -5642,7 +6664,12 @@
 
   function auditAnalyses(project) {
     (project.analyses || []).forEach(function (record) {
-      if (!findSeries(project, record.referenceSeriesId) || !findSeries(project, record.predictionSeriesId)) {
+      if (record.kind === "stat") {
+        if (!findSeries(project, record.referenceSeriesId)) {
+          setAnalysisStatus(record, "invalid", "找不到系列。");
+          return;
+        }
+      } else if (!findSeries(project, record.referenceSeriesId) || !findSeries(project, record.predictionSeriesId)) {
         setAnalysisStatus(record, "invalid", "找不到参考或预测系列。");
         return;
       }
@@ -5736,6 +6763,173 @@
     return result;
   }
 
+  function quickFormulaAliases(count) {
+    var aliases = [];
+    var i = 0;
+    var n = Math.max(0, Math.floor(Number(count) || 0));
+    while (aliases.length < n) {
+      var alias = excelColumnAlias(i);
+      i += 1;
+      if (isReservedFormulaName(alias)) continue;
+      aliases.push(alias);
+    }
+    return aliases;
+  }
+
+  function quickFormulaExpression(op, count) {
+    var aliases = quickFormulaAliases(count);
+    if (!aliases.length) throw new Error("未选择系列。");
+    var normalized = normalizeAnalysisOp(op);
+    if (!normalized) throw new Error("不支持的快捷运算。");
+    if (aliases.length === 1) return aliases[0];
+    if (normalized === "sum") return "sum(" + aliases.join(", ") + ")";
+    if (normalized === "average") return "average(" + aliases.join(", ") + ")";
+    if (normalized === "max") return "max(" + aliases.join(", ") + ")";
+    return "min(" + aliases.join(", ") + ")";
+  }
+
+  function compactQuickFormulaExpression(op, count) {
+    var aliases = quickFormulaAliases(count);
+    var expr = quickFormulaExpression(op, count);
+    if (aliases.length <= 8) return expr;
+    var normalized = normalizeAnalysisOp(op);
+    var fn = normalized === "average" ? "average" : normalized;
+    return fn + "(" + aliases[0] + " … " + aliases[aliases.length - 1] + ")";
+  }
+
+  function quickFormulaDraft(project, spec) {
+    var ids = ((spec && spec.seriesIds) || []).filter(Boolean);
+    if (!ids.length) throw new Error("请先勾选要计算的系列。");
+    var aliases = quickFormulaAliases(ids.length);
+    var bindings = {};
+    aliases.forEach(function (alias, index) { bindings[alias] = ids[index]; });
+    var name = spec && String(spec.name || "").trim();
+    return {
+      name: name || nextFormulaName(project),
+      expression: quickFormulaExpression(spec && spec.op, ids.length),
+      bindings: bindings,
+      outputUnit: (spec && spec.outputUnit) || "",
+      missingValueMode: normalizeMissingValueMode(spec && spec.missingValueMode),
+      alignment: normalizeAlignmentConfig(spec && spec.alignment)
+    };
+  }
+
+  function valuesInStatWindow(series, alignment) {
+    var xs = series.x || [];
+    var ys = series.y || [];
+    var values = [];
+    var excludedCount = 0;
+    var excludedByReason = { range: 0, nan: 0 };
+    var i;
+    var min = alignment && alignment.rangeMin != null && Number.isFinite(Number(alignment.rangeMin))
+      ? Number(alignment.rangeMin) : null;
+    var max = alignment && alignment.rangeMax != null && Number.isFinite(Number(alignment.rangeMax))
+      ? Number(alignment.rangeMax) : null;
+    for (i = 0; i < ys.length; i += 1) {
+      var x = Number(xs[i]);
+      var y = Number(ys[i]);
+      if (min != null && !(Number.isFinite(x) && x >= min)) {
+        excludedCount += 1;
+        excludedByReason.range += 1;
+        continue;
+      }
+      if (max != null && !(Number.isFinite(x) && x <= max)) {
+        excludedCount += 1;
+        excludedByReason.range += 1;
+        continue;
+      }
+      if (!Number.isFinite(y)) {
+        excludedCount += 1;
+        excludedByReason.nan += 1;
+        continue;
+      }
+      values.push(y);
+    }
+    return { values: values, excludedCount: excludedCount, excludedByReason: excludedByReason };
+  }
+
+  function reduceStatValues(op, values) {
+    if (!values.length) throw new Error("没有有效样本。");
+    var i;
+    var acc;
+    if (op === "sum" || op === "average") {
+      acc = 0;
+      for (i = 0; i < values.length; i += 1) acc += values[i];
+      return op === "average" ? acc / values.length : acc;
+    }
+    acc = values[0];
+    for (i = 1; i < values.length; i += 1) {
+      if (op === "max") acc = Math.max(acc, values[i]);
+      else acc = Math.min(acc, values[i]);
+    }
+    return acc;
+  }
+
+  function applySeriesStat(project, draft) {
+    if (!project.analyses) project.analyses = [];
+    var series = findSeries(project, draft && draft.seriesId);
+    if (!series) throw new Error("未选择系列。");
+    if (!(series.x || []).length) throw new Error("系列没有数据。");
+    var op = normalizeAnalysisOp(draft && draft.op);
+    if (!op) throw new Error("不支持的快捷运算。");
+    var alignment = normalizeAlignmentConfig(draft && draft.alignment);
+    var windowed = valuesInStatWindow(series, alignment);
+    var value = reduceStatValues(op, windowed.values);
+    var existing = draft && draft.id ? findAnalysis(project, draft.id) : null;
+    var record = normalizeAnalysisRecord({
+      id: existing ? existing.id : makeId("analysis"),
+      name: (draft && draft.name) || (existing && existing.name) || (op.toUpperCase() + "_" + seriesDisplayName(series)),
+      kind: "stat",
+      op: op,
+      referenceSeriesId: series.id,
+      predictionSeriesId: "",
+      alignment: alignment
+    });
+    record.metrics = {
+      mae: null,
+      rmse: null,
+      maxAe: null,
+      bias: null,
+      value: value,
+      n: windowed.values.length
+    };
+    record.unit = series.unit || "";
+    record.validCount = windowed.values.length;
+    record.excludedCount = windowed.excludedCount;
+    record.excludedByReason = windowed.excludedByReason;
+    record.alignmentSummary = normalizeAlignmentSummary({ mode: alignment.mode, excludedByReason: windowed.excludedByReason });
+    record.status = "ready";
+    record.errorMessage = "";
+    record.computedAt = new Date().toISOString();
+    record.sourceStamp = analysisSourceStamp(project, record);
+    if (existing) {
+      project.analyses = project.analyses.map(function (item) { return item.id === record.id ? record : item; });
+    } else {
+      project.analyses.push(record);
+    }
+    return record;
+  }
+
+  function applyQuickFormula(project, spec) {
+    var mode = spec && spec.mode === "pointwise" ? "pointwise" : "stat";
+    var ids = ((spec && spec.seriesIds) || []).filter(Boolean);
+    if (!ids.length) throw new Error("请先勾选要计算的系列。");
+    if (mode === "stat") {
+      return ids.map(function (id, index) {
+        return applySeriesStat(project, {
+          seriesId: id,
+          op: spec.op,
+          alignment: spec.alignment,
+          name: spec && spec.name && ids.length === 1
+            ? spec.name
+            : (normalizeAnalysisOp(spec.op).toUpperCase() + "_" + seriesDisplayName(findSeries(project, id) || { localId: String(index + 1) }))
+        });
+      });
+    }
+    if (ids.length < 2) throw new Error("逐点计算至少需要两条系列。");
+    return applyFormula(project, quickFormulaDraft(project, spec));
+  }
+
   function applyAnalysis(project, draft) {
     if (!project.analyses) project.analyses = [];
     var result = evaluateAnalysis(project, draft);
@@ -5771,6 +6965,15 @@
     if (!record) throw new Error("找不到分析记录。");
     record.status = "computing";
     try {
+      if (record.kind === "stat") {
+        return applySeriesStat(project, {
+          id: record.id,
+          name: record.name,
+          seriesId: record.referenceSeriesId,
+          op: record.op,
+          alignment: record.alignment
+        });
+      }
       var next = applyAnalysis(project, {
         id: record.id,
         name: record.name,
@@ -5782,7 +6985,9 @@
       });
       return next;
     } catch (error) {
-      var missing = !findSeries(project, record.referenceSeriesId) || !findSeries(project, record.predictionSeriesId);
+      var missing = record.kind === "stat"
+        ? !findSeries(project, record.referenceSeriesId)
+        : (!findSeries(project, record.referenceSeriesId) || !findSeries(project, record.predictionSeriesId));
       setAnalysisStatus(record, missing ? "invalid" : "error", error.message || "计算失败");
       throw error;
     }
@@ -5827,9 +7032,11 @@
     var rows = [
       ["parameter", "value"],
       ["name", record.name],
+      ["kind", record.kind || "error"],
+      ["op", record.op || ""],
       ["status", record.status],
       ["reference", seriesPath(project, record.referenceSeriesId)],
-      ["prediction", seriesPath(project, record.predictionSeriesId)],
+      ["prediction", record.kind === "stat" ? "" : seriesPath(project, record.predictionSeriesId)],
       ["mode", summary.mode || record.alignment.mode],
       ["delta", csvNumber(record.alignment.delta)],
       ["rangeMin", csvNumber(record.alignment.rangeMin)],
@@ -5839,6 +7046,7 @@
       ["unit", record.unit],
       ["N", csvNumber(record.metrics.n)],
       ["excluded", csvNumber(record.excludedCount)],
+      ["Value", csvNumber(record.metrics.value)],
       ["MAE", csvNumber(record.metrics.mae)],
       ["RMSE", csvNumber(record.metrics.rmse)],
       ["MaxAE", csvNumber(record.metrics.maxAe)],
@@ -5853,6 +7061,7 @@
   }
 
   function analysisPointwiseCsv(project, record) {
+    if (record && record.kind === "stat") throw new Error("序列统计没有逐点误差。");
     assertAnalysisExportable(record);
     var result = evaluateAnalysis(project, record);
     var lines = ["X,Reference,Aligned Prediction,Signed Error,Absolute Error"];
@@ -5871,6 +7080,16 @@
   function analysisCopyText(project, record) {
     assertAnalysisExportable(record);
     var unit = record.unit ? " " + record.unit : "";
+    if (record.kind === "stat") {
+      return [
+        record.name,
+        "Kind\tstat",
+        "Op\t" + String(record.op || "").toUpperCase(),
+        "Series\t" + seriesPath(project, record.referenceSeriesId),
+        "N\t" + record.metrics.n,
+        "Value\t" + csvNumber(record.metrics.value) + unit
+      ].join("\n");
+    }
     return [
       record.name,
       "Reference\t" + seriesPath(project, record.referenceSeriesId),
@@ -5884,6 +7103,7 @@
   }
 
   function ensureAnalysisErrorCurve(project, record) {
+    if (record && record.kind === "stat") throw new Error("序列统计不创建误差曲线。");
     assertAnalysisExportable(record);
     var result = evaluateAnalysis(project, record);
     var series = record.errorSeriesId ? findSeries(project, record.errorSeriesId) : null;
@@ -5935,6 +7155,724 @@
     return { series: series, plot: plot, reused: reused };
   }
 
+  function normalizeSegmentRangeType(value) {
+    var type = String(value || "row");
+    return SEGMENT_RANGE_TYPES.indexOf(type) >= 0 ? type : "row";
+  }
+
+  function normalizeRowRanges(raw) {
+    var ranges = [];
+    (Array.isArray(raw) ? raw : []).forEach(function (item) {
+      if (Array.isArray(item) && item.length >= 2) {
+        ranges.push({ start: Math.round(Number(item[0])), end: Math.round(Number(item[1])) });
+        return;
+      }
+      if (!item || typeof item !== "object") return;
+      ranges.push({
+        start: Math.round(Number(item.start)),
+        end: Math.round(Number(item.end))
+      });
+    });
+    return ranges.filter(function (item) {
+      return Number.isFinite(item.start) && Number.isFinite(item.end) && item.end >= item.start && item.start >= 0;
+    });
+  }
+
+  function normalizeSegmentRangeDefinition(raw) {
+    var src = raw && typeof raw === "object" ? raw : {};
+    return {
+      column: src.column == null ? "" : String(src.column),
+      start: src.start,
+      end: src.end,
+      startRow: src.startRow == null ? null : Number(src.startRow),
+      endRow: src.endRow == null ? null : Number(src.endRow),
+      stepIndex: src.stepIndex == null ? "" : String(src.stepIndex),
+      stepName: src.stepName == null ? "" : String(src.stepName),
+      runIds: Array.isArray(src.runIds) ? src.runIds.map(String) : [],
+      splitAll: !!src.splitAll
+    };
+  }
+
+  function normalizeColumnSelection(raw) {
+    if (!raw || typeof raw !== "object") return { mode: "all", columns: [] };
+    var mode = raw.mode === "selected" ? "selected" : "all";
+    var columns = Array.isArray(raw.columns) ? raw.columns.map(String) : [];
+    return { mode: mode, columns: columns };
+  }
+
+  function listSegments(project, sourceDatasetId) {
+    return (project.datasets || []).filter(function (item) {
+      return item.kind === "segment" && (!sourceDatasetId || item.sourceDatasetId === sourceDatasetId);
+    });
+  }
+
+  function sourceDatasetOfSegment(project, segment) {
+    if (!segment || segment.kind !== "segment") return null;
+    return findDataset(project, segment.sourceDatasetId);
+  }
+
+  function datasetCsvRows(dataset) {
+    if (!dataset || dataset.kind === "computed") return [];
+    var source = dataset.kind === "segment" ? null : dataset;
+    if (!source || !source.rawCsv) return [];
+    if (csvRowCache && csvRowCache.has(source)) return csvRowCache.get(source);
+    var parsed = parseCsv(source.rawCsv);
+    var rows = parsed.slice(1);
+    if (csvRowCache) csvRowCache.set(source, rows);
+    return rows;
+  }
+
+  function datasetHeaderIndex(dataset, header) {
+    var headers = (dataset && dataset.headers) || [];
+    var wanted = String(header || "");
+    var index = headers.indexOf(wanted);
+    if (index >= 0) return index;
+    var normalized = normalizeHeader(wanted);
+    for (var i = 0; i < headers.length; i += 1) {
+      if (normalizeHeader(headers[i]) === normalized) return i;
+    }
+    return -1;
+  }
+
+  function datasetXColumnIndex(dataset) {
+    var index = datasetHeaderIndex(dataset, dataset && dataset.xHeader);
+    if (index >= 0) return index;
+    if (dataset && dataset.xName) {
+      index = datasetHeaderIndex(dataset, dataset.xName);
+      if (index >= 0) return index;
+    }
+    return 0;
+  }
+
+  function datasetCsvIndexMap(dataset) {
+    var rows = datasetCsvRows(dataset);
+    var xIndex = datasetXColumnIndex(dataset);
+    var map = new Array(rows.length);
+    var seriesIndex = 0;
+    var i;
+    for (i = 0; i < rows.length; i += 1) {
+      var xValue = parseNumericCell((rows[i] || [])[xIndex]);
+      if (Number.isFinite(xValue)) {
+        map[i] = seriesIndex;
+        seriesIndex += 1;
+      } else {
+        map[i] = -1;
+      }
+    }
+    return map;
+  }
+
+  function rowRangeCount(ranges) {
+    var count = 0;
+    (ranges || []).forEach(function (range) {
+      count += range.end - range.start + 1;
+    });
+    return count;
+  }
+
+  function csvRowCount(dataset) {
+    return datasetCsvRows(dataset).length;
+  }
+
+  function compareSegmentBound(cell, bound) {
+    if (bound == null || bound === "") return 0;
+    var numericCell = parseNumericCell(cell);
+    var numericBound = typeof bound === "number" ? bound : parseNumericCell(bound);
+    if (Number.isFinite(numericCell) && Number.isFinite(numericBound)) {
+      if (numericCell < numericBound) return -1;
+      if (numericCell > numericBound) return 1;
+      return 0;
+    }
+    var left = String(cell == null ? "" : cell);
+    var right = String(bound);
+    if (left < right) return -1;
+    if (left > right) return 1;
+    return 0;
+  }
+
+  function isStepIndexHeader(header) {
+    var normalized = normalizeHeader(header);
+    return /工步索引|stepindex|stepidx|steptid|工步号/.test(normalized) || normalized === "step";
+  }
+
+  function isStepNameHeader(header) {
+    var normalized = normalizeHeader(header);
+    return /工步名称|工步名|stepname|steplabel|stepstatus/.test(normalized);
+  }
+
+  function detectStepColumns(dataset) {
+    var headers = (dataset && dataset.headers) || [];
+    var indexColumn = -1;
+    var nameColumn = -1;
+    headers.forEach(function (header, column) {
+      if (indexColumn < 0 && isStepIndexHeader(header)) indexColumn = column;
+      if (nameColumn < 0 && isStepNameHeader(header)) nameColumn = column;
+    });
+    return { indexColumn: indexColumn, nameColumn: nameColumn };
+  }
+
+  function detectStepRuns(dataset) {
+    var columns = detectStepColumns(dataset);
+    if (columns.indexColumn < 0 && columns.nameColumn < 0) return [];
+    var rows = datasetCsvRows(dataset);
+    var runs = [];
+    var current = null;
+    var i;
+    for (i = 0; i < rows.length; i += 1) {
+      var row = rows[i] || [];
+      var indexValue = columns.indexColumn >= 0 ? String(row[columns.indexColumn] == null ? "" : row[columns.indexColumn]).trim() : "";
+      var nameValue = columns.nameColumn >= 0 ? String(row[columns.nameColumn] == null ? "" : row[columns.nameColumn]).trim() : "";
+      var key = indexValue + "\0" + nameValue;
+      if (!current || current.key !== key) {
+        if (current) {
+          current.endRow = i - 1;
+          current.rowCount = current.endRow - current.startRow + 1;
+          runs.push(current);
+        }
+        current = {
+          id: String(runs.length + 1),
+          key: key,
+          index: indexValue,
+          name: nameValue,
+          startRow: i,
+          endRow: i,
+          rowCount: 1
+        };
+      }
+    }
+    if (current) {
+      current.endRow = rows.length - 1;
+      current.rowCount = current.endRow - current.startRow + 1;
+      runs.push(current);
+    }
+    return runs;
+  }
+
+  function resolveSegmentRows(dataset, rangeType, definition) {
+    var type = normalizeSegmentRangeType(rangeType);
+    var spec = normalizeSegmentRangeDefinition(definition);
+    var rows = datasetCsvRows(dataset);
+    if (!rows.length) throw new Error("源数据没有可切段的原始行。");
+    if (type === "row") {
+      var startRow = Math.round(Number(spec.startRow));
+      var endRow = Math.round(Number(spec.endRow));
+      if (!Number.isFinite(startRow) || !Number.isFinite(endRow)) throw new Error("请输入起始行和结束行。");
+      if (startRow < 1) startRow = 1;
+      if (endRow < startRow) throw new Error("结束行必须大于或等于起始行。");
+      var last = rows.length;
+      if (startRow > last) throw new Error("起始行超出数据范围。");
+      if (endRow > last) endRow = last;
+      return [{ start: startRow - 1, end: endRow - 1 }];
+    }
+    if (type === "step") {
+      var runs = detectStepRuns(dataset);
+      if (!runs.length) throw new Error("没有工步信息，无法按工步切段。");
+      var selected = [];
+      if (spec.runIds && spec.runIds.length) {
+        selected = runs.filter(function (run) { return spec.runIds.indexOf(run.id) >= 0; });
+      } else if (spec.stepIndex !== "") {
+        selected = runs.filter(function (run) { return run.index === String(spec.stepIndex); });
+      } else if (spec.stepName) {
+        selected = runs.filter(function (run) { return run.name === spec.stepName; });
+      }
+      if (!selected.length) throw new Error("没有命中的工步区间。");
+      return selected.map(function (run) { return { start: run.startRow, end: run.endRow }; });
+    }
+    var column = spec.column || dataset.xHeader || dataset.xName;
+    var columnIndex = datasetHeaderIndex(dataset, column);
+    if (columnIndex < 0) throw new Error("找不到切段列：" + column);
+    if (spec.start == null || spec.end == null || spec.start === "" || spec.end === "") {
+      throw new Error("请输入起始边界和结束边界。");
+    }
+    var start = spec.start;
+    var end = spec.end;
+    if (compareSegmentBound(start, end) > 0) {
+      var swapped = start;
+      start = end;
+      end = swapped;
+    }
+    var ranges = [];
+    var openStart = -1;
+    var i;
+    for (i = 0; i < rows.length; i += 1) {
+      var cell = (rows[i] || [])[columnIndex];
+      var inRange = compareSegmentBound(cell, start) >= 0 && compareSegmentBound(cell, end) <= 0;
+      if (inRange) {
+        if (openStart < 0) openStart = i;
+      } else if (openStart >= 0) {
+        ranges.push({ start: openStart, end: i - 1 });
+        openStart = -1;
+      }
+    }
+    if (openStart >= 0) ranges.push({ start: openStart, end: rows.length - 1 });
+    if (!ranges.length) throw new Error("选定区间没有命中数据行。");
+    return ranges;
+  }
+
+  function sliceSeriesByRowRanges(sourceSeries, indexMap, ranges) {
+    var x = [];
+    var y = [];
+    (ranges || []).forEach(function (range) {
+      var row;
+      for (row = range.start; row <= range.end; row += 1) {
+        var seriesIndex = indexMap[row];
+        if (seriesIndex == null || seriesIndex < 0) continue;
+        x.push(sourceSeries.x[seriesIndex]);
+        y.push(sourceSeries.y[seriesIndex]);
+      }
+    });
+    return { x: x, y: y };
+  }
+
+  function defaultSegmentName(source, rangeType, definition, ranges) {
+    var spec = normalizeSegmentRangeDefinition(definition);
+    if (rangeType === "step") {
+      var label = spec.stepName || spec.stepIndex || "工步";
+      return (source.name || "数据") + " / " + label;
+    }
+    if (rangeType === "row" && ranges && ranges[0]) {
+      return (source.name || "数据") + " / 行 " + (ranges[0].start + 1) + "–" + (ranges[0].end + 1);
+    }
+    if ((rangeType === "time" || rangeType === "x") && spec.start != null && spec.end != null) {
+      return (source.name || "数据") + " / " + spec.start + "–" + spec.end;
+    }
+    return (source.name || "数据") + " / 片段";
+  }
+
+  function materializeSegmentSeries(source, segmentId, ranges) {
+    var indexMap = datasetCsvIndexMap(source);
+    return (source.series || []).map(function (series) {
+      var sliced = sliceSeriesByRowRanges(series, indexMap, ranges);
+      var copy = cloneJson(series);
+      copy.id = seriesId(segmentId, series.localId);
+      copy.datasetId = segmentId;
+      copy.kind = "segment";
+      copy.role = series.role || "numeric";
+      copy.x = sliced.x;
+      copy.y = sliced.y;
+      return normalizeSeries(copy, segmentId);
+    });
+  }
+
+  function previewSegment(project, spec) {
+    var source = findDataset(project, spec && spec.sourceDatasetId);
+    if (!source || source.kind === "computed") throw new Error("只能从原始数据簇创建片段。");
+    if (source.kind === "segment") throw new Error("不能对片段再次切段。");
+    var rangeType = normalizeSegmentRangeType(spec && spec.rangeType);
+    var ranges = resolveSegmentRows(source, rangeType, spec && spec.rangeDefinition);
+    return {
+      sourceDatasetId: source.id,
+      rangeType: rangeType,
+      rangeDefinition: normalizeSegmentRangeDefinition(spec && spec.rangeDefinition),
+      selectedRowRanges: ranges,
+      rowCount: rowRangeCount(ranges),
+      columnCount: (source.headers || []).length,
+      name: String((spec && spec.name) || defaultSegmentName(source, rangeType, spec && spec.rangeDefinition, ranges))
+    };
+  }
+
+  function createSegment(project, spec) {
+    var preview = previewSegment(project, spec);
+    var source = findDataset(project, preview.sourceDatasetId);
+    var segmentId = spec && spec.id ? String(spec.id) : makeId("seg");
+    if (findDataset(project, segmentId)) throw new Error("片段 ID 已存在：" + segmentId);
+    var dataset = normalizeDataset({
+      id: segmentId,
+      name: preview.name,
+      kind: "segment",
+      sourceFilename: source.sourceFilename,
+      sourceEncoding: source.sourceEncoding,
+      importedAt: source.importedAt,
+      headers: source.headers.slice(),
+      timeUnit: source.timeUnit,
+      xHeader: source.xHeader,
+      xName: source.xName,
+      xUnit: source.xUnit,
+      xIsTime: source.xIsTime,
+      defaultXColumnRef: source.defaultXColumnRef || "",
+      sourceDatasetId: source.id,
+      rangeType: preview.rangeType,
+      rangeDefinition: preview.rangeDefinition,
+      selectedRowRanges: preview.selectedRowRanges,
+      createdAt: (spec && spec.createdAt) || new Date().toISOString(),
+      columnSelection: spec && spec.columnSelection,
+      series: materializeSegmentSeries(source, segmentId, preview.selectedRowRanges)
+    });
+    addDataset(project, dataset);
+    return dataset;
+  }
+
+  function updateSegment(project, segmentId, patch) {
+    var segment = findDataset(project, segmentId);
+    if (!segment || segment.kind !== "segment") throw new Error("找不到数据片段。");
+    var source = sourceDatasetOfSegment(project, segment);
+    if (!source) throw new Error("片段来源数据集已不存在，未静默保留失效依赖。");
+    var next = patch && typeof patch === "object" ? patch : {};
+    if (next.name != null) segment.name = String(next.name).trim() || segment.name;
+    var rangeType = next.rangeType != null ? normalizeSegmentRangeType(next.rangeType) : segment.rangeType;
+    var definition = next.rangeDefinition != null ? next.rangeDefinition : segment.rangeDefinition;
+    if (next.rangeType != null || next.rangeDefinition != null) {
+      var ranges = resolveSegmentRows(source, rangeType, definition);
+      segment.rangeType = rangeType;
+      segment.rangeDefinition = normalizeSegmentRangeDefinition(definition);
+      segment.selectedRowRanges = ranges;
+      var refreshed = materializeSegmentSeries(source, segment.id, ranges);
+      var byLocal = {};
+      refreshed.forEach(function (item) { byLocal[item.localId] = item; });
+      segment.series.forEach(function (item) {
+        var nextSeries = byLocal[item.localId];
+        if (!nextSeries) return;
+        item.x = nextSeries.x;
+        item.y = nextSeries.y;
+      });
+      refreshed.forEach(function (item) {
+        if (segment.series.some(function (series) { return series.localId === item.localId; })) return;
+        segment.series.push(item);
+      });
+      recomputeDownstream(project, segment.series.map(function (series) { return series.id; }));
+    }
+    if (next.columnSelection) segment.columnSelection = normalizeColumnSelection(next.columnSelection);
+    return segment;
+  }
+
+  function splitDatasetBySteps(project, datasetId) {
+    var source = findDataset(project, datasetId);
+    if (!source || source.kind === "computed" || source.kind === "segment") throw new Error("只能拆分原始数据簇。");
+    var runs = detectStepRuns(source);
+    if (!runs.length) throw new Error("没有工步信息，无法按工步拆分。");
+    return runs.map(function (run) {
+      var used = {};
+      listSegments(project, source.id).forEach(function (item) { used[item.name] = true; });
+      var base = (source.name || "数据") + " / " + (run.name || "工步") + " " + (run.index || run.id);
+      var name = base;
+      var suffix = 2;
+      while (used[name]) {
+        name = base + " (" + suffix + ")";
+        suffix += 1;
+      }
+      return createSegment(project, {
+        name: name,
+        sourceDatasetId: source.id,
+        rangeType: "step",
+        rangeDefinition: {
+          stepIndex: run.index,
+          stepName: run.name,
+          runIds: [run.id]
+        }
+      });
+    });
+  }
+
+  function datasetDeleteImpact(project, datasetId) {
+    var dataset = findDataset(project, datasetId);
+    if (!dataset) return { segments: [], derived: [], plots: [], analyses: [] };
+    var segments = dataset.kind === "segment" ? [] : listSegments(project, datasetId);
+    var seriesIds = dataset.series.map(function (series) { return series.id; });
+    segments.forEach(function (segment) {
+      (segment.series || []).forEach(function (series) { seriesIds.push(series.id); });
+    });
+    var impact = formulaImpact(project, seriesIds);
+    impact.segments = segments.map(function (item) {
+      return { id: item.id, name: item.name, rowCount: rowRangeCount(item.selectedRowRanges) };
+    });
+    return impact;
+  }
+
+  function segmentExportHeaders(source, options) {
+    var headers = (source.headers || []).slice();
+    var selection = normalizeColumnSelection(options && options.columnSelection);
+    if (selection.mode === "selected" && selection.columns.length) {
+      headers = selection.columns.filter(function (name) { return datasetHeaderIndex(source, name) >= 0; });
+    }
+    var keepOriginalTime = !options || options.keepOriginalTime !== false;
+    var timeHeader = (options && options.timeColumn) || source.xHeader || source.xName;
+    if (!keepOriginalTime && timeHeader) {
+      headers = headers.filter(function (name) { return name !== timeHeader; });
+    }
+    var relative = options && options.relativeTime;
+    if (relative) {
+      var relativeHeader = "相对时间(s)";
+      var timeIndex = headers.indexOf(timeHeader);
+      if (timeIndex >= 0) headers.splice(timeIndex + 1, 0, relativeHeader);
+      else headers.push(relativeHeader);
+    }
+    return headers;
+  }
+
+  function collectSegmentExportRows(source, ranges, options) {
+    var rows = datasetCsvRows(source);
+    var headers = segmentExportHeaders(source, options);
+    var timeHeader = (options && options.timeColumn) || source.xHeader || source.xName;
+    var timeIndex = datasetHeaderIndex(source, timeHeader);
+    var origin = null;
+    if (options && options.relativeTime) {
+      (ranges || []).some(function (range) {
+        var row;
+        for (row = range.start; row <= range.end; row += 1) {
+          var value = parseNumericCell((rows[row] || [])[timeIndex]);
+          if (Number.isFinite(value)) {
+            origin = value;
+            return true;
+          }
+        }
+        return false;
+      });
+      if (origin == null) origin = 0;
+    }
+    var out = [];
+    (ranges || []).forEach(function (range) {
+      var row;
+      for (row = range.start; row <= range.end; row += 1) {
+        var sourceRow = rows[row] || [];
+        var next = [];
+        headers.forEach(function (header) {
+          if (header === "相对时间(s)") {
+            var timeValue = parseNumericCell(sourceRow[timeIndex]);
+            next.push(Number.isFinite(timeValue) ? String(timeValue - origin) : "");
+            return;
+          }
+          var column = datasetHeaderIndex(source, header);
+          next.push(column >= 0 ? (sourceRow[column] == null ? "" : sourceRow[column]) : "");
+        });
+        out.push(next);
+      }
+    });
+    return { headers: headers, rows: out };
+  }
+
+  function serializeCsvRows(headers, rows) {
+    var lines = [headers.map(csvEscape).join(",")];
+    (rows || []).forEach(function (row) {
+      lines.push(headers.map(function (_, index) {
+        return csvEscape(row[index] == null ? "" : row[index]);
+      }).join(","));
+    });
+    return lines.join("\r\n") + "\r\n";
+  }
+
+  function encodeGb18030(text) {
+    var source = String(text || "");
+    if (!encodeGb18030.map) {
+      encodeGb18030.map = Object.create(null);
+      var decoder = new TextDecoder("gb18030");
+      var pair = new Uint8Array(2);
+      var b1;
+      var b2;
+      for (b1 = 0x81; b1 <= 0xFE; b1 += 1) {
+        for (b2 = 0x40; b2 <= 0xFE; b2 += 1) {
+          if (b2 === 0x7F) continue;
+          pair[0] = b1;
+          pair[1] = b2;
+          try {
+            var decoded = decoder.decode(pair);
+            if (decoded.length === 1 && decoded.charCodeAt(0) !== 0xFFFD) {
+              encodeGb18030.map[decoded] = (b1 << 8) | b2;
+            }
+          } catch (error) {}
+        }
+      }
+    }
+    var bytes = [];
+    var i;
+    for (i = 0; i < source.length; i += 1) {
+      var code = source.charCodeAt(i);
+      if (code < 0x80) {
+        bytes.push(code);
+        continue;
+      }
+      var unit = source.charAt(i);
+      if (code >= 0xD800 && code <= 0xDBFF && i + 1 < source.length) {
+        unit = source.slice(i, i + 2);
+        i += 1;
+      }
+      var packed = encodeGb18030.map[unit];
+      if (packed == null) throw new Error("无法按 GB18030 编码字符：" + unit);
+      bytes.push((packed >> 8) & 0xFF, packed & 0xFF);
+    }
+    return new Uint8Array(bytes);
+  }
+
+  function encodeCsvText(text, encoding) {
+    var label = String(encoding || "utf-8-bom").toLowerCase();
+    if (label === "utf8") label = "utf-8";
+    if (label === "utf8-bom") label = "utf-8-bom";
+    if (label === "gbk") label = "gb18030";
+    if (CSV_EXPORT_ENCODINGS.indexOf(label) < 0) throw new Error("不支持的导出编码：" + encoding);
+    if (label === "utf-8") return new TextEncoder().encode(text);
+    if (label === "utf-8-bom") {
+      var body = new TextEncoder().encode(text);
+      var bom = new Uint8Array(3 + body.length);
+      bom[0] = 0xEF;
+      bom[1] = 0xBB;
+      bom[2] = 0xBF;
+      bom.set(body, 3);
+      return bom;
+    }
+    return encodeGb18030(text);
+  }
+
+  function sanitizeExportFilename(value, fallback) {
+    var name = String(value || fallback || "segment").replace(/[\\/:*?"<>|]+/g, "_").trim();
+    return name || "segment";
+  }
+
+  function crc32(bytes) {
+    if (!crc32.table) {
+      crc32.table = new Uint32Array(256);
+      var n;
+      var c;
+      var k;
+      for (n = 0; n < 256; n += 1) {
+        c = n;
+        for (k = 0; k < 8; k += 1) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        crc32.table[n] = c >>> 0;
+      }
+    }
+    var crc = 0xFFFFFFFF;
+    var i;
+    for (i = 0; i < bytes.length; i += 1) crc = crc32.table[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+  }
+
+  function zipStore(files) {
+    var encoder = new TextEncoder();
+    var local = [];
+    var central = [];
+    var offset = 0;
+    (files || []).forEach(function (file) {
+      var nameBytes = encoder.encode(file.name);
+      var data = file.bytes instanceof Uint8Array ? file.bytes : new Uint8Array(file.bytes || []);
+      var crc = crc32(data);
+      var localHeader = new Uint8Array(30 + nameBytes.length);
+      var view = new DataView(localHeader.buffer);
+      view.setUint32(0, 0x04034b50, true);
+      view.setUint16(4, 20, true);
+      view.setUint16(6, 0x0800, true);
+      view.setUint16(8, 0, true);
+      view.setUint16(10, 0, true);
+      view.setUint16(12, 0, true);
+      view.setUint32(14, crc, true);
+      view.setUint32(18, data.length, true);
+      view.setUint32(22, data.length, true);
+      view.setUint16(26, nameBytes.length, true);
+      view.setUint16(28, 0, true);
+      localHeader.set(nameBytes, 30);
+      local.push(localHeader, data);
+      var centralHeader = new Uint8Array(46 + nameBytes.length);
+      var centralView = new DataView(centralHeader.buffer);
+      centralView.setUint32(0, 0x02014b50, true);
+      centralView.setUint16(4, 20, true);
+      centralView.setUint16(6, 20, true);
+      centralView.setUint16(8, 0x0800, true);
+      centralView.setUint16(10, 0, true);
+      centralView.setUint16(12, 0, true);
+      centralView.setUint16(14, 0, true);
+      centralView.setUint32(16, crc, true);
+      centralView.setUint32(20, data.length, true);
+      centralView.setUint32(24, data.length, true);
+      centralView.setUint16(28, nameBytes.length, true);
+      centralView.setUint16(30, 0, true);
+      centralView.setUint16(32, 0, true);
+      centralView.setUint16(34, 0, true);
+      centralView.setUint16(36, 0, true);
+      centralView.setUint32(38, 0, true);
+      centralView.setUint32(42, offset, true);
+      centralHeader.set(nameBytes, 46);
+      central.push(centralHeader);
+      offset += localHeader.length + data.length;
+    });
+    var centralSize = 0;
+    central.forEach(function (chunk) { centralSize += chunk.length; });
+    var eocd = new Uint8Array(22);
+    var eocdView = new DataView(eocd.buffer);
+    eocdView.setUint32(0, 0x06054b50, true);
+    eocdView.setUint16(8, files.length, true);
+    eocdView.setUint16(10, files.length, true);
+    eocdView.setUint32(12, centralSize, true);
+    eocdView.setUint32(16, offset, true);
+    var total = offset + centralSize + eocd.length;
+    var out = new Uint8Array(total);
+    var cursor = 0;
+    local.forEach(function (chunk) {
+      out.set(chunk, cursor);
+      cursor += chunk.length;
+    });
+    central.forEach(function (chunk) {
+      out.set(chunk, cursor);
+      cursor += chunk.length;
+    });
+    out.set(eocd, cursor);
+    return out;
+  }
+
+  function segmentExportTarget(project, segmentId) {
+    if (!segmentId) return null;
+    var dataset = findDataset(project, segmentId);
+    if (!dataset || dataset.kind !== "segment") return null;
+    if (!sourceDatasetOfSegment(project, dataset)) return null;
+    return dataset;
+  }
+
+  function segmentPanelExportState(project, segmentId) {
+    var target = segmentExportTarget(project, segmentId);
+    var hasSaved = (project.datasets || []).some(function (item) {
+      return !!segmentExportTarget(project, item.id);
+    });
+    if (target) {
+      return { enabled: true, segmentId: target.id, name: target.name || "", reason: "", hasSaved: true };
+    }
+    return {
+      enabled: false,
+      segmentId: "",
+      name: "",
+      reason: segmentId ? "missing" : "none",
+      hasSaved: hasSaved
+    };
+  }
+
+  function exportSegmentCsv(project, segmentId, options) {
+    var segment = findDataset(project, segmentId);
+    if (!segment || segment.kind !== "segment") throw new Error("找不到数据片段。");
+    var source = sourceDatasetOfSegment(project, segment);
+    if (!source) throw new Error("片段来源数据集已不存在，未静默导出。");
+    if (!source.rawCsv) throw new Error("源数据没有保留原始单元格，无法按原表导出。");
+    var packed = collectSegmentExportRows(source, segment.selectedRowRanges, options || {});
+    var text = serializeCsvRows(packed.headers, packed.rows);
+    var encoding = (options && options.encoding) || "utf-8-bom";
+    var base = sanitizeExportFilename((options && options.filename) || (segment.name + ".csv"), segment.name + ".csv");
+    if (!/\.csv$/i.test(base)) base += ".csv";
+    return {
+      filename: base,
+      text: text,
+      bytes: encodeCsvText(text, encoding),
+      headers: packed.headers,
+      rowCount: packed.rows.length,
+      encoding: encoding
+    };
+  }
+
+  function exportSegmentsZip(project, segmentIds, options) {
+    var files = [];
+    var used = {};
+    (segmentIds || []).forEach(function (id) {
+      var exported = exportSegmentCsv(project, id, options);
+      var name = exported.filename;
+      var suffix = 2;
+      while (used[name]) {
+        name = exported.filename.replace(/\.csv$/i, "") + "-" + suffix + ".csv";
+        suffix += 1;
+      }
+      used[name] = true;
+      files.push({ name: name, bytes: exported.bytes });
+    });
+    if (!files.length) throw new Error("没有可导出的片段。");
+    return {
+      filename: sanitizeExportFilename((options && options.zipName) || "segments.zip", "segments.zip"),
+      bytes: zipStore(files),
+      files: files.map(function (file) { return file.name; })
+    };
+  }
+
   var api = {
     APP_INFO: APP_INFO,
     SOFTWARE_VERSION: SOFTWARE_VERSION,
@@ -5983,6 +7921,9 @@
     LAYOUT_PADDING: LAYOUT_PADDING,
     LAYOUT_GAP: LAYOUT_GAP,
     LAYOUT_TEMPLATES: LAYOUT_TEMPLATES,
+    DEFAULT_TICK_COUNT: DEFAULT_TICK_COUNT,
+    MIN_INSTANCE_WIDTH: MIN_INSTANCE_WIDTH,
+    MIN_INSTANCE_HEIGHT: MIN_INSTANCE_HEIGHT,
     CANVAS_PRESETS: CANVAS_PRESETS,
     PAPER_SIZE_PRESETS: PAPER_SIZE_PRESETS,
     PLOT_ACCENT_COLORS: PLOT_ACCENT_COLORS,
@@ -5998,6 +7939,10 @@
     duplicateCanvas: duplicateCanvas,
     deleteCanvas: deleteCanvas,
     createInstance: createInstance,
+    extractPlotDisplay: extractPlotDisplay,
+    ensureInstanceDisplay: ensureInstanceDisplay,
+    bindPlotView: bindPlotView,
+    syncInstanceDisplaySize: syncInstanceDisplaySize,
     removeInstance: removeInstance,
     setInstanceGeometry: setInstanceGeometry,
     moveInstanceLayer: moveInstanceLayer,
@@ -6021,7 +7966,11 @@
     clampZoom: clampZoom,
     parseCsv: parseCsv,
     parseColumnHeader: parseColumnHeader,
+    CSV_ENCODING_LABELS: CSV_ENCODING_LABELS,
+    detectCsvEncoding: detectCsvEncoding,
+    decodeCsvBytes: decodeCsvBytes,
     parseDatasetFromCsv: parseDatasetFromCsv,
+    parseDatasetFromCsvBytes: parseDatasetFromCsvBytes,
     createProject: createProject,
     parseProject: parseProject,
     serializeProject: serializeProject,
@@ -6030,6 +7979,10 @@
     parseFormulaExpression: parseFormulaExpression,
     formulaAliases: formulaAliases,
     evaluateFormulaAst: evaluateFormulaAst,
+    excelColumnAlias: excelColumnAlias,
+    quickFormulaAliases: quickFormulaAliases,
+    compactQuickFormulaExpression: compactQuickFormulaExpression,
+    normalizeMissingValueMode: normalizeMissingValueMode,
     normalizeFormulaDefinition: normalizeFormulaDefinition,
     normalizeAlignmentConfig: normalizeAlignmentConfig,
     alignSeries: alignSeries,
@@ -6051,6 +8004,10 @@
     nextAnalysisName: nextAnalysisName,
     evaluateAnalysis: evaluateAnalysis,
     previewAnalysis: previewAnalysis,
+    quickFormulaExpression: quickFormulaExpression,
+    quickFormulaDraft: quickFormulaDraft,
+    applySeriesStat: applySeriesStat,
+    applyQuickFormula: applyQuickFormula,
     applyAnalysis: applyAnalysis,
     recomputeAnalysis: recomputeAnalysis,
     renameAnalysis: renameAnalysis,
@@ -6064,6 +8021,26 @@
     formulaWouldCycle: formulaWouldCycle,
     addDataset: addDataset,
     removeDataset: removeDataset,
+    SEGMENT_RANGE_TYPES: SEGMENT_RANGE_TYPES,
+    CSV_EXPORT_ENCODINGS: CSV_EXPORT_ENCODINGS,
+    listSegments: listSegments,
+    detectStepColumns: detectStepColumns,
+    detectStepRuns: detectStepRuns,
+    previewSegment: previewSegment,
+    createSegment: createSegment,
+    updateSegment: updateSegment,
+    splitDatasetBySteps: splitDatasetBySteps,
+    datasetDeleteImpact: datasetDeleteImpact,
+    sourceDatasetOfSegment: sourceDatasetOfSegment,
+    rowRangeCount: rowRangeCount,
+    csvRowCount: csvRowCount,
+    segmentExportTarget: segmentExportTarget,
+    segmentPanelExportState: segmentPanelExportState,
+    exportSegmentCsv: exportSegmentCsv,
+    exportSegmentsZip: exportSegmentsZip,
+    encodeCsvText: encodeCsvText,
+    serializeCsvRows: serializeCsvRows,
+    zipStore: zipStore,
     createPlot: createPlot,
     ensureDefaultPlot: ensureDefaultPlot,
     addSeriesToPlot: addSeriesToPlot,
@@ -6093,6 +8070,7 @@
     findNearestPoint: findNearestPoint,
     findNearestDataPoint: findNearestDataPoint,
     snapReadout: snapReadout,
+    pickReadoutCandidate: pickReadoutCandidate,
     detailConnectorLines: detailConnectorLines,
     normalizeEdge: normalizeEdge,
     normalizeDetailSource: normalizeDetailSource,
@@ -6105,6 +8083,14 @@
     syncPlotAxisAutoTitles: syncPlotAxisAutoTitles,
     syncAllPlotAxisAutoTitles: syncAllPlotAxisAutoTitles,
     isTimeHeader: isTimeHeader,
+    isRelativeTimeHeader: isRelativeTimeHeader,
+    isTimeLikeHeader: isTimeLikeHeader,
+    listNumericXColumns: listNumericXColumns,
+    suggestRelativeXColumn: suggestRelativeXColumn,
+    resolvedXColumnRef: resolvedXColumnRef,
+    mappedSeriesX: mappedSeriesX,
+    setDatasetDefaultXColumn: setDatasetDefaultXColumn,
+    setPlotXColumnOverride: setPlotXColumnOverride,
     projectNameFromFilename: projectNameFromFilename,
     seriesDisplayName: seriesDisplayName,
     seriesOriginalName: seriesOriginalName,
@@ -6145,6 +8131,17 @@
     setPlotSize: setPlotSize,
     layoutSlots: layoutSlots,
     applyLayoutTemplate: applyLayoutTemplate,
+    applyLayoutToInstances: applyLayoutToInstances,
+    placeInstanceInSlot: placeInstanceInSlot,
+    instanceBox: instanceBox,
+    geometryMatches: geometryMatches,
+    collectLayoutSlotBoxes: collectLayoutSlotBoxes,
+    matchFillSlot: matchFillSlot,
+    slotContainsInstance: slotContainsInstance,
+    findSlotOccupant: findSlotOccupant,
+    findSlotOverlaps: findSlotOverlaps,
+    inspectSlotPlacement: inspectSlotPlacement,
+    placePrimaryInSlot: placePrimaryInSlot,
     canvasLayoutArea: canvasLayoutArea,
     setCanvasSize: setCanvasSize,
     placePlotInSlot: placePlotInSlot,
@@ -6169,17 +8166,26 @@
     parseFigureTemplate: parseFigureTemplate,
     normalizeTemplateLibrary: normalizeTemplateLibrary,
     duplicateFigureTemplate: duplicateFigureTemplate,
+    normalizeTemplateNameKey: normalizeTemplateNameKey,
+    templatesWithName: templatesWithName,
+    templateListLabel: templateListLabel,
+    saveFigureTemplate: saveFigureTemplate,
     detailChildren: detailChildren,
     removePlot: removePlot,
     effectiveMagnification: effectiveMagnification,
     snapPlotMove: snapPlotMove,
     snapPlotResize: snapPlotResize,
     snapThresholdWorld: snapThresholdWorld,
+    SNAP_SCREEN_PX: SNAP_SCREEN_PX,
+    SNAP_RELEASE_PX: SNAP_RELEASE_PX,
+    READOUT_HIT_PX: READOUT_HIT_PX,
+    SLOT_MATCH_PX: SLOT_MATCH_PX,
     validateTickInterval: validateTickInterval,
     axisTickSet: axisTickSet,
     formatTickValue: formatTickValue,
     compactNumber: compactNumber,
     autoTicks: autoTicks,
+    autoTickCountForSize: autoTickCountForSize,
     layoutLegendItems: layoutLegendItems,
     resolveLegendPosition: resolveLegendPosition,
     legendAnchor: legendAnchor,
@@ -6205,6 +8211,8 @@
     clampInsetRect: clampInsetRect,
     normalizeAnnotation: normalizeAnnotation,
     normalizeAnnotations: normalizeAnnotations,
+    setAnnotationLabelOffset: setAnnotationLabelOffset,
+    annotationLabelPoint: annotationLabelPoint,
     prunePlotInspection: prunePlotInspection,
     finalizePlotInspection: finalizePlotInspection,
     insetYExtent: insetYExtent,

@@ -1330,3 +1330,233 @@ Edge 未安装，`playwright install msedge` 需要 sudo，file:// 记 NOT RUN�
 FONT-001 与 DOCK-001 不在这一版。发布后取 `releases/latest`：`0.6.3` 判断为发现新版本 `0.7.0` 且带 zip 下载地址；本地 `0.7.0` 判断为当前已是最新。Edge、真机触控板、系统保存框、Windows NOT RUN。
 
 验证：`node --check visualizer-core.js` PASS；`node tests/core-test.js` PASS（`APP_INFO.version` 为 `0.7.0`，工程格式 `1.1`）；`node tests/icon-slot-test.js` PASS。普通 Chrome 无 `--allow-file-access-from-files` 打开工作树与 ZIP 解压 HTML。Playwright Chrome headless `file://` 同样未加该旗标：导入 spec070-A/B、公式 B−A 得 1,1,1,1、MAE=RMSE=MaxAE=Bias=1 N=4、CSV/SVG/PNG、1.0 工程打开后工作副本 1.1、工程文本重开。ZIP 三个文件在压缩包根目录。Edge、真机触控板、系统保存框、Windows NOT RUN。760×480 打开 Dock 时 Results 底边重叠约 20 px。
+
+---
+
+## v0.7.1 开发候选（未发布）
+
+- 日期：2026-10-27
+- 软件版本：`0.7.1`
+- 工程格式：`projectFormatVersion: "1.1"`（未升）
+- 分支：`feat/v0.1.0`
+- 起点：`a39a9539d7e676fbf3bb3e6f4307e5b36d421246`
+- 结束：未提交
+- Notion：V071-A / V071-B / V071-C / V071-04 / V071-04-FIX02 / V071-X-01
+
+以本地 v0.7.0 为基线，没有用 GitHub 旧 main 覆盖。没有重构菜单层级、Dock、Inspector、Results 布局或公式解析器。没有打 tag，没有发 Release。
+
+### 任务 A：CSV 中文乱码
+
+根因：CSV 文件选择与拖拽走 `file.text()`，按 UTF-8 读 GBK/GB18030，表头变成 U+FFFD 或乱码。
+
+做法：`detectCsvEncoding` / `decodeCsvBytes` / `parseDatasetFromCsvBytes`。BOM 优先，再严格 UTF-8，失败后 GB18030/GBK。合理性评分；低置信度弹表头预览。含替换符不得提交 Dataset。
+
+整文件（60319×94）：UTF-8 合计 1861 ms；GB18030 合计 2031 ms。本机只有 UTF-8 副本 `2026-10-24@19-44-13_0.33C_UTF8.CSV`，GB18030 由该副本再编码。中文表头完整。旧工程若已把乱码写进 JSON，原始字节已丢失，不能无损恢复；重新导入会新建 Dataset，Series 样式不会自动迁回。
+
+### 任务 B：Windows 字体
+
+`--ui-font` 增加 SimSun / NSimSun，不改成微软雅黑。`data-os=windows` 时关闭 antialiased。图内默认栈加 Segoe UI。科研绘图字体选项未动。Mac Chrome 已看；Windows Chrome/Edge 与 125%/150% 系统缩放 NOT RUN，任务 B 不能标完全通过。
+
+### 任务 C：快捷公式
+
+入口：计算工具 → 快捷公式。SUM / AVERAGE / MAX / MIN。序列统计写 Results 标量；逐点计算走现有 `applyFormula`。手动公式仍在。
+
+### V071-C-FIX01：超过 26 条 Series 的别名
+
+人工验收失败：60319×94 CSV 勾选 57 条温度后，逐点 AVERAGE 把第 27 个别名写成 `[`，解析器报「公式含有不支持的字符：[」。根因是 `quickFormulaAliases` 用 `String.fromCharCode(65+i)`，超过 Z 就进入 ASCII 符号。
+
+做法：Excel 列名 A–Z、AA–AZ、BA…；跳过函数名；逐点 SUM/AVERAGE 改为 `sum(...)` / `average(...)`，避免 ignore 模式仍除以 N。缺失值分严格（该时刻全部有效）和忽略缺失（除以有效条数），NaN 不当 0，不对齐失败不当外插。超过 8 条时对话框默认折叠列表，可搜索、看完整公式、自定义输出名，底部「计算」不被挤出。未截断输入。未改 CSV 编码和 Segment 导出。
+
+Node：1/2/26/27/52/53/57/100/200 条；57×60319 独立基准 `y=t*0.001+s`，平均 `t*0.001+28`，60319 点一致。Mac Chrome `file://`：57 条注入后预览 `average(A … BE)`，完整公式止于 BE，输出 `T_mean`，t=0 为 28。Undo/Redo 恢复。Results 逐点不写标量（空窗仍在）。等待重新人工验收。不发布。
+
+### 任务 D：数据切段与 CSV 导出（V071-04）
+
+Segment 是 Dataset `kind: "segment"`，引用原始 `rawCsv` 行区间，不复制全表，不混入「计算结果」簇。`projectFormatVersion` 仍是 1.1。撤销快照增加 `segments`。
+
+四种入口：工具栏切段（G，独立于框选 M）、时间/X 区间、按工步（连续 run，同名不连续分开，无工步列不显示该模式）、1 基行号。左侧在原始簇下挂「数据片段」；右侧 Inspector 有切段设置与 CSV 选项。导出走原始单元格、UTF-8 BOM / UTF-8 / GB18030、可选相对时间与指定列；多片段 ZIP 本地 STORE，不走 CDN。
+
+验收文件 UTF-8 副本 `2026-10-24@19-44-13_0.33C_UTF8.CSV`（60319×94）：10 个连续工步区间；工步索引 3 / 放电 CC = 10529 行 × 94 列。本机没有原始 GBK 文件名。Mac Chrome `file://` 用 8 行夹具创建「放电 CC」3 行、加入图窗、公式绑定可见 `放电 CC / 电压`。Windows / Edge / 系统保存框 NOT RUN。
+
+### V071-04-FIX02：同源多 Segment 创建与编辑模式
+
+根因：`commitSegmentFromDraft` 创建成功后把 `segmentDraft.segmentId` 写成新片段，主按钮变成「更新片段」，下一次提交走 `updateSegment`，看起来像覆盖。
+
+做法：草稿增加显式 `mode: create | edit`。创建成功后 `enterCreateSegmentMode(source, true)`，保留区间、清空 `segmentId` 与名称。主按钮「创建片段」/「保存对当前片段的修改」；另存为新片段；始终可见「继续创建新片段」。同名需确认。同源可重叠，各自独立 `segmentId`。未改 CSV 编码、导出与公式。
+
+Node：同源五个重叠片段、编辑第 2 段不改第 3 段、另存为第 6 段、共 6 段可导出。整文件 60319×94：5 个重叠附加段 + 另存为后共 11 段工程往返。Mac Chrome `file://`：连续创建、编辑 段2、另存为 段6、继续创建回到「创建片段」。标识 `EXEC_V071-04-FIX02_20261027T235100_CURSOR_a39a953`。WIP / Done=NO。
+
+### V071-X-01：自定义 X 轴数据列与相对时间映射
+
+绘图 X 是视图重映射，不改 `series.x`。新增 `dataset.defaultXColumnRef`、`plot.xColumnByDataset`。`seriesXForPlot` 先按列配对行，再仅当映射列是时间列时做时间单位换算。公式与 AlignmentConfig 仍用原始 `series.x`。候选项用真实表头；双时间列可建议相对时间。`projectFormatVersion` 仍是 1.1。Inspector「X 轴数据映射」：每数据源下拉「数据源默认 / 导入默认 / 相对时间 / 其他数值列」，「设为该数据源默认」。切段复制来源默认 X。未改公式引擎。
+
+Node：A/B 相对时间叠加 0–3000、Y 不变、切回绝对时间、两图窗隔离、手动轴范围与自定义标题保留、公式 y/x 不变、工程往返、Undo、SOC X、无效列、普通 CSV。Mac Chrome `file://`：segA/segB 各选「相对时间(s) · 相对时间」后图窗 X 范围 0–3000，两曲线从 0 叠加，电压 Y 原值，`series.x` 仍为绝对时间，公式 `A+1` 不随映射改变。标识 `EXEC_V071-X-01_20261027T235100_CURSOR_a39a953`。WIP / Done=NO。
+
+### 验证
+
+- `node --check visualizer-core.js` PASS
+- `node tests/core-test.js` PASS（含 FIX02 同源六段、X-01 映射与公式隔离、切段、公式依赖、工程往返、CSV 转义、GB18030、ZIP、FIX01 1–200 条与 57×60319 独立基准）
+- `node tests/segment-acceptance.js` PASS：parse 1912 ms，detect 285 ms，segment 399 ms，export 82 ms，reimport 147 ms；工步 3 / 放电 CC = 10529 行；5 个重叠附加段 + 另存为后工程往返 11 段
+- `node tests/csv-encoding-bench.js` 本轮 NOT RUN（编码路径未改；GB18030 导出由切段验收覆盖）
+- `node tests/icon-slot-test.js` 本轮 NOT RUN（本机 Chrome 正用于 `file://` 回归）
+- Mac Chrome `file://`：FIX02 连续创建/编辑/另存为 PASS；X-01 相对时间叠加 0–3000 PASS。无 `--allow-file-access-from-files`
+- Edge / Windows / 系统保存框 / 真机触控板 / 浏览器实际 ZIP 下载 NOT RUN
+- 用户 57 条真机 CSV 重新人工验收：等待中。FIX02 / X-01 等待人工看界面
+
+### 2026-10-29 人工验收
+
+用户确认「0.7.1 我人工验收可，目前没有什么问题，可以先 done」。记录 `USER_MANUAL_ACCEPTANCE_V071_20261029`。Notion 任务 V071-A / B / C（含 FIX01）/ 04 / FIX02 / X-01 标 Done。HEAD 仍是 `a39a953`，未提交、未打 tag、未发 Release。Edge / Windows / 系统保存框 / 触控板仍 NOT RUN，不改成 PASS。下一步等发布授权或执行已立项的 v0.7.2。
+
+---
+
+## v0.7.2
+
+- 软件版本：`0.7.2`（工作区，未提交）
+- 工程格式：`projectFormatVersion: "1.1"`（未升）
+- 分支：`feat/v0.1.0`
+- 日期：2026-10-29
+- 起点 HEAD：`a39a953`。未提交、未打 tag、未发 Release。正式已发布仍是 v0.7.0。
+
+按 SPEC-072 与 V072-A→C→B→D/E/F/G→H 实施。未 reset v0.7.1 未提交改动。
+
+### 根因
+
+- 快捷布局走 `applyLayoutTemplate`，改的是 Plot 几何，还会在空槽上造出新图窗。
+- 画布实例与源 Plot 共用样式对象；压缩拼图等于改源图。
+- 图窗 resize 只改 CSS 外框，内部 SVG 仍按源图尺寸画。
+- 自动刻度目标偏少；模板不序列化 `tickMode`。
+- 模板按显示名追加，同名不可辨认。
+- 标注 `<summary>` 被工具栏绑定跳过，点击无模式切换；画布点击把标注写进源 Plot，副本重绘看不到。
+
+### 做法
+
+实例增加 `display` 快照与 `sourcePlotId`。`bindPlotView` 给画布绘制和 Inspector。快捷布局改为 `applyLayoutToInstances`。拖角时按实例宽高重绘。画布右/底/右下可拖。图例 `layoutMode: manual-rows` + `rowBreaks`。自动刻度默认约 7 档，模板保存刻度字段。同名模板要覆盖/另存/取消。标注按钮进入 `annotation-point`，画布标注写入当前实例。
+
+未改 `projectFormatVersion`。旧工程缺 `display` 时按源图补快照。
+
+### 验证
+
+- `node --check visualizer-core.js` PASS
+- `node tests/core-test.js` PASS（隔离、布局溢出/空槽、3×2、刻度、图例分行、模板冲突、工程往返 1.1）
+- Mac Chrome `file://`：标注按钮有状态文案；4 图 2×2；布局菜单含 3×2；画布拖柄 1600×900；实例栏有「从源图重新同步」
+- 52 系列长图例视觉、PNG/SVG、Undo 全点击、Edge/Windows/触控板：NOT RUN
+- 标识：`EXEC_V072-A_20261029T142000_CURSOR_a39a953` 至 `EXEC_V072-H_20261029T142000_CURSOR_a39a953`
+
+WIP / Done=NO。不提交、不发布。
+
+### 2026-10-29 用户澄清：上下两组布局不得混用
+
+上方快捷布局曾在普通单选时只排选中项；下方「当前主图」改下拉还会整页套用「一大两小」。按最新澄清拆开：
+
+- 上方 `applyChosenLayout` 始终排布当前画布全部实例。
+- 下方只走 `placePrimaryInSlot`：空槽放入或新建这一张，占用则确认交换，重复同一槽不复制。不改源图 `layout`。
+
+`node tests/core-test.js` PASS。Mac Chrome `file://`：单选后 2×2 仍排 4 张；定向右槽交换；「尚未入画」只新增 1 张。标识 `EXEC_V072-B_20261029T144319_CURSOR_a39a953`、`EXEC_V072-H_20261029T144319_CURSOR_a39a953`。保持 WIP，不提交、不发布。
+
+### 2026-10-29 人工 FAIL 修复：B-FIX03 / C-FIX02 / D-FIX02 / G-FIX02
+
+此前人工验收不得用 Node PASS 覆盖。本轮按 B+C 槽位几何与吸附 → D 图例行分组 → G 标注框拖动修复，并在真实 Mac Chrome `file://` 复现用户截图场景。
+
+根因：
+
+- B：占用判定用实例中心是否落在槽内，小图叠在「一大两小」左大槽上会误报「已在该分区」。
+- C：吸附只吃图窗边，没有槽位四边填充预览。
+- D：`manual-rows` 把每个断点组当成不受列数约束的整行；Inspector 为每个图例项铺勾选。
+- G：`hitInspection` 在添加模式下跳过标注命中；点标注文字变成再加点或拖图。数据点文字框没有独立 `labelOffset`。
+
+做法：`slotContainsInstance` 改为精确矩形；部分重叠确认后铺满槽。`collectEdgeGuides` 纳入槽边，`matchFillSlot` 四边接近时给出 `.tv-guide-slot` 预览并在松手填充。`layoutLegendItems` 同时吃 `columns` 与 `rowBreaks`；Inspector 改为搜索 + 行芯片 + 「重置自动排版」。标注命中始终优先；点标注只改 `labelOffset`，数据锚点不动。
+
+验证：
+
+- `node --check visualizer-core.js` PASS
+- `node tests/core-test.js` PASS（含重叠占用、填充预览、57 项 8 列/6 列、`labelOffset` 往返）
+- Mac Chrome `file://`：4 图交叠点「一大两小」左槽先确认重叠再铺满 40×40 / 628×800，第二次点击才报已在该分区；拖「循环对比」出现槽位虚线预览并吸附填充；59 项图例 8 列手动分行、搜索与行芯片，图上图例未裁切；T45 标注可选中，文字框相对数据点独立偏移
+- MCP 合成指针拖标注：`setPointerCapture` 拒绝非活动 pointerId，记 IMPLEMENTED_UNVERIFIED，需用户真机拖一下
+- 证据：`tmp/v072-fix/chrome-file-evidence.json`
+- 标识：`EXEC_V072-B_20261029T172000_CURSOR_a39a953` 至 `EXEC_V072-H_20261029T172000_CURSOR_a39a953`（B/C/D/G/H）
+
+人工 FAIL 仍待用户复验。WIP / Done=NO。不提交、不发布。
+
+### 2026-10-30 C-FIX03 / D-FIX03 / G-FIX03
+
+按已批准方案修三件：图窗等宽等高吸附、图例独立行测宽、标注悬停读数与真实拖标签。未 reset、未提交、未发布。
+
+根因：
+
+- C：resize 只对齐右/下边，不比较实例宽高；画布实例拖角原先未走 `snapPlotResize`。槽位边在 resize 回落时会抢走尺寸吸附。
+- D：`layoutLegendItems` 用全图共享 `colWidths`，长名称行把 T 网格列撑宽。
+- G：`annotation-point` 关掉 hover 读数；`moveAnnotation` 拖框函数被图层排序同名函数覆盖；读数浮层盖住标签命中区。
+
+做法：resize 先独立吸附等宽/等高（8 CSS px，12 px 滞后，Alt 绕过），回落边对齐时 `omitSlots`。图例 grid 行共享列宽，`rowBreaks` 后独立行按自身测宽。标注模式用 `pickReadoutCandidate` 显示预览；拖框改名为 `dragAnnotationLabel`，document 监听补捕获失败；落点后收起 Inspector。
+
+验证：
+
+- `node --check visualizer-core.js` PASS
+- `node tests/core-test.js` PASS（等宽/等高/Alt/远离不吸；长名称变长或拆行不改 T 项 x；`pickReadoutCandidate` 近命中/远离）
+- Mac Chrome 156.0.8078.76（Playwright `channel: "chrome"` headless）`file://`：导入 `TESTDATA_119_series.csv`。D：57 项列数=8，T2 x 在长名称拉长后仍为 58.23。C：图B 520×300 拖宽到 680「与「图A」同宽」，再拖高到 410「同高」，Alt 拖成 720×450。G：真实鼠标悬停预览 `T1 · x = 1 · y = 25.11`，点击落点后拖标签，`labelOffset` 从 `(0.023,-0.051)` 变为 `(0.095,0.052)`
+- 证据：`tmp/v072-fix03-chrome/report.json` 与同目录截图
+- 标识：`EXEC_V072-C-FIX03_20261030T113842_CURSOR_a39a953`、`EXEC_V072-D-FIX03_20261030T113842_CURSOR_a39a953`、`EXEC_V072-G-FIX03_20261030T113842_CURSOR_a39a953`、`EXEC_V072-H_20261030T113842_CURSOR_a39a953`
+
+NOT RUN：Edge / Windows / 触控板 / 系统保存框 / PNG/SVG / 工程重开 UI。人工验收前 WIP / Done=NO。
+
+## v0.7.2 V072-I 画布预览与导出缺主图
+
+- 日期：2026-11-02
+- 软件版本：`0.7.2`（工作区，未提交）
+- 工程格式：`projectFormatVersion: "1.1"`（未升）
+- 起点 HEAD：`a39a953`。未提交、未打 tag、未发 Release。
+- 标识：`EXEC_V072-I_20261102T103212_CURSOR_a39a953`
+
+用户人工验收 18 项 PASS，H2 FAIL：画布预览和实际导出都缺部分主图，局部放大图和虚线引导线还在。本轮只修这条导出链路，不改已通过的布局、图例、标注和吸附。
+
+根因：`buildCanvasSvg()` 把每个绘制节点存在 `nodes[instance.id]`。局部视图不是画布实例，舞台项却带着父图的 instance。子图后写入时盖掉父图节点，第二轮只把子图挂进 SVG。引导线另按 `nodes[plot.id]` 取值，所以虚线还在，父图整段不在文件里。没有局部视图的图不会被盖掉，所以右侧图仍在。编辑画布按舞台项各画一个 HTML 框，不走这张表，所以编辑态还能看见主图。
+
+做法：一次遍历按舞台项收集节点，每项都 `appendChild`。局部视图仍用 `nodes[plot.id]` 找父图算引导线。导出组写上 `data-plot-id` 和主图的 `data-instance-id`。
+
+验证：
+
+- 修前 `node tests/canvas-export-test.js`：父图「主图左」不在 SVG / PNG，局部视图和「温度右」在，引导线在。9 项 FAIL。
+- 修后同一命令 PASS。1 张、2 张主图；带局部视图的父图、局部视图、无局部视图的邻图都在；隐藏实例不导出；另一张画布的图不混入；6 张主图加局部视图都在；工程保存再打开后父图仍在。父图 `translate(48 36)`，曲线 path 为 2。
+- 实际打开 `tmp/v072i/canvas.png` 和 `tmp/v072i/canvas.svg`：主图曲线、来源框、虚线引导线、局部视图曲线、右侧图都在。
+- Mac Chrome 打开预览：对话框 SVG 含「主图左」「局部视图 1」「温度右」。
+- `node --check visualizer-core.js` PASS。`node tests/core-test.js` PASS（含 v0.7.1 与 v0.7.2 既有用例）。
+- 对照：`tmp/v072i/report.json`。
+
+NOT RUN：Edge / Windows / 触控板 / 系统保存框 / 18 项人工点击重放。H2 仍待用户复验。WIP / Done=NO。不提交、不发布。
+
+## v0.7.2 V072-J 创建片段后底部 CSV 导出
+
+- 日期：2026-11-02
+- 软件版本：`0.7.2`（工作区，未提交）
+- 工程格式：`projectFormatVersion: "1.1"`（未升）
+- 起点 HEAD：`a39a953`。未提交、未打 tag、未发 Release。
+- 标识：`EXEC_V072-J_20261102T113512_CURSOR_a39a953`
+
+用户截图：创建片段后面板仍是「创建片段 / 继续创建新片段」，底部「导出当前片段 CSV」灰色。只能到左侧已保存片段导出。
+
+根因：`buildSegmentSection` 用 `exportBtn.disabled = !editing`。`editing` 来自 `isSegmentEditMode()`，要求 `segmentDraft.mode === "edit"` 且 `segmentDraft.segmentId` 非空。创建成功后 `enterCreateSegmentMode` 故意把模式留在 `create` 并清空 `segmentId`，避免下一次提交覆盖刚保存的片段。按钮把「编辑模式」当成「有可导出片段」，所以已保存片段存在时按钮仍禁用。左侧右键导出直接用片段 id，不看这个草稿模式，所以左边能导出。
+
+做法：运行时记 `exportTargetSegmentId`，不写入工程。创建成功、另存为新片段、左侧点选已有片段时更新它。继续创建和改草稿名称、区间、文件名都不改这个 id。底部按钮用 `segmentPanelExportState` 判断该 id 是否仍是来源有效的已保存 Segment；同名原始 Dataset、已删除或来源失效的 id 不能导出。点击仍走左侧同一个 `exportOneSegment`。按钮旁写明导出目标，草稿名称不同时说明尚未保存。没有目标、目标失效、已有片段但未选中，三句原因分开。批量 ZIP 仍以左侧勾选为准；未勾选时只在正在编辑某个已保存片段时打包那一个；勾选变化会重绘数量和名称。未保存草稿不进包。
+
+验证：
+
+- 先写 `segmentPanelExportState` 测试，未实现时 `node tests/core-test.js` 在该函数处抛出 `is not a function`。实现后 `all core tests passed`。覆盖：空目标、同名原始 Dataset、同名两段按 id 区分、UTF-8 BOM、全部列、相对时间从 0 且绝对时间不改、指定列、GB18030、两段 ZIP、来源失效、删除后失效，以及页面不再使用 `exportBtn.disabled = !editing`。
+- `node tests/segment-acceptance.js`：`segment acceptance passed`。60319 行源数据，放电 CC 10529 行，GB18030 含「放电 CC」。
+- `node tests/canvas-export-test.js`：`canvas export checks passed`。V072-I 父图、局部视图、引导线、邻图仍在。
+- Mac Chrome 156，`file:///Users/elssssa/Visualizer/temperature_trajectory_visualizer.html`。夹具是构造的 1732 行 × 177 列，不是用户截图里的 112080–113811 实验文件。
+- 创建前按钮禁用，说明「还没有已保存的片段」。预览 `1732 行 × 177 列 · 区间预览 1–1732`。点击「创建片段」后主按钮仍是「创建片段」，「继续创建新片段」还在。状态「已创建片段「25_2C放电」，1732 行」。导出按钮 `disabled=false`，opacity 1。说明「导出目标：25_2C放电」。
+- 把草稿名称改成「下一段草稿」、结束行改成 400，不提交。导出目标仍是 25_2C放电，左侧该段仍是 1732 行。再创建段B（80 行）和段C（10 行）。三段并存，A 未被覆盖。点选 A 后导出目标回到 A。
+- 底部导出与左侧「导出 CSV」字节一致：`25_2C放电.csv`，UTF-8 BOM，1732 行，178 列（177 列加「相对时间(s)」），表头以「时间(s),相对时间(s),电压(V),温度」开头，首行绝对时间 1000，相对时间 0。
+- 改成 GB18030、指定「时间(s)」「电压(V)」、关闭相对时间：无 BOM，表头只有这两列，1732 行，首行时间仍是 1000。
+- 勾选段B、段C 后 ZIP 为 `segments.zip`（`PK`）。解压 `段B.csv` 80 行、`段C.csv` 10 行，均有 BOM、温度列、绝对时间 1000、相对时间 0。未保存草稿不在包内。勾选后按钮从禁用变为可用，说明「将打包已勾选的 1 个片段：ZIP段」。
+- 保存工程再打开：按钮禁用，说明「已有保存的片段，但还没有选定导出目标」。点选 25_2C放电 后可导出，仍是 1732 行、BOM、相对时间 0。删除该段后按钮禁用，说明「导出目标已删除或来源失效」。段B、段C 仍在。
+
+NOT RUN：Edge / Windows / 触控板 / 系统保存框。H2 用户复验未做。WIP / Done=NO。不提交、不发布。
+
+---
+
+## 2026-11-02 用户确认 v0.7.2 人工验收
+
+用户确认当前版本全部功能人工验收通过，包含此前未复验的 H2（画布预览和 PNG/SVG 中的主图）和 V072-J（创建片段后底部导出刚保存的片段）。记录 `USER_MANUAL_ACCEPTANCE_V072_20261102`。
+
+据此把 v0.7.1 与 v0.7.2 一起作为正式版 v0.7.2 发布。v0.7.1 不单独打 tag。`projectFormatVersion` 仍是 `1.1`，仍可读 `1.0`。Edge、Windows、真机触控板、系统保存框仍是 NOT RUN，不改成 PASS。发布提交、tag 和 Release 地址写在下一章。
+

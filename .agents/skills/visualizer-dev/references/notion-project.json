@@ -1,0 +1,82 @@
+{
+  "project": "Visualizer",
+  "updated": "2026-10-16",
+  "identity": "定位只使用 url 与 id。title 只是标签，搜索命中的标题不能代替页面身份。本文件不保存 Token、OAuth 或密码。",
+  "relocation": "先用这里的 url 或 id 读取。读取失败时，用当前 Notion 连接重新定位，并核对父级或与 Visualizer Project 的关联后再接受新地址。不能新建同名页面来冒充原页面。确认新地址后才更新本文件。",
+  "pages": {
+    "project": {
+      "role": "Visualizer Project",
+      "url": "https://app.notion.com/p/3fb679f4adb781fa944bfd6f7adae82e",
+      "id": "3fb679f4-adb7-81fa-944b-fd6f7adae82e"
+    },
+    "projectContext": {
+      "role": "PROJECT_CONTEXT",
+      "url": "https://app.notion.com/p/3fb679f4adb7815e819bc3f0e96dfca4",
+      "id": "3fb679f4-adb7-815e-819b-c3f0e96dfca4"
+    },
+    "currentState": {
+      "role": "CURRENT_STATE",
+      "url": "https://app.notion.com/p/3fb679f4adb78104bfe2e333e7667003",
+      "id": "3fb679f4-adb7-8104-bfe2-e333e7667003"
+    },
+    "releaseHistory": {
+      "role": "RELEASE_HISTORY",
+      "url": "https://app.notion.com/p/3fb679f4adb781ccb2afd639d76d34bf",
+      "id": "3fb679f4-adb7-81cc-b2af-d639d76d34bf"
+    },
+    "developmentLog": {
+      "role": "DEVELOPMENT_LOG",
+      "url": "https://app.notion.com/p/3fb679f4adb781849018e4ae9c77a9fc",
+      "id": "3fb679f4-adb7-8184-9018-e4ae9c77a9fc"
+    },
+    "testBaseline": {
+      "role": "TEST_BASELINE",
+      "url": "https://app.notion.com/p/3fb679f4adb7813cb755e860a6f9b7bc",
+      "id": "3fb679f4-adb7-813c-b755-e860a6f9b7bc"
+    },
+    "init001": {
+      "role": "INIT-001",
+      "url": "https://app.notion.com/p/3fb679f4adb78125bbbefc50ca3949cf",
+      "id": "3fb679f4-adb7-8125-bbbe-fc50ca3949cf",
+      "note": "已完成的同步验证任务。后续测试只允许在页末追加可识别记录，不改变 Done。"
+    }
+  },
+  "dataSources": {
+    "tasks": {
+      "role": "原有 Task Database。与其他项目共用，创建和查询都必须关联 Visualizer Project。",
+      "databaseUrl": "https://app.notion.com/p/2e1679f4adb7819fbfbbe13f87ba5af2",
+      "databaseId": "2e1679f4-adb7-819f-bfbb-e13f87ba5af2",
+      "dataSourceUrl": "collection://2e1679f4-adb7-81a2-a81c-000b4dd2614f",
+      "dataSourceId": "2e1679f4-adb7-81a2-a81c-000b4dd2614f",
+      "titleProperty": "Task",
+      "doneProperty": "Done",
+      "statusSelect": "选择",
+      "statusValues": ["WIP", "DONE"],
+      "projectRelation": "Related to Project DB",
+      "projectRelationTarget": "collection://2e1679f4-adb7-81bf-a0c8-000b900c4bb3",
+      "dueDateProperty": "Due Date",
+      "rollupNotCompletion": "汇总"
+    },
+    "versionNotes": {
+      "role": "开发者版本更新数据库。不改表结构，只在已批准的发布或里程碑时创建或更新唯一一条版本记录。",
+      "databaseUrl": "https://app.notion.com/p/86b37901fe4e44d1b0db386d9496b510",
+      "databaseId": "86b37901-fe4e-44d1-b0db-386d9496b510",
+      "dataSourceUrl": "collection://3be7e0fe-d94b-479e-84c0-2972ea2e294c",
+      "dataSourceId": "3be7e0fe-d94b-479e-84c0-2972ea2e294c",
+      "titleProperty": "版本",
+      "typeProperty": "类型",
+      "typeValues": ["正式发布", "预发布", "开发里程碑"],
+      "dateProperty": "发布日期",
+      "summaryProperty": "一句话更新",
+      "gitTagProperty": "Git Tag",
+      "releaseUrlProperty": "Release",
+      "validationProperty": "验证说明"
+    }
+  },
+  "contextNotes": {
+    "role": "PROJECT_CONTEXT、CURRENT_STATE、RELEASE_HISTORY、DEVELOPMENT_LOG、TEST_BASELINE 所在的 Notes 数据源。不要为同一角色再新建一页。",
+    "dataSourceUrl": "collection://2e1679f4-adb7-8182-823e-000b03767f4b",
+    "dataSourceId": "2e1679f4-adb7-8182-823e-000b03767f4b"
+  },
+  "localFallbackDir": "tmp/notion-handoff"
+}
