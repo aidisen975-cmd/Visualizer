@@ -52,4 +52,12 @@
 
 ## 下一步
 
-v0.7.2 作为正式版发布。Edge、Windows、真机触控板、系统保存框仍未在本轮实测。发布地址写在 DEVLOG 的发布章节。
+v0.7.2 已作为正式版发布。Edge、Windows、真机触控板、系统保存框仍未在本轮实测。
+
+## 发布
+
+- 分支：`feat/v0.1.0`
+- 提交：`a8770c5a1a4d0b7008e0ca6ba64c9aa32663b1ce`
+- tag：`v0.7.2`
+- Release：https://github.com/aidisen975-cmd/Visualizer/releases/tag/v0.7.2
+- 附件：`Visualizer-v0.7.2.zip`，SHA256 `1cc1cc71edb47f97b0467438353d8ec76f05966cd65a96271196283885c8cbc2`

@@ -1560,3 +1560,22 @@ NOT RUN：Edge / Windows / 触控板 / 系统保存框。H2 用户复验未做�
 
 据此把 v0.7.1 与 v0.7.2 一起作为正式版 v0.7.2 发布。v0.7.1 不单独打 tag。`projectFormatVersion` 仍是 `1.1`，仍可读 `1.0`。Edge、Windows、真机触控板、系统保存框仍是 NOT RUN，不改成 PASS。发布提交、tag 和 Release 地址写在下一章。
 
+---
+
+## 2026-11-02 发布 v0.7.2
+
+- 软件版本：`0.7.2`
+- 工程格式：`projectFormatVersion: "1.1"`
+- 分支：`feat/v0.1.0`
+- 提交：`a8770c5a1a4d0b7008e0ca6ba64c9aa32663b1ce`
+- tag：`v0.7.2` 指向该提交
+- 页面：https://github.com/aidisen975-cmd/Visualizer/releases/tag/v0.7.2
+
+正式版，不是 Draft，也不是 Pre-release。附件 `Visualizer-v0.7.2.zip`（html + `visualizer-core.js` + `README.md`，三个文件在压缩包根目录）。SHA256 `1cc1cc71edb47f97b0467438353d8ec76f05966cd65a96271196283885c8cbc2`。从 GitHub 重新下载后哈希一致。v0.7.1 没有单独发布，改动随 v0.7.2 进入正式版。
+
+发布后 `checkForUpdates`：`0.7.0` 状态为发现新版本，最新版 `0.7.2`，下载地址是 `Visualizer-v0.7.2.zip`。本地 `0.7.2` 状态为当前已是最新。
+
+验证：`node --check visualizer-core.js` PASS；`node tests/core-test.js` PASS；`node tests/canvas-export-test.js` PASS；`node tests/segment-acceptance.js` PASS；`node tests/icon-slot-test.js` PASS。用户 2026-11-02 确认当前版本全部功能人工验收通过。Edge、Windows、真机触控板、系统保存框 NOT RUN。
+
+---
+
