@@ -1666,11 +1666,11 @@ WIP / Done=NO。未提交、不升版本、不发布。
 - 软件版本：`0.7.3`
 - 工程格式：`projectFormatVersion: "1.1"`
 - 分支：`feat/v0.1.0`
-- 内容：V072-K 指定列 UI 与快捷多选、V072-L CSV 表头别名、V072-M 片段内相对时间列与导出去重；`projectFormatVersion` 未升，旧工程仍可读。
-- tag：`v0.7.3`（提交哈希见 Git）
-- Release：`https://github.com/aidisen975-cmd/Visualizer/releases/tag/v0.7.3`
+- 提交：`a1eb4e61087761d796b7caee763dee78e4839be6`
+- tag：`v0.7.3` 指向该提交
+- 页面：https://github.com/aidisen975-cmd/Visualizer/releases/tag/v0.7.3
 
-正式版，不是 Draft，也不是 Pre-release。附件 `Visualizer-v0.7.3.zip`（html + `visualizer-core.js` + `README.md`，三个文件在压缩包根目录）。SHA256 见 Progress 发布节。
+正式版，不是 Draft，也不是 Pre-release。附件 `Visualizer-v0.7.3.zip`（html + `visualizer-core.js` + `README.md`，三个文件在压缩包根目录）。SHA256 `afc35e13a51cb86c74c4ec027167a8f24f864899b4f9a75b6eeac227d035be97`。
 
 验证：`node --check visualizer-core.js` PASS；`node tests/core-test.js` PASS；`node tests/canvas-export-test.js` PASS；`node tests/icon-slot-test.js` PASS。Edge、Windows、真机触控板、系统保存框 NOT RUN。
 

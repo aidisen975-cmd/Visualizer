@@ -45,4 +45,7 @@ Edge、Windows、真机触控板与系统保存框补测；`segment-acceptance.j
 ## 发布
 
 - 分支：`feat/v0.1.0`
-- tag：`v0.7.3`（发布后填写提交哈希与 SHA256）
+- 提交：`a1eb4e61087761d796b7caee763dee78e4839be6`（完整哈希见 Git）
+- tag：`v0.7.3`
+- Release：https://github.com/aidisen975-cmd/Visualizer/releases/tag/v0.7.3
+- 附件：`Visualizer-v0.7.3.zip`，SHA256 `afc35e13a51cb86c74c4ec027167a8f24f864899b4f9a75b6eeac227d035be97`
