@@ -409,7 +409,7 @@ assert(legend.columns >= 2, "大量图例自动多列");
 assert(legend.placed.length >= 20, "多列后尽量保留图例项");
 
 var v021 = core.parseProject(core.serializeProject(elecProject));
-assert(v021.softwareVersion === "0.7.2", "新工程写入 0.7.2");
+assert(v021.softwareVersion === "0.7.3", "新工程写入 0.7.3");
 assert(v021.schemaVersion === 2, "新工程写入 schemaVersion 2");
 assert(v021.plots[0].legend.visible === true, "legend 随工程保存");
 assert(v021.ui.leftPanelWidth >= 220, "ui layout 随工程保存");
@@ -543,7 +543,7 @@ var oldMigrated = core.parseProject(readFixture("TESTDATA_v010.tvproj.json"));
 assert(oldMigrated.plots[0].seriesRefs[0].style && oldMigrated.plots[0].seriesRefs[0].style.lineWidth === 1.5, "旧工程补齐 series.style");
 assert(oldMigrated.plots[0].xAxis.time && oldMigrated.plots[0].xAxis.time.displayUnit, "旧工程补齐 per-chart time");
 assert(oldMigrated.plots[0].textStyles && oldMigrated.plots[0].textStyles.title.fontSize === 14, "旧工程补齐 textStyles");
-assert(oldMigrated.softwareVersion === "0.7.2", "打开后 working copy 版本为 0.7.2，源文件未改");
+assert(oldMigrated.softwareVersion === "0.7.3", "打开后 working copy 版本为 0.7.3，源文件未改");
 assert(oldMigrated.plots[0].type === "normal" && oldMigrated.plots[0].topEdge.showLine === false, "旧工程补上普通图和默认关闭的上边轴");
 assert(oldMigrated.plots[0].xAxis.showLine === true && oldMigrated.plots[0].xAxis.showTickLabels === true && oldMigrated.plots[0].xAxis.tickDirection === "out", "旧工程底轴默认轴线、刻度标签和向外刻度");
 assert(oldMigrated.plots[0].showTitle === true && oldMigrated.plots[0].title !== "未命名图", "旧工程有标题时显示标题，不回写成未命名图");
@@ -653,7 +653,7 @@ assert(huge.grown, "文字过大时允许增大 Figure");
 assert(huge.plotArea.width >= core.FIGURE_LAYOUT.minPlotWidth, "Plot Area 不低于最小宽度");
 assert(huge.plotArea.height >= core.FIGURE_LAYOUT.minPlotHeight, "Plot Area 不低于最小高度");
 
-assert(core.APP_INFO.version === "0.7.2", "APP version 为 0.7.2");
+assert(core.APP_INFO.version === "0.7.3", "APP version 为 0.7.3");
 assert(core.SOFTWARE_VERSION === core.APP_INFO.version, "SOFTWARE_VERSION 与 APP_INFO.version 相同");
 assert(core.PROJECT_FORMAT_VERSION === "1.1", "工程格式为 1.1");
 assert(core.APP_INFO.version !== core.PROJECT_FORMAT_VERSION, "软件版本与工程格式分离");
@@ -1792,7 +1792,7 @@ var updateChecks = [
 
 // V070-B: Alignment Engine. Fixed SPEC-070 fixture. atol = 1e-9, rtol = 1e-9. APP 0.7.0, project format 1.1.
 (function () {
-  assert(core.APP_INFO.version === "0.7.2", "对齐测试时软件版本为 0.7.2");
+  assert(core.APP_INFO.version === "0.7.3", "对齐测试时软件版本为 0.7.3");
   assert(core.PROJECT_FORMAT_VERSION === "1.1", "对齐测试不升工程格式");
   var ATOL = 1e-9;
   var RTOL = 1e-9;
@@ -1946,7 +1946,7 @@ var updateChecks = [
 
 // V070-C: MAE/RMSE/MaxAE/Bias + AnalysisRecord. Shares alignSeries. APP 0.7.0, project format 1.1.
 (function () {
-  assert(core.APP_INFO.version === "0.7.2", "误差测试时软件版本为 0.7.2");
+  assert(core.APP_INFO.version === "0.7.3", "误差测试时软件版本为 0.7.3");
   assert(core.PROJECT_FORMAT_VERSION === "1.1", "误差测试不升工程格式");
   var ATOL = 1e-9;
   var RTOL = 1e-9;
@@ -2600,6 +2600,265 @@ var updateChecks = [
   assert(page.indexOf("exportBtn.disabled = !editing") < 0, "底部 CSV 不再因创建模式禁用");
   assert(page.indexOf("segmentPanelExportState") >= 0, "底部导出复用已保存目标判定");
   assert(page.indexOf("exportOneSegment") >= 0, "底部与左侧共用 exportOneSegment");
+  assert(page.indexOf("tv-column-list") >= 0, "指定列使用独立列选择器列表");
+  assert(page.indexOf("tv-series-list") >= 0 && page.indexOf("buildSegmentColumnPicker") >= 0, "列选择器不再复用 series-row 四列网格");
+  assert(page.indexOf("applyColumnPickerSelection") >= 0, "列选择器接入快捷多选");
+  assert(page.indexOf("已选择 ") >= 0 && page.indexOf("全选") >= 0 && page.indexOf("清空") >= 0, "列选择器提供全选/清空与计数");
+}());
+
+(function testColumnPickerSelectionAndExportOrder() {
+  var headers = [];
+  var i;
+  for (i = 0; i < 177; i += 1) {
+    if (i === 0) headers.push("时间(s)");
+    else if (i === 1) headers.push("日期时间");
+    else if (i === 2) headers.push("工步名称");
+    else if (i === 36) headers.push("充电电流(A)");
+    else if (i === 50) headers.push("温度");
+    else if (i === 120) headers.push("温度");
+    else headers.push("列" + i);
+  }
+  assert(headers.length === 177, "夹具表头 177 列");
+  var selected = core.applyColumnPickerSelection([], 177, { type: "toggle", index: 0 });
+  selected = core.applyColumnPickerSelection(selected, 177, { type: "toggle", index: 2 });
+  selected = core.applyColumnPickerSelection(selected, 177, { type: "toggle", index: 6 });
+  assert(selected.join(",") === "0,2,6", "离散点选互不串改");
+  selected = core.applyColumnPickerSelection(selected, 177, {
+    type: "range",
+    from: 6,
+    to: 14,
+    checked: true
+  });
+  assert(selected.join(",") === "0,2,6,7,8,9,10,11,12,13,14", "Shift 连选 7–15 对应 index 6–14");
+  selected = core.applyColumnPickerSelection(selected, 177, { type: "selectAll" });
+  assert(selected.length === 177 && selected[0] === 0 && selected[176] === 176, "Cmd/Ctrl+A 等价全选");
+  selected = core.applyColumnPickerSelection(selected, 177, { type: "clear" });
+  assert(selected.length === 0, "清空后无勾选");
+
+  var selection = core.columnSelectionFromIndexes(headers, [36, 2, 120, 50], "selected");
+  assert(selection.indexes.join(",") === "2,36,50,120", "索引按源列序排序");
+  assert(selection.columns.join(",") === "工步名称,充电电流(A),温度,温度", "重名列分别保留");
+  assert(core.resolveSelectedColumnIndexes(headers, {
+    mode: "selected",
+    columns: ["充电电流(A)", "工步名称"]
+  }).join(",") === "2,36", "旧版仅列名选择也按源序");
+
+  var lines = [headers.join(",")];
+  function buildRow(timeValue) {
+    return headers.map(function (_name, index) {
+      if (index === 0) return String(timeValue);
+      if (index === 1) return "2026-11-03";
+      if (index === 2) return "放电 CC";
+      return String(index);
+    }).join(",");
+  }
+  lines.push(buildRow(1000), buildRow(1001));
+  var source = core.parseDatasetFromCsv(lines.join("\n"), {
+    id: "ds-177",
+    name: "177cols",
+    sourceFilename: "177cols.csv"
+  });
+  var project = core.createProject({ projectName: "column-picker" });
+  core.addDataset(project, source);
+  var segment = core.createSegment(project, {
+    name: "段A",
+    sourceDatasetId: source.id,
+    rangeType: "row",
+    rangeDefinition: { startRow: 1, endRow: 1 }
+  });
+  var exported = core.exportSegmentCsv(project, segment.id, {
+    encoding: "utf-8",
+    columnSelection: selection,
+    keepOriginalTime: true,
+    relativeTime: false
+  });
+  assert(exported.headers.join(",") === "工步名称,充电电流(A),温度,温度", "指定列导出保持源序与重名");
+  assert(exported.text.split("\r\n")[1] === "放电 CC,36,50,120", "按索引取值，重名列不串列");
+  var legacy = core.exportSegmentCsv(project, segment.id, {
+    encoding: "utf-8",
+    columnSelection: { mode: "selected", columns: ["温度", "工步名称"] },
+    keepOriginalTime: true,
+    relativeTime: false
+  });
+  assert(legacy.headers.join(",") === "工步名称,温度,温度", "旧版列名导出按源序展开全部同名列");
+  var emptyFailed = false;
+  try {
+    core.exportSegmentCsv(project, segment.id, {
+      columnSelection: { mode: "selected", columns: [], indexes: [] }
+    });
+  } catch (error) {
+    emptyFailed = /至少选择一列/.test(String(error && error.message || error));
+  }
+  assert(emptyFailed, "0 列指定导出必须失败");
+
+  var otherHeaders = ["时间(s)", "温度", "电压(V)", "充电电流(A)"];
+  var cross = core.resolveSelectedColumnIndexes(otherHeaders, {
+    mode: "selected",
+    indexes: [2, 36, 50, 120],
+    columns: ["工步名称", "充电电流(A)", "温度", "温度"]
+  });
+  assert(cross.join(",") === "1,3", "跨源索引失效时按列名回退到导出源");
+  var sameLayout = core.resolveSelectedColumnIndexes(headers, selection);
+  assert(sameLayout.join(",") === "2,36,50,120", "同源布局仍优先使用索引保住重名列");
+
+  var page = fs.readFileSync(path.join(__dirname, "..", "temperature_trajectory_visualizer.html"), "utf8");
+  assert(page.indexOf("grid-template-columns: auto minmax(0, 1fr)") >= 0, "列名行使用全宽文本轨道");
+  assert(page.indexOf("tv-series-row") >= 0 && page.indexOf("buildSegmentColumnPicker") >= 0, "series-row 仍留给系列列表");
+  assert(page.indexOf("segmentColumnAnchor = null") >= 0, "切换片段/数据源时重置 Shift 锚点");
+  assert(page.indexOf("导出表头名称") >= 0 && page.indexOf("使用数据系列重命名后的列名") >= 0, "导出面板可选表头名称");
+  assert(page.indexOf("tv-column-alias") >= 0, "指定列在别名模式下给出原始列名到导出列名");
+  var specFn = page.slice(page.indexOf("function segmentSpecFromDraft"), page.indexOf("function commitSegmentFromDraft"));
+  assert(specFn.indexOf("headerMode") < 0, "表头模式留在导出面板，不写入片段规格");
+}());
+
+(function testCsvExportHeaderAlias() {
+  function body(text) {
+    return String(text || "").split("\r\n").slice(1).join("\r\n");
+  }
+  function bytesEqual(left, right) {
+    if (!left || !right || left.length !== right.length) return false;
+    var i;
+    for (i = 0; i < left.length; i += 1) if (left[i] !== right[i]) return false;
+    return true;
+  }
+  function zipEntries(bytes) {
+    var view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    var out = [];
+    var offset = 0;
+    while (offset + 30 <= bytes.length && view.getUint32(offset, true) === 0x04034b50) {
+      var nameLen = view.getUint16(offset + 26, true);
+      var extraLen = view.getUint16(offset + 28, true);
+      var size = view.getUint32(offset + 18, true);
+      var nameStart = offset + 30;
+      var dataStart = nameStart + nameLen + extraLen;
+      out.push({
+        name: new TextDecoder().decode(bytes.slice(nameStart, nameStart + nameLen)),
+        text: new TextDecoder().decode(bytes.slice(dataStart, dataStart + size))
+      });
+      offset = dataStart + size;
+    }
+    return out;
+  }
+  var csv = [
+    "时间(s),T45(℃),进水口温度(℃),温度,工步名称,温度",
+    "10,1,2,3,放电 CC,4",
+    "12,1.5,2.5,3.5,静置,4.5",
+    ""
+  ].join("\n");
+  var source = core.parseDatasetFromCsv(csv, { id: "ds-alias", name: "别名源", sourceFilename: "alias.csv" });
+  var project = core.createProject({ projectName: "header-alias" });
+  core.addDataset(project, source);
+  var originalHeaders = source.headers.slice();
+  var t45 = source.series.filter(function (series) { return series.originalHeader === "T45(℃)"; })[0];
+  var inlet = source.series.filter(function (series) { return series.originalHeader === "进水口温度(℃)"; })[0];
+  var temps = source.series.filter(function (series) { return series.originalHeader === "温度"; });
+  assert(t45 && t45.displayName === "T45" && t45.name === "T45", "T45 导入显示名");
+  assert(inlet && inlet.displayName === "进水口温度", "进水口温度导入显示名");
+  assert(temps.length === 2 && temps[0].displayName === "温度" && temps[1].displayName === "温度", "同名温度列按序各成一条系列");
+  var yBefore = t45.y.slice();
+  inlet.displayName = "冷却液入口温度";
+  inlet.label = inlet.displayName;
+  temps[0].displayName = "温度甲";
+  temps[0].label = temps[0].displayName;
+  temps[1].displayName = "温度甲";
+  temps[1].label = temps[1].displayName;
+  var segmentA = core.createSegment(project, {
+    name: "段A",
+    sourceDatasetId: source.id,
+    rangeType: "row",
+    rangeDefinition: { startRow: 1, endRow: 2 }
+  });
+  var segmentB = core.createSegment(project, {
+    name: "段B",
+    sourceDatasetId: source.id,
+    rangeType: "row",
+    rangeDefinition: { startRow: 1, endRow: 1 }
+  });
+  function options(mode, extra) {
+    var next = {
+      encoding: extra && extra.encoding || "utf-8",
+      headerMode: mode,
+      keepOriginalTime: !extra || extra.keepOriginalTime !== false,
+      relativeTime: !!(extra && extra.relativeTime),
+      timeColumn: "时间(s)",
+      columnSelection: (extra && extra.columnSelection) || { mode: "all" }
+    };
+    return next;
+  }
+  var originalExport = core.exportSegmentCsv(project, segmentA.id, options("original"));
+  var aliasExport = core.exportSegmentCsv(project, segmentA.id, options("alias"));
+  assert(originalExport.headers.join("|") === originalHeaders.join("|"), "默认原始列名逐字保持");
+  assert(aliasExport.headers.join("|") === "时间(s)|T45(℃)|冷却液入口温度|温度甲|工步名称|温度甲", "只替换已重命名的列");
+  assert(aliasExport.renamedCount === 3, "已使用重命名 3 列");
+  assert(aliasExport.duplicateHeaders.join("|") === "温度甲", "同名别名保留并提示");
+  assert(body(originalExport.text) === body(aliasExport.text), "两种表头的数据行相同");
+  assert(source.headers.join("|") === originalHeaders.join("|"), "导出不改源表头");
+  assert(t45.originalHeader === "T45(℃)" && t45.y.join(",") === yBefore.join(","), "导出不改系列身份和数值");
+  t45.displayName = "模组中央温度";
+  t45.label = t45.displayName;
+  var inherited = core.exportSegmentCsv(project, segmentA.id, options("alias"));
+  assert(inherited.headers[1] === "模组中央温度", "片段未单独改名时回退到源系列别名");
+  var segmentInlet = segmentA.series.filter(function (series) { return series.originalHeader === "进水口温度(℃)"; })[0];
+  segmentInlet.displayName = "片段入口";
+  segmentInlet.label = segmentInlet.displayName;
+  var segmentWins = core.exportSegmentCsv(project, segmentA.id, options("alias"));
+  assert(segmentWins.headers[2] === "片段入口", "片段自己的别名优先于源系列");
+  segmentInlet.displayName = " ";
+  segmentInlet.label = " ";
+  var blank = core.exportSegmentCsv(project, segmentA.id, options("alias"));
+  assert(blank.headers[2] === "进水口温度(℃)", "空白别名回退原始列名");
+  var selected = core.exportSegmentCsv(project, segmentA.id, options("alias", {
+    columnSelection: core.columnSelectionFromIndexes(source.headers, [5, 1, 4], "selected")
+  }));
+  assert(selected.headers.join("|") === "模组中央温度|工步名称|温度甲", "指定列按源序使用别名");
+  assert(body(selected.text).split("\r\n")[0] === "1,放电 CC,4", "指定列仍按列索引取值");
+  var segmentTemp = segmentA.series.filter(function (series) { return series.originalHeader === "温度"; })[0];
+  segmentTemp.displayName = "相对时间(s)";
+  segmentTemp.label = segmentTemp.displayName;
+  var relative = core.exportSegmentCsv(project, segmentA.id, options("alias", { relativeTime: true }));
+  assert(relative.headers.join("|") === "时间(s)|相对时间(s)|模组中央温度|进水口温度(℃)|相对时间(s)|工步名称|温度甲", "生成的相对时间列不被别名覆盖");
+  assert(relative.duplicateHeaders.indexOf("相对时间(s)") >= 0, "别名撞上相对时间列时提示重复");
+  assert(body(relative.text).split("\r\n")[0] === "10,0,1,2,3,放电 CC,4", "相对时间从 0 起，原温度单元格不变");
+  segmentTemp.displayName = '模组,"中央"\n温度';
+  segmentTemp.label = segmentTemp.displayName;
+  var quoted = core.exportSegmentCsv(project, segmentA.id, options("alias", { encoding: "utf-8-bom" }));
+  assert(quoted.bytes[0] === 0xEF && quoted.bytes[1] === 0xBB && quoted.bytes[2] === 0xBF, "别名导出保留 UTF-8 BOM");
+  var quotedText = new TextDecoder("utf-8").decode(quoted.bytes);
+  var quotedBack = core.parseDatasetFromCsv(quotedText, { id: "re-utf", name: "回导" });
+  assert(quotedBack.headers[3] === '模组,"中央"\n温度', "含逗号引号换行的中文别名可回导");
+  assert(quotedBack.series.some(function (series) { return series.originalHeader === '模组,"中央"\n温度' && series.y[0] === 3; }), "回导数值仍在原列");
+  var gb = core.exportSegmentCsv(project, segmentA.id, options("alias", { encoding: "gb18030" }));
+  var gbText = new TextDecoder("gb18030").decode(gb.bytes);
+  var gbBack = core.parseDatasetFromCsv(gbText, { id: "re-gb", name: "回导gb" });
+  assert(gbBack.headers[1] === "模组中央温度" && gbBack.headers[3].indexOf("中央") >= 0, "GB18030 中文别名无乱码");
+  var plot = core.createPlot(project, { title: "图" });
+  core.addSeriesToPlot(project, plot, [t45.id]);
+  plot.seriesRefs[0].legendName = "画布图例";
+  var legendIgnored = core.exportSegmentCsv(project, segmentA.id, options("alias"));
+  assert(legendIgnored.headers.indexOf("画布图例") < 0, "图窗图例名不改变 CSV 表头");
+  var again = core.exportSegmentCsv(project, segmentA.id, options("alias", { encoding: "utf-8-bom" }));
+  assert(bytesEqual(quoted.bytes, again.bytes), "同一片段重复导出字节一致");
+  var saved = core.serializeProject(project);
+  assert(saved.indexOf("headerMode") < 0, "表头模式不进入工程");
+  assert(saved.indexOf('"projectFormatVersion": "1.1"') >= 0, "工程格式仍是 1.1");
+  var reopened = core.parseProject(saved);
+  assert(reopened.projectFormatVersion === "1.1", "重开后仍是 1.1");
+  var reopenedSource = core.findDataset(reopened, source.id);
+  assert(reopenedSource.headers.join("|") === originalHeaders.join("|"), "重开后源列名仍在");
+  assert(core.findSeries(reopened, t45.id).displayName === "模组中央温度", "重开后系列别名仍在");
+  var reopenedExport = core.exportSegmentCsv(reopened, segmentA.id, options("alias"));
+  assert(reopenedExport.headers[1] === "模组中央温度", "重开后仍可导出别名表头");
+  var originalAfter = core.exportSegmentCsv(reopened, segmentA.id, options("original"));
+  assert(originalAfter.headers.join("|") === originalHeaders.join("|"), "重开后仍可切回原始列名");
+  var zip = core.exportSegmentsZip(project, [segmentA.id, segmentB.id], options("alias"));
+  var entries = zipEntries(zip.bytes);
+  assert(entries.length === 2, "ZIP 含两段");
+  entries.forEach(function (entry) {
+    var id = entry.name.indexOf("段B") >= 0 ? segmentB.id : segmentA.id;
+    var single = core.exportSegmentCsv(project, id, options("alias"));
+    assert(entry.text === single.text, "ZIP 内 CSV 与单段导出字节对应的文本一致");
+  });
+  assert(core.APP_INFO.version === "0.7.3" && core.PROJECT_FORMAT_VERSION === "1.1", "不升软件版本和工程格式");
 }());
 
 (function testCustomXColumnMapping() {
@@ -2957,7 +3216,65 @@ var updateChecks = [
 
   var round = core.parseProject(core.serializeProject(p));
   assert(round.canvases[0].instances[0].display && round.canvases[0].instances[0].display.legend.fontSize === 11, "工程往返保留副本图例");
-  assert(round.projectFormatVersion === "1.1", "v0.7.2 不升工程格式");
+  assert(round.projectFormatVersion === "1.1", "v0.7.3 不升工程格式");
+}());
+
+(function testSegmentRelativeTimeColumn() {
+  var csv = [
+    "时间(s),电压(V),温度(℃)",
+    "100,3.7,25",
+    "250,3.6,26",
+    "500,3.5,27",
+    ""
+  ].join("\n");
+  var p = core.createProject({ projectName: "seg-rel" });
+  var source = core.parseDatasetFromCsv(csv, { id: "src", name: "源", sourceFilename: "源.csv" });
+  core.addDataset(p, source);
+  var segA = core.createSegment(p, {
+    name: "A",
+    sourceDatasetId: source.id,
+    rangeType: "time",
+    rangeDefinition: { column: "时间(s)", start: "100", end: "500" },
+    includeRelativeTimeColumn: true,
+    timeColumn: "时间(s)"
+  });
+  assert(segA.includeRelativeTimeColumn && segA.derivedRelativeTime, "勾选后在片段内派生相对时间列");
+  assert(segA.headers.indexOf("相对时间(s)") > segA.headers.indexOf("时间(s)"), "相对时间列紧跟时间列");
+  var relSeries = segA.series.filter(function (item) { return item.role === "relative-time"; })[0];
+  assert(relSeries && relSeries.y.join(",") === "0,150,400", "相对时间按真实采样间隔从 0 起");
+  assert(core.suggestRelativeXColumn(p, segA) === "相对时间(s)", "片段内可选相对时间作 X");
+  var volt = segA.series.filter(function (item) { return item.originalHeader === "电压(V)"; })[0];
+  var plot = core.createPlot(p, { name: "图" });
+  core.addSeriesToPlot(p, plot, [volt.id]);
+  core.setDatasetDefaultXColumn(p, segA.id, "相对时间(s)");
+  assert(core.seriesXForPlot(p, plot, volt, segA).join(",") === "0,150,400", "绘图 X 使用片段相对时间");
+  var exported = core.exportSegmentCsv(p, segA.id, { encoding: "utf-8", relativeTime: true, keepOriginalTime: true });
+  assert(exported.headers.filter(function (h) { return h === "相对时间(s)"; }).length === 1, "已有相对时间列时导出不再重复");
+  assert(exported.headers.indexOf("相对时间(s)") === exported.headers.indexOf("时间(s)") + 1, "导出列顺序稳定");
+  var body = exported.text.split("\r\n").filter(Boolean);
+  assert(body[1].split(",")[1] === "0", "导出相对时间与片段一致");
+  var segB = core.createSegment(p, {
+    name: "B",
+    sourceDatasetId: source.id,
+    rangeType: "time",
+    rangeDefinition: { column: "时间(s)", start: "100", end: "250" },
+    includeRelativeTimeColumn: false
+  });
+  assert(!segB.includeRelativeTimeColumn, "未勾选时不派生");
+  var exportB = core.exportSegmentCsv(p, segB.id, { encoding: "utf-8", relativeTime: true, keepOriginalTime: true });
+  assert(exportB.headers.indexOf("相对时间(s)") >= 0, "未含列时导出可补充");
+  core.updateSegment(p, segA.id, {
+    rangeType: "time",
+    rangeDefinition: { column: "时间(s)", start: "250", end: "500" }
+  });
+  relSeries = core.findDataset(p, segA.id).series.filter(function (item) { return item.role === "relative-time"; })[0];
+  assert(relSeries.y.join(",") === "0,250", "编辑范围后相对时间重算");
+  var saved = core.parseProject(core.serializeProject(p));
+  var reopenedA = core.findDataset(saved, segA.id);
+  assert(reopenedA.includeRelativeTimeColumn && reopenedA.derivedRelativeTime, "工程保存相对时间元数据");
+  var reopenedRel = reopenedA.series.filter(function (item) { return item.role === "relative-time"; })[0];
+  assert(reopenedRel.y.join(",") === "0,250", "重开后相对时间仍在");
+  assert(saved.projectFormatVersion === "1.1", "不升工程格式");
 }());
 
 Promise.all(updateChecks).then(function () {

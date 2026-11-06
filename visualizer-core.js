@@ -4,7 +4,7 @@
 
   var APP_INFO = Object.freeze({
     name: "Visualizer",
-    version: "0.7.2",
+    version: "0.7.3",
     repositoryOwner: "aidisen975-cmd",
     repositoryName: "Visualizer",
     updateChannel: "stable"
@@ -344,6 +344,10 @@
       : parseColumnHeader(metaOrString);
     var normalized = normalizeHeader(meta.name || meta.originalHeader || "");
     return /相对时间|relativetime|reltime|^trel$/.test(normalized);
+  }
+
+  function headerLooksRelativeTime(header) {
+    return isRelativeTimeHeader(parseColumnHeader(header));
   }
 
   function isTimeLikeHeader(metaOrString) {
@@ -1525,11 +1529,17 @@
   function listNumericXColumns(project, dataset) {
     if (!dataset || dataset.kind === "computed") return [];
     var source = xColumnSourceDataset(project, dataset);
-    var headers = (source && source.headers) || dataset.headers || [];
+    var headers = dataset.kind === "segment"
+      ? (dataset.headers || []).slice()
+      : ((source && source.headers) || dataset.headers || []);
     var rows = datasetCsvRows(source || dataset);
     return headers.map(function (header, index) {
       var parsed = parseColumnHeader(header);
       var numeric = !rows.length || isMostlyNumericColumn(rows, index, 0);
+      if (dataset.kind === "segment" && headerLooksRelativeTime(header)) {
+        var relSeries = findSegmentSeriesByHeader(dataset, header);
+        numeric = !!relSeries && (relSeries.y || []).some(function (value) { return Number.isFinite(value); });
+      }
       return {
         header: header,
         name: parsed.name || header,
@@ -1569,10 +1579,28 @@
     if (colIndex < 0) colIndex = datasetHeaderIndex(dataset, header);
     var expected = (series.y || series.x || []).length;
     if (colIndex < 0) {
+      var derived = dataset.kind === "segment" ? findSegmentSeriesByHeader(dataset, header) : null;
+      if (derived && (derived.role === "relative-time" || headerLooksRelativeTime(header))) {
+        var derivedValues = (derived.y || []).slice();
+        if (derivedValues.length === expected) return derivedValues;
+        if (derivedValues.length > expected) return derivedValues.slice(0, expected);
+        while (derivedValues.length < expected) derivedValues.push(NaN);
+        return derivedValues;
+      }
       var missing = [];
       var i;
       for (i = 0; i < expected; i += 1) missing.push(NaN);
       return missing;
+    }
+    if (dataset.kind === "segment" && source && datasetHeaderIndex(source, header) < 0) {
+      var segmentOnly = findSegmentSeriesByHeader(dataset, header);
+      if (segmentOnly) {
+        var segmentValues = (segmentOnly.y || []).slice();
+        if (segmentValues.length === expected) return segmentValues;
+        if (segmentValues.length > expected) return segmentValues.slice(0, expected);
+        while (segmentValues.length < expected) segmentValues.push(NaN);
+        return segmentValues;
+      }
     }
     var rows = datasetCsvRows(source || dataset);
     var indexMap = datasetCsvIndexMap(source || dataset);
@@ -1826,6 +1854,9 @@
       dataset.selectedRowRanges = normalizeRowRanges(raw.selectedRowRanges);
       dataset.createdAt = String(raw.createdAt || "");
       dataset.columnSelection = normalizeColumnSelection(raw.columnSelection);
+      dataset.includeRelativeTimeColumn = raw.includeRelativeTimeColumn === true;
+      dataset.derivedRelativeTime = raw.derivedRelativeTime === true;
+      dataset.relativeTimeSourceColumn = String(raw.relativeTimeSourceColumn || "");
     }
     return dataset;
   }
@@ -7194,10 +7225,102 @@
   }
 
   function normalizeColumnSelection(raw) {
-    if (!raw || typeof raw !== "object") return { mode: "all", columns: [] };
+    if (!raw || typeof raw !== "object") return { mode: "all", columns: [], indexes: [] };
     var mode = raw.mode === "selected" ? "selected" : "all";
     var columns = Array.isArray(raw.columns) ? raw.columns.map(String) : [];
-    return { mode: mode, columns: columns };
+    var indexes = Array.isArray(raw.indexes)
+      ? raw.indexes.map(Number).filter(function (n) { return Number.isInteger(n) && n >= 0; })
+      : [];
+    return { mode: mode, columns: columns, indexes: indexes };
+  }
+
+  function uniqueSortedIndexes(indexes, columnCount) {
+    var seen = Object.create(null);
+    var out = [];
+    (indexes || []).forEach(function (value) {
+      var index = Number(value);
+      if (!Number.isInteger(index) || index < 0) return;
+      if (columnCount != null && index >= columnCount) return;
+      if (seen[index]) return;
+      seen[index] = true;
+      out.push(index);
+    });
+    out.sort(function (a, b) { return a - b; });
+    return out;
+  }
+
+  function resolveSelectedColumnIndexes(headers, selection) {
+    var list = headers || [];
+    var sel = normalizeColumnSelection(selection);
+    if (sel.mode !== "selected") {
+      return list.map(function (_header, index) { return index; });
+    }
+    if (sel.indexes.length) {
+      var fromIndexes = uniqueSortedIndexes(sel.indexes, list.length);
+      // Indexes are only safe on the same header layout. If stored names no longer match
+      // those positions (cross-dataset export target vs draft picker), fall back to names.
+      if (!sel.columns.length) return fromIndexes;
+      if (fromIndexes.length === sel.columns.length
+        && fromIndexes.every(function (index, pos) { return list[index] === sel.columns[pos]; })) {
+        return fromIndexes;
+      }
+    }
+    var wanted = Object.create(null);
+    sel.columns.forEach(function (name) { wanted[String(name)] = true; });
+    var out = [];
+    list.forEach(function (header, index) {
+      if (wanted[String(header)]) out.push(index);
+    });
+    return out;
+  }
+
+  function columnSelectionFromIndexes(headers, indexes, mode) {
+    var list = headers || [];
+    var resolved = uniqueSortedIndexes(indexes, list.length);
+    return {
+      mode: mode === "selected" ? "selected" : "all",
+      indexes: resolved,
+      columns: resolved.map(function (index) { return list[index]; })
+    };
+  }
+
+  // ponytail: same selection shapes as left-panel series multi-select
+  function applyColumnPickerSelection(selectedIndexes, columnCount, action) {
+    var count = Math.max(0, Number(columnCount) || 0);
+    var selected = Object.create(null);
+    uniqueSortedIndexes(selectedIndexes, count).forEach(function (index) {
+      selected[index] = true;
+    });
+    var type = action && action.type;
+    if (type === "selectAll") {
+      var all = [];
+      var i;
+      for (i = 0; i < count; i += 1) all.push(i);
+      return all;
+    }
+    if (type === "clear") return [];
+    if (type === "toggle") {
+      var toggleIndex = Number(action.index);
+      if (Number.isInteger(toggleIndex) && toggleIndex >= 0 && toggleIndex < count) {
+        if (selected[toggleIndex]) delete selected[toggleIndex];
+        else selected[toggleIndex] = true;
+      }
+    } else if (type === "range") {
+      var from = Number(action.from);
+      var to = Number(action.to);
+      if (Number.isInteger(from) && Number.isInteger(to)) {
+        var lo = Math.min(from, to);
+        var hi = Math.max(from, to);
+        var checked = action.checked !== false;
+        var cursor;
+        for (cursor = lo; cursor <= hi; cursor += 1) {
+          if (cursor < 0 || cursor >= count) continue;
+          if (checked) selected[cursor] = true;
+          else delete selected[cursor];
+        }
+      }
+    }
+    return uniqueSortedIndexes(Object.keys(selected).map(Number), count);
   }
 
   function listSegments(project, sourceDatasetId) {
@@ -7439,6 +7562,140 @@
     return (source.name || "数据") + " / 片段";
   }
 
+  var SEGMENT_RELATIVE_TIME_HEADER = "相对时间(s)";
+  var SEGMENT_RELATIVE_DERIVED_INDEX = -2;
+
+  function findSegmentSeriesByHeader(segment, header) {
+    if (!segment) return null;
+    var wanted = String(header || "");
+    return (segment.series || []).find(function (series) {
+      return series.originalHeader === wanted || series.sourceLabel === wanted || series.name === wanted;
+    }) || null;
+  }
+
+  function sourceHasRelativeTimeColumn(source) {
+    return (source.headers || []).some(headerLooksRelativeTime);
+  }
+
+  function segmentHasStoredRelativeTime(segment, source) {
+    if (!segment || segment.kind !== "segment") return false;
+    if (segment.includeRelativeTimeColumn) return true;
+    if (segment.derivedRelativeTime) return true;
+    if (!source) return false;
+    return sourceHasRelativeTimeColumn(source) && (segment.headers || []).some(headerLooksRelativeTime);
+  }
+
+  function resolveSegmentTimeColumn(source, spec, segment) {
+    if (spec && spec.timeColumn) return String(spec.timeColumn);
+    if (segment && segment.relativeTimeSourceColumn) return String(segment.relativeTimeSourceColumn);
+    var def = segment && segment.rangeDefinition;
+    if (def && def.column) return String(def.column);
+    return source.xHeader || source.xName || "";
+  }
+
+  function computeRelativeTimeValues(source, ranges, timeColumn) {
+    var timeIndex = datasetHeaderIndex(source, timeColumn);
+    if (timeIndex < 0) throw new Error("找不到时间列：" + timeColumn);
+    var rows = datasetCsvRows(source);
+    var indexMap = datasetCsvIndexMap(source);
+    var origin = null;
+    var values = [];
+    var absX = [];
+    (ranges || []).forEach(function (range) {
+      var row;
+      for (row = range.start; row <= range.end; row += 1) {
+        if (indexMap[row] == null || indexMap[row] < 0) continue;
+        var timeValue = parseNumericCell((rows[row] || [])[timeIndex]);
+        if (origin == null && Number.isFinite(timeValue)) origin = timeValue;
+        if (!Number.isFinite(timeValue)) {
+          values.push(NaN);
+          absX.push(NaN);
+        } else {
+          values.push(timeValue - (origin == null ? 0 : origin));
+          absX.push(timeValue);
+        }
+      }
+    });
+    if (origin == null) origin = 0;
+    return { values: values, absX: absX, origin: origin, header: SEGMENT_RELATIVE_TIME_HEADER };
+  }
+
+  function removeDerivedRelativeTimeColumn(segment) {
+    if (!segment || !segment.derivedRelativeTime) return;
+    var header = SEGMENT_RELATIVE_TIME_HEADER;
+    var idx = (segment.headers || []).indexOf(header);
+    if (idx >= 0) segment.headers.splice(idx, 1);
+    segment.series = (segment.series || []).filter(function (series) {
+      return series.role !== "relative-time";
+    });
+    segment.derivedRelativeTime = false;
+  }
+
+  function insertDerivedRelativeTimeColumn(segment, source, ranges, timeColumn) {
+    removeDerivedRelativeTimeColumn(segment);
+    var rel = computeRelativeTimeValues(source, ranges, timeColumn);
+    var header = rel.header;
+    var usedLocalIds = new Set((segment.series || []).map(function (item) { return item.localId; }));
+    if (!(segment.headers || []).some(function (item) { return item === header; })) {
+      var timeHeader = timeColumn || source.xHeader;
+      var insertAt = datasetHeaderIndex(segment, timeHeader);
+      if (insertAt < 0) insertAt = segment.headers.length;
+      else insertAt += 1;
+      segment.headers.splice(insertAt, 0, header);
+    } else {
+      segment.series = (segment.series || []).filter(function (series) {
+        return series.role !== "relative-time";
+      });
+    }
+    var anchor = (segment.series[0] && segment.series[0].x) ? segment.series[0].x.slice() : rel.absX.slice();
+    var localId = uniqueLocalId("相对时间", segment.headers.length, usedLocalIds);
+    var meta = parseColumnHeader(header);
+    var relSeries = normalizeSeries({
+      id: seriesId(segment.id, localId),
+      datasetId: segment.id,
+      localId: localId,
+      label: meta.name || header,
+      name: meta.name || "相对时间",
+      unit: meta.unit || source.xUnit || "s",
+      originalHeader: header,
+      originalName: header,
+      displayName: meta.name || header,
+      sourceLabel: header,
+      kind: "segment",
+      role: "relative-time",
+      x: anchor,
+      y: rel.values.map(function (value) { return Number.isFinite(value) ? value : NaN; })
+    }, segment.id);
+    segment.series.push(relSeries);
+    segment.derivedRelativeTime = true;
+    segment.includeRelativeTimeColumn = true;
+    segment.relativeTimeSourceColumn = timeColumn || source.xHeader || "";
+  }
+
+  function syncSegmentRelativeTimeColumn(segment, source, ranges, spec) {
+    var want = !!(spec && spec.includeRelativeTimeColumn);
+    if (!want) {
+      removeDerivedRelativeTimeColumn(segment);
+      segment.includeRelativeTimeColumn = false;
+      segment.relativeTimeSourceColumn = "";
+      return;
+    }
+    var timeColumn = resolveSegmentTimeColumn(source, spec, segment);
+    if (sourceHasRelativeTimeColumn(source)) {
+      segment.includeRelativeTimeColumn = true;
+      segment.relativeTimeSourceColumn = timeColumn;
+      segment.derivedRelativeTime = false;
+      return;
+    }
+    insertDerivedRelativeTimeColumn(segment, source, ranges, timeColumn);
+  }
+
+  function refreshDerivedRelativeTimeColumn(segment, source) {
+    if (!segment || !segment.derivedRelativeTime) return;
+    var timeColumn = segment.relativeTimeSourceColumn || source.xHeader || "";
+    insertDerivedRelativeTimeColumn(segment, source, segment.selectedRowRanges, timeColumn);
+  }
+
   function materializeSegmentSeries(source, segmentId, ranges) {
     var indexMap = datasetCsvIndexMap(source);
     return (source.series || []).map(function (series) {
@@ -7460,15 +7717,31 @@
     if (source.kind === "segment") throw new Error("不能对片段再次切段。");
     var rangeType = normalizeSegmentRangeType(spec && spec.rangeType);
     var ranges = resolveSegmentRows(source, rangeType, spec && spec.rangeDefinition);
-    return {
+    var preview = {
       sourceDatasetId: source.id,
       rangeType: rangeType,
       rangeDefinition: normalizeSegmentRangeDefinition(spec && spec.rangeDefinition),
       selectedRowRanges: ranges,
       rowCount: rowRangeCount(ranges),
-      columnCount: (source.headers || []).length,
+      columnCount: (source.headers || []).length + ((spec && spec.includeRelativeTimeColumn && !sourceHasRelativeTimeColumn(source)) ? 1 : 0),
       name: String((spec && spec.name) || defaultSegmentName(source, rangeType, spec && spec.rangeDefinition, ranges))
     };
+    if (spec && spec.includeRelativeTimeColumn) {
+      try {
+        var timeColumn = resolveSegmentTimeColumn(source, spec, null);
+        var rel = computeRelativeTimeValues(source, ranges, timeColumn);
+        var mid = rel.values[Math.floor(rel.values.length / 2)];
+        preview.relativeTimeSample = {
+          header: rel.header,
+          first: rel.values[0],
+          middle: mid,
+          last: rel.values[rel.values.length - 1]
+        };
+      } catch (relError) {
+        preview.relativeTimeSample = { error: relError.message };
+      }
+    }
+    return preview;
   }
 
   function createSegment(project, spec) {
@@ -7498,6 +7771,7 @@
       columnSelection: spec && spec.columnSelection,
       series: materializeSegmentSeries(source, segmentId, preview.selectedRowRanges)
     });
+    syncSegmentRelativeTimeColumn(dataset, source, preview.selectedRowRanges, spec);
     addDataset(project, dataset);
     return dataset;
   }
@@ -7529,7 +7803,14 @@
         if (segment.series.some(function (series) { return series.localId === item.localId; })) return;
         segment.series.push(item);
       });
+      refreshDerivedRelativeTimeColumn(segment, source);
       recomputeDownstream(project, segment.series.map(function (series) { return series.id; }));
+    }
+    if (next.includeRelativeTimeColumn != null) {
+      syncSegmentRelativeTimeColumn(segment, source, segment.selectedRowRanges, {
+        includeRelativeTimeColumn: !!next.includeRelativeTimeColumn,
+        timeColumn: next.timeColumn || resolveSegmentTimeColumn(source, next, segment)
+      });
     }
     if (next.columnSelection) segment.columnSelection = normalizeColumnSelection(next.columnSelection);
     return segment;
@@ -7578,34 +7859,192 @@
     return impact;
   }
 
-  function segmentExportHeaders(source, options) {
-    var headers = (source.headers || []).slice();
-    var selection = normalizeColumnSelection(options && options.columnSelection);
-    if (selection.mode === "selected" && selection.columns.length) {
-      headers = selection.columns.filter(function (name) { return datasetHeaderIndex(source, name) >= 0; });
-    }
-    var keepOriginalTime = !options || options.keepOriginalTime !== false;
-    var timeHeader = (options && options.timeColumn) || source.xHeader || source.xName;
-    if (!keepOriginalTime && timeHeader) {
-      headers = headers.filter(function (name) { return name !== timeHeader; });
-    }
-    var relative = options && options.relativeTime;
-    if (relative) {
-      var relativeHeader = "相对时间(s)";
-      var timeIndex = headers.indexOf(timeHeader);
-      if (timeIndex >= 0) headers.splice(timeIndex + 1, 0, relativeHeader);
-      else headers.push(relativeHeader);
-    }
-    return headers;
+  function normalizeCsvHeaderMode(value) {
+    return value === "alias" ? "alias" : "original";
   }
 
-  function collectSegmentExportRows(source, ranges, options) {
-    var rows = datasetCsvRows(source);
-    var headers = segmentExportHeaders(source, options);
+  // A saved left-panel rename changes displayName and leaves name at the import label.
+  function explicitSeriesAlias(series) {
+    if (!series || series.kind === "computed") return "";
+    var alias = String(series.displayName == null ? "" : series.displayName).trim();
+    if (!alias) return "";
+    var baseline = String(series.name == null ? "" : series.name).trim();
+    if (alias === baseline) return "";
+    return alias;
+  }
+
+  function numericSeriesColumnIndexes(dataset) {
+    var headers = (dataset && dataset.headers) || [];
+    var rows = [headers].concat(datasetCsvRows(dataset));
+    var xIndex = datasetXColumnIndex(dataset);
+    var columns = [];
+    headers.forEach(function (_, columnIndex) {
+      if (columnIndex === xIndex) return;
+      if (isMostlyNumericColumn(rows, columnIndex, 1)) columns.push(columnIndex);
+    });
+    return columns;
+  }
+
+  function seriesColumnBindingKey(dataset) {
+    return (dataset.series || []).map(function (item) {
+      return item && item.kind !== "computed" ? item.id : "";
+    }).join("\0");
+  }
+
+  // ponytail: WeakMap by dataset object, rebuild only when series ids change
+  var seriesColumnCache = typeof WeakMap !== "undefined" ? new WeakMap() : null;
+
+  function rawSeriesByColumnIndex(dataset) {
+    if (!dataset) return Object.create(null);
+    var key = seriesColumnBindingKey(dataset);
+    if (seriesColumnCache) {
+      var cached = seriesColumnCache.get(dataset);
+      if (cached && cached.key === key) return cached.map;
+    }
+    var columns = numericSeriesColumnIndexes(dataset);
+    var series = (dataset.series || []).filter(function (item) {
+      return item && item.kind !== "computed";
+    });
+    var headers = dataset.headers || [];
+    var map = Object.create(null);
+    var aligned = series.length === columns.length && series.every(function (item, index) {
+      return String(headers[columns[index]] || "") === String(item.originalHeader || item.originalName || "");
+    });
+    if (aligned) {
+      series.forEach(function (item, index) { map[columns[index]] = item; });
+    } else {
+      var used = Object.create(null);
+      series.forEach(function (item) {
+        var wanted = String(item.originalHeader || item.originalName || "");
+        var found = -1;
+        columns.forEach(function (columnIndex) {
+          if (found >= 0 || used[columnIndex]) return;
+          if (String(headers[columnIndex] || "") === wanted) found = columnIndex;
+        });
+        if (found >= 0) {
+          used[found] = true;
+          map[found] = item;
+        }
+      });
+    }
+    if (seriesColumnCache) seriesColumnCache.set(dataset, { key: key, map: map });
+    return map;
+  }
+
+  function seriesAliasState(series) {
+    if (!series || series.kind === "computed") return "none";
+    var alias = String(series.displayName == null ? "" : series.displayName).trim();
+    if (!alias) return "blank";
+    var baseline = String(series.name == null ? "" : series.name).trim();
+    return alias === baseline ? "none" : "alias";
+  }
+
+  function seriesForSourceColumn(source, segment, columnIndex) {
+    var sourceSeries = rawSeriesByColumnIndex(source)[columnIndex] || null;
+    var segmentSeries = null;
+    if (segment && segment.kind === "segment" && sourceSeries) {
+      var localId = sourceSeries.localId;
+      (segment.series || []).some(function (item) {
+        if (!item || item.kind === "computed" || item.localId !== localId) return false;
+        segmentSeries = item;
+        return true;
+      });
+    }
+    if (segmentSeries) {
+      var segmentState = seriesAliasState(segmentSeries);
+      if (segmentState === "blank") return null;
+      if (segmentState === "alias") return segmentSeries;
+    }
+    return seriesAliasState(sourceSeries) === "alias" ? sourceSeries : null;
+  }
+
+  function duplicateHeaderNames(headers) {
+    var seen = Object.create(null);
+    var out = [];
+    (headers || []).forEach(function (header) {
+      var key = String(header);
+      seen[key] = (seen[key] || 0) + 1;
+      if (seen[key] === 2) out.push(key);
+    });
+    return out;
+  }
+
+  function resolveSegmentExportPlan(source, options, segment) {
+    var materializedRelative = segment && segment.derivedRelativeTime;
+    var allHeaders = materializedRelative
+      ? (segment.headers || []).slice()
+      : (source.headers || []).slice();
+    var selection = normalizeColumnSelection(options && options.columnSelection);
+    var sourceIndexes = selection.mode === "selected"
+      ? resolveSelectedColumnIndexes(allHeaders, selection)
+      : allHeaders.map(function (_header, index) { return index; });
+    var headers = sourceIndexes.map(function (index) { return allHeaders[index]; });
+    var indexes = sourceIndexes.map(function (index) {
+      if (!materializedRelative) return index;
+      var header = allHeaders[index];
+      if (header === SEGMENT_RELATIVE_TIME_HEADER && segment.derivedRelativeTime) {
+        return SEGMENT_RELATIVE_DERIVED_INDEX;
+      }
+      return datasetHeaderIndex(source, header);
+    });
+    var keepOriginalTime = !options || options.keepOriginalTime !== false;
     var timeHeader = (options && options.timeColumn) || source.xHeader || source.xName;
-    var timeIndex = datasetHeaderIndex(source, timeHeader);
+    var timeSourceIndex = datasetHeaderIndex(source, timeHeader);
+    if (!keepOriginalTime && timeHeader) {
+      var keptHeaders = [];
+      var keptIndexes = [];
+      headers.forEach(function (header, pos) {
+        if (header === timeHeader) return;
+        keptHeaders.push(header);
+        keptIndexes.push(indexes[pos]);
+      });
+      headers = keptHeaders;
+      indexes = keptIndexes;
+    }
+    if (options && options.relativeTime && !segmentHasStoredRelativeTime(segment, source)) {
+      var relativeHeader = SEGMENT_RELATIVE_TIME_HEADER;
+      var timePos = headers.indexOf(timeHeader);
+      if (timePos >= 0) {
+        headers.splice(timePos + 1, 0, relativeHeader);
+        indexes.splice(timePos + 1, 0, -1);
+      } else {
+        headers.push(relativeHeader);
+        indexes.push(-1);
+      }
+    }
+    var renamedCount = 0;
+    if (normalizeCsvHeaderMode(options && options.headerMode) === "alias") {
+      headers = headers.map(function (header, pos) {
+        if (indexes[pos] < 0) return header;
+        var alias = explicitSeriesAlias(seriesForSourceColumn(source, segment, indexes[pos]));
+        if (!alias || alias === header) return header;
+        renamedCount += 1;
+        return alias;
+      });
+    }
+    return {
+      headers: headers,
+      indexes: indexes,
+      timeSourceIndex: timeSourceIndex,
+      emptySelected: selection.mode === "selected" && !sourceIndexes.length,
+      renamedCount: renamedCount,
+      duplicateHeaders: duplicateHeaderNames(headers)
+    };
+  }
+
+  function segmentExportHeaders(source, options) {
+    return resolveSegmentExportPlan(source, options).headers;
+  }
+
+  function collectSegmentExportRows(source, ranges, options, segment) {
+    var rows = datasetCsvRows(source);
+    var plan = resolveSegmentExportPlan(source, options, segment);
+    if (plan.emptySelected) throw new Error("请至少选择一列后再导出。");
+    var headers = plan.headers;
+    var indexes = plan.indexes;
+    var timeIndex = plan.timeSourceIndex;
     var origin = null;
-    if (options && options.relativeTime) {
+    if (options && options.relativeTime && !segmentHasStoredRelativeTime(segment, source)) {
       (ranges || []).some(function (range) {
         var row;
         for (row = range.start; row <= range.end; row += 1) {
@@ -7619,25 +8058,71 @@
       });
       if (origin == null) origin = 0;
     }
+    var derivedRelativeSeries = segment && segment.derivedRelativeTime
+      ? findSegmentSeriesByHeader(segment, SEGMENT_RELATIVE_TIME_HEADER)
+      : null;
     var out = [];
+    var derivedPoint = 0;
     (ranges || []).forEach(function (range) {
       var row;
       for (row = range.start; row <= range.end; row += 1) {
         var sourceRow = rows[row] || [];
         var next = [];
-        headers.forEach(function (header) {
-          if (header === "相对时间(s)") {
+        indexes.forEach(function (columnIndex) {
+          if (columnIndex === SEGMENT_RELATIVE_DERIVED_INDEX) {
+            var derivedValue = derivedRelativeSeries && derivedRelativeSeries.y
+              ? derivedRelativeSeries.y[derivedPoint]
+              : NaN;
+            next.push(Number.isFinite(derivedValue) ? String(derivedValue) : "");
+            return;
+          }
+          if (columnIndex < 0) {
             var timeValue = parseNumericCell(sourceRow[timeIndex]);
             next.push(Number.isFinite(timeValue) ? String(timeValue - origin) : "");
             return;
           }
-          var column = datasetHeaderIndex(source, header);
-          next.push(column >= 0 ? (sourceRow[column] == null ? "" : sourceRow[column]) : "");
+          next.push(sourceRow[columnIndex] == null ? "" : sourceRow[columnIndex]);
         });
         out.push(next);
+        derivedPoint += 1;
       }
     });
-    return { headers: headers, rows: out };
+    return {
+      headers: headers,
+      rows: out,
+      renamedCount: plan.renamedCount,
+      duplicateHeaders: plan.duplicateHeaders
+    };
+  }
+
+  function describeCsvExportHeaders(project, datasetId, options) {
+    var dataset = findDataset(project, datasetId);
+    var segment = dataset && dataset.kind === "segment" ? dataset : null;
+    var source = segment ? sourceDatasetOfSegment(project, segment) : dataset;
+    if (!source || source.kind === "computed" || source.kind === "segment") {
+      return { headers: [], renamedCount: 0, duplicateHeaders: [], columns: [] };
+    }
+    var plan = resolveSegmentExportPlan(source, options, segment);
+    var useAlias = normalizeCsvHeaderMode(options && options.headerMode) === "alias";
+    var columns = (source.headers || []).map(function (header, index) {
+      var exportName = header;
+      if (useAlias) {
+        var alias = explicitSeriesAlias(seriesForSourceColumn(source, segment, index));
+        if (alias) exportName = alias;
+      }
+      return {
+        index: index,
+        original: header,
+        exportName: exportName,
+        renamed: exportName !== header
+      };
+    });
+    return {
+      headers: plan.headers.slice(),
+      renamedCount: plan.renamedCount,
+      duplicateHeaders: plan.duplicateHeaders.slice(),
+      columns: columns
+    };
   }
 
   function serializeCsvRows(headers, rows) {
@@ -7836,7 +8321,15 @@
     var source = sourceDatasetOfSegment(project, segment);
     if (!source) throw new Error("片段来源数据集已不存在，未静默导出。");
     if (!source.rawCsv) throw new Error("源数据没有保留原始单元格，无法按原表导出。");
-    var packed = collectSegmentExportRows(source, segment.selectedRowRanges, options || {});
+    var exportOptions = options || {};
+    var selection = normalizeColumnSelection(exportOptions.columnSelection);
+    if (selection.mode === "selected" && !resolveSelectedColumnIndexes(
+      segment && segment.derivedRelativeTime ? (segment.headers || []) : (source.headers || []),
+      selection
+    ).length) {
+      throw new Error("请至少选择一列后再导出。");
+    }
+    var packed = collectSegmentExportRows(source, segment.selectedRowRanges, exportOptions, segment);
     var text = serializeCsvRows(packed.headers, packed.rows);
     var encoding = (options && options.encoding) || "utf-8-bom";
     var base = sanitizeExportFilename((options && options.filename) || (segment.name + ".csv"), segment.name + ".csv");
@@ -7847,7 +8340,9 @@
       bytes: encodeCsvText(text, encoding),
       headers: packed.headers,
       rowCount: packed.rows.length,
-      encoding: encoding
+      encoding: encoding,
+      renamedCount: packed.renamedCount,
+      duplicateHeaders: packed.duplicateHeaders
     };
   }
 
@@ -8026,6 +8521,7 @@
     listSegments: listSegments,
     detectStepColumns: detectStepColumns,
     detectStepRuns: detectStepRuns,
+    segmentHasStoredRelativeTime: segmentHasStoredRelativeTime,
     previewSegment: previewSegment,
     createSegment: createSegment,
     updateSegment: updateSegment,
@@ -8036,6 +8532,12 @@
     csvRowCount: csvRowCount,
     segmentExportTarget: segmentExportTarget,
     segmentPanelExportState: segmentPanelExportState,
+    normalizeColumnSelection: normalizeColumnSelection,
+    resolveSelectedColumnIndexes: resolveSelectedColumnIndexes,
+    columnSelectionFromIndexes: columnSelectionFromIndexes,
+    applyColumnPickerSelection: applyColumnPickerSelection,
+    normalizeCsvHeaderMode: normalizeCsvHeaderMode,
+    describeCsvExportHeaders: describeCsvExportHeaders,
     exportSegmentCsv: exportSegmentCsv,
     exportSegmentsZip: exportSegmentsZip,
     encodeCsvText: encodeCsvText,

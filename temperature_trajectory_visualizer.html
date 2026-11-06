@@ -968,6 +968,81 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    .tv-column-picker {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin: 4px 0 8px;
+      min-width: 0;
+    }
+    .tv-column-picker-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+    .tv-column-picker-count {
+      color: var(--muted);
+      font-size: 11px;
+      margin-left: auto;
+    }
+    .tv-column-picker-hint {
+      margin: 0;
+      color: var(--faint);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    .tv-column-list {
+      max-height: 220px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+      min-width: 0;
+    }
+    .tv-column-list:focus {
+      outline: 2px solid var(--focus);
+      outline-offset: 1px;
+    }
+    .tv-column-row {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 8px;
+      align-items: start;
+      min-height: 28px;
+      padding: 5px 8px;
+      font-size: 12px;
+      line-height: 1.35;
+      user-select: none;
+      cursor: pointer;
+      border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+    }
+    .tv-column-row:last-child { border-bottom: 0; }
+    .tv-column-row input[type="checkbox"] {
+      width: 14px;
+      height: 14px;
+      margin: 2px 0 0;
+      flex: none;
+    }
+    .tv-column-name {
+      min-width: 0;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .tv-column-index {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      margin-right: 6px;
+    }
+    .tv-column-alias {
+      display: block;
+      margin-top: 1px;
+      color: var(--faint);
+      font-size: 11px;
+      line-height: 1.3;
+    }
     .tv-series-row.is-inspect {
       background: rgba(53, 89, 122, .08);
       box-shadow: inset 2px 0 0 var(--focus);
@@ -2660,6 +2735,7 @@
     var formulaDraft = null;
     var segmentDraft = emptySegmentDraft();
     var exportTargetSegmentId = "";
+    var segmentColumnAnchor = null;
     var checkedSegmentIds = new Set();
     var collapsedSegmentLists = new Set();
     var quickFormulaDraft = null;
@@ -3877,9 +3953,12 @@
         encoding: "utf-8-bom",
         filename: "",
         keepOriginalTime: true,
-        relativeTime: false,
+        includeRelativeTimeInSegment: false,
+        exportRelativeTime: false,
         columnMode: "all",
-        selectedColumns: []
+        selectedColumns: [],
+        selectedColumnIndexes: [],
+        headerMode: "original"
       };
     }
 
@@ -3888,11 +3967,16 @@
     }
 
     function fillSegmentDraftFromDataset(dataset) {
+      var keepHeaderMode = segmentDraft && segmentDraft.headerMode === "alias" ? "alias" : "original";
       var source = dataset && dataset.kind === "segment"
         ? core.sourceDatasetOfSegment(project, dataset) || dataset
         : dataset;
       var draft = emptySegmentDraft();
-      if (!source) return draft;
+      segmentColumnAnchor = null;
+      if (!source) {
+        draft.headerMode = keepHeaderMode;
+        return draft;
+      }
       draft.sourceDatasetId = source.id;
       draft.mode = dataset && dataset.kind === "segment" ? "edit" : "create";
       draft.column = source.xHeader || source.xName || "";
@@ -3916,10 +4000,41 @@
         draft.stepRunIds = (def.runIds || []).slice();
         if (dataset.columnSelection) {
           draft.columnMode = dataset.columnSelection.mode || "all";
-          draft.selectedColumns = (dataset.columnSelection.columns || []).slice();
+          draft.selectedColumnIndexes = core.resolveSelectedColumnIndexes(
+            source.headers || [],
+            dataset.columnSelection
+          );
+          draft.selectedColumns = draft.selectedColumnIndexes.map(function (index) {
+            return (source.headers || [])[index];
+          });
         }
+        draft.includeRelativeTimeInSegment = !!dataset.includeRelativeTimeColumn;
       }
+      draft.headerMode = keepHeaderMode;
       return draft;
+    }
+
+    function syncSegmentDraftColumnSelection(headers) {
+      var list = headers || [];
+      // Empty array means intentional clear. Only hydrate legacy names when indexes were never set.
+      var indexes = Array.isArray(segmentDraft.selectedColumnIndexes)
+        ? segmentDraft.selectedColumnIndexes
+        : core.resolveSelectedColumnIndexes(list, {
+          mode: "selected",
+          columns: segmentDraft.selectedColumns || []
+        });
+      var selection = core.columnSelectionFromIndexes(
+        list,
+        indexes,
+        segmentDraft.columnMode === "selected" ? "selected" : "all"
+      );
+      segmentDraft.selectedColumnIndexes = selection.indexes.slice();
+      segmentDraft.selectedColumns = selection.columns.slice();
+      return selection;
+    }
+
+    function currentColumnSelection(headers) {
+      return syncSegmentDraftColumnSelection(headers);
     }
 
     function segmentRangeDefinitionFromDraft(draft) {
@@ -5336,6 +5451,7 @@
 
     function enterCreateSegmentMode(source, keepRange) {
       if (!source) return;
+      segmentColumnAnchor = null;
       var previous = keepRange ? {
         rangeType: segmentDraft.rangeType,
         column: segmentDraft.column,
@@ -5346,9 +5462,11 @@
         stepRunIds: (segmentDraft.stepRunIds || []).slice(),
         encoding: segmentDraft.encoding,
         keepOriginalTime: segmentDraft.keepOriginalTime,
-        relativeTime: segmentDraft.relativeTime,
+        includeRelativeTimeInSegment: segmentDraft.includeRelativeTimeInSegment,
+        exportRelativeTime: segmentDraft.exportRelativeTime,
         columnMode: segmentDraft.columnMode,
         selectedColumns: (segmentDraft.selectedColumns || []).slice(),
+        selectedColumnIndexes: (segmentDraft.selectedColumnIndexes || []).slice(),
         filename: segmentDraft.filename
       } : null;
       segmentDraft = fillSegmentDraftFromDataset(source);
@@ -5365,8 +5483,10 @@
         segmentDraft.stepRunIds = previous.stepRunIds;
         segmentDraft.encoding = previous.encoding;
         segmentDraft.keepOriginalTime = previous.keepOriginalTime;
-        segmentDraft.relativeTime = previous.relativeTime;
+        segmentDraft.includeRelativeTimeInSegment = previous.includeRelativeTimeInSegment;
+        segmentDraft.exportRelativeTime = previous.exportRelativeTime;
         segmentDraft.columnMode = previous.columnMode;
+        segmentDraft.selectedColumnIndexes = previous.selectedColumnIndexes;
         segmentDraft.selectedColumns = previous.selectedColumns;
         segmentDraft.filename = previous.filename;
       }
@@ -5580,28 +5700,64 @@
       box.appendChild(wrap);
     }
 
-    function currentSegmentExportOptions() {
+    function currentSegmentExportOptions(segmentId) {
+      var targetId = segmentId || exportTargetSegmentId;
+      var targetSegment = targetId ? core.findDataset(project, targetId) : null;
+      var exportSource = targetSegment && targetSegment.kind === "segment"
+        ? core.sourceDatasetOfSegment(project, targetSegment)
+        : null;
+      var draftSource = core.findDataset(project, segmentDraft.sourceDatasetId);
+      var draftHeaders = (draftSource && draftSource.headers)
+        || (exportSource && exportSource.headers)
+        || [];
+      if (targetSegment && targetSegment.derivedRelativeTime) {
+        draftHeaders = targetSegment.headers || draftHeaders;
+      }
+      var exportAddsRelative = !!segmentDraft.exportRelativeTime
+        && !core.segmentHasStoredRelativeTime(targetSegment, exportSource);
       return {
         encoding: segmentDraft.encoding || "utf-8-bom",
         filename: segmentDraft.filename,
         keepOriginalTime: segmentDraft.keepOriginalTime !== false,
-        relativeTime: !!segmentDraft.relativeTime,
+        relativeTime: exportAddsRelative,
         timeColumn: segmentDraft.column,
-        columnSelection: {
-          mode: segmentDraft.columnMode === "selected" ? "selected" : "all",
-          columns: segmentDraft.selectedColumns || []
-        }
+        columnSelection: currentColumnSelection(draftHeaders),
+        headerMode: segmentDraft.headerMode === "alias" ? "alias" : "original"
       };
+    }
+
+    function csvHeaderSummary(datasetId) {
+      if (!datasetId) return { headers: [], renamedCount: 0, duplicateHeaders: [], columns: [] };
+      return core.describeCsvExportHeaders(project, datasetId, currentSegmentExportOptions(datasetId));
+    }
+
+    function csvHeaderModeNote() {
+      if (segmentDraft.headerMode !== "alias") {
+        return "导出表头使用原始列名。左侧数据系列的重命名不会写入 CSV。";
+      }
+      var target = core.segmentExportTarget(project, exportTargetSegmentId);
+      var source = target
+        ? core.sourceDatasetOfSegment(project, target)
+        : core.findDataset(project, segmentDraft.sourceDatasetId);
+      var summary = csvHeaderSummary(target ? target.id : (source && source.id));
+      var text = "已使用重命名：" + (summary.renamedCount || 0) + " 列。未重命名的列仍用原始表头。";
+      if (summary.duplicateHeaders && summary.duplicateHeaders.length) text += " 表头有重复，回导可能歧义。";
+      return text;
     }
 
     function exportOneSegment(segmentId) {
       try {
-        var exported = core.exportSegmentCsv(project, segmentId, currentSegmentExportOptions());
+        var exported = core.exportSegmentCsv(project, segmentId, currentSegmentExportOptions(segmentId));
         var blob = new Blob([exported.bytes], { type: "text/csv;charset=utf-8" });
         return saveBlobWithPicker(blob, exported.filename, [
           { description: "CSV", accept: { "text/csv": [".csv"] } }
         ]).then(function (saved) {
-          if (saved) setStatus("已导出 " + exported.filename + "。", "ok");
+          if (saved) {
+            var warn = exported.duplicateHeaders && exported.duplicateHeaders.length && segmentDraft.headerMode === "alias"
+              ? " 表头有重复，回导可能歧义。"
+              : "";
+            setStatus("已导出 " + exported.filename + "。" + warn, "ok");
+          }
         }).catch(function (error) {
           setStatus((error && error.message) || "导出失败。", "error");
         });
@@ -5653,7 +5809,13 @@
         saveBlobWithPicker(blob, name, [
           { description: "ZIP", accept: { "application/zip": [".zip"] } }
         ]).then(function (saved) {
-          if (saved) setStatus("已打包 " + zip.files.length + " 个片段。", "ok");
+          if (saved) {
+            var summary = csvHeaderSummary(ids[0]);
+            var warn = segmentDraft.headerMode === "alias" && summary.duplicateHeaders && summary.duplicateHeaders.length
+              ? " 表头有重复，回导可能歧义。"
+              : "";
+            setStatus("已打包 " + zip.files.length + " 个片段。" + warn, "ok");
+          }
         }).catch(function (error) {
           setStatus((error && error.message) || "打包失败。", "error");
         });
@@ -5668,10 +5830,9 @@
         sourceDatasetId: source.id,
         rangeType: segmentDraft.rangeType,
         rangeDefinition: segmentRangeDefinitionFromDraft(segmentDraft),
-        columnSelection: {
-          mode: segmentDraft.columnMode === "selected" ? "selected" : "all",
-          columns: segmentDraft.selectedColumns || []
-        }
+        columnSelection: currentColumnSelection(source.headers || []),
+        includeRelativeTimeColumn: !!segmentDraft.includeRelativeTimeInSegment,
+        timeColumn: segmentDraft.column
       };
     }
 
@@ -5842,6 +6003,17 @@
       preview.dataset.segmentPreview = "1";
       sec.body.appendChild(preview);
       refreshSegmentPreview(sec);
+      var includeRel = document.createElement("label");
+      includeRel.className = "tv-switch";
+      var includeRelInput = document.createElement("input");
+      includeRelInput.type = "checkbox";
+      includeRelInput.checked = !!segmentDraft.includeRelativeTimeInSegment;
+      includeRelInput.addEventListener("change", function () {
+        segmentDraft.includeRelativeTimeInSegment = includeRelInput.checked;
+        refreshSegmentPreview(sec);
+      });
+      includeRel.append(includeRelInput, document.createTextNode(" 在片段中新增相对时间列"));
+      sec.body.appendChild(includeRel);
       var actions = document.createElement("div");
       actions.className = "tv-dataset-tools";
       var save = document.createElement("button");
@@ -5857,18 +6029,15 @@
         saveAs.textContent = "另存为新片段";
         saveAs.addEventListener("click", saveSegmentAsNew);
         actions.appendChild(saveAs);
+        var newSegment = document.createElement("button");
+        newSegment.type = "button";
+        newSegment.className = "tv-button";
+        newSegment.textContent = "新建片段";
+        newSegment.addEventListener("click", function () {
+          beginSegmentDraft(source);
+        });
+        actions.appendChild(newSegment);
       }
-      var continueBtn = document.createElement("button");
-      continueBtn.type = "button";
-      continueBtn.className = "tv-button";
-      continueBtn.textContent = "继续创建新片段";
-      continueBtn.addEventListener("click", function () {
-        enterCreateSegmentMode(source, true);
-        renderData();
-        renderProps();
-        setStatus("已切换到创建新片段。来源仍是「" + source.name + "」。", "");
-      });
-      actions.appendChild(continueBtn);
       sec.body.appendChild(actions);
       var encoding = selectControl("CSV 编码", segmentDraft.encoding, [
         ["utf-8-bom", "UTF-8 BOM"],
@@ -5882,8 +6051,26 @@
       ]);
       colMode.input.addEventListener("change", function () {
         segmentDraft.columnMode = colMode.input.value;
+        if (segmentDraft.columnMode !== "selected") {
+          segmentDraft.selectedColumnIndexes = [];
+          segmentDraft.selectedColumns = [];
+        }
         renderProps();
       });
+      var headerMode = selectControl("导出表头名称", segmentDraft.headerMode === "alias" ? "alias" : "original", [
+        ["original", "原始列名"],
+        ["alias", "使用数据系列重命名后的列名"]
+      ]);
+      headerMode.input.id = "tvCsvHeaderMode";
+      headerMode.input.setAttribute("aria-describedby", "tvCsvHeaderModeNote");
+      headerMode.input.addEventListener("change", function () {
+        segmentDraft.headerMode = headerMode.input.value === "alias" ? "alias" : "original";
+        renderProps();
+      });
+      var headerNote = document.createElement("p");
+      headerNote.className = "tv-hint";
+      headerNote.id = "tvCsvHeaderModeNote";
+      headerNote.textContent = csvHeaderModeNote();
       var file = fieldControl("文件名称", segmentDraft.filename);
       file.input.addEventListener("input", function () { segmentDraft.filename = file.input.value; });
       var keepTime = document.createElement("label");
@@ -5897,9 +6084,22 @@
       rel.className = "tv-switch";
       var relInput = document.createElement("input");
       relInput.type = "checkbox";
-      relInput.checked = !!segmentDraft.relativeTime;
-      relInput.addEventListener("change", function () { segmentDraft.relativeTime = relInput.checked; });
-      rel.append(relInput, document.createTextNode(" 新增从 0 开始的相对时间列"));
+      var exportTarget = core.segmentExportTarget(project, exportTargetSegmentId);
+      var exportSource = exportTarget ? core.sourceDatasetOfSegment(project, exportTarget) : null;
+      var targetHasRelative = core.segmentHasStoredRelativeTime(exportTarget, exportSource);
+      relInput.checked = !!segmentDraft.exportRelativeTime && !targetHasRelative;
+      relInput.disabled = targetHasRelative;
+      relInput.addEventListener("change", function () {
+        if (targetHasRelative) return;
+        segmentDraft.exportRelativeTime = relInput.checked;
+      });
+      rel.append(relInput, document.createTextNode(" 导出时补充相对时间列"));
+      if (targetHasRelative) {
+        var relHint = document.createElement("p");
+        relHint.className = "tv-hint";
+        relHint.textContent = "导出目标片段已含相对时间列，导出时不会重复附加。";
+        sec.body.appendChild(relHint);
+      }
       var exportState = core.segmentPanelExportState(project, exportTargetSegmentId);
       var exportNote = document.createElement("p");
       exportNote.className = "tv-hint";
@@ -5929,30 +6129,147 @@
       zipBtn.title = zipPlan.text;
       zipBtn.setAttribute("aria-describedby", "tvSegmentZipTarget");
       zipBtn.addEventListener("click", exportCheckedSegmentsZip);
-      sec.body.append(encoding.wrap, colMode.wrap, file.wrap, keepTime, rel);
+      sec.body.append(encoding.wrap, colMode.wrap, headerMode.wrap, headerNote, file.wrap, keepTime, rel);
       if (segmentDraft.columnMode === "selected") {
-        var colList = document.createElement("div");
-        colList.className = "tv-series-list";
-        (source.headers || []).forEach(function (header) {
-          var row = document.createElement("label");
-          row.className = "tv-series-row";
-          var box = document.createElement("input");
-          box.type = "checkbox";
-          box.checked = segmentDraft.selectedColumns.indexOf(header) >= 0;
-          box.addEventListener("change", function () {
-            if (box.checked) segmentDraft.selectedColumns.push(header);
-            else segmentDraft.selectedColumns = segmentDraft.selectedColumns.filter(function (name) { return name !== header; });
-          });
-          var copy = document.createElement("span");
-          copy.className = "tv-series-name";
-          copy.textContent = header;
-          row.append(box, copy);
-          colList.appendChild(row);
-        });
-        sec.body.appendChild(colList);
+        sec.body.appendChild(buildSegmentColumnPicker(source));
+        if (!(segmentDraft.selectedColumnIndexes || []).length) {
+          if (exportState.enabled) {
+            exportBtn.disabled = true;
+            exportBtn.title = "请至少选择一列后再导出。";
+          }
+          if (zipPlan.ids.length) {
+            zipBtn.disabled = true;
+            zipBtn.title = "请至少选择一列后再导出。";
+          }
+        }
       }
       sec.body.append(exportNote, exportBtn, zipNote, zipBtn);
       return sec;
+    }
+
+    function buildSegmentColumnPicker(listSource) {
+      var listHeaders = (listSource && listSource.headers) || [];
+      var summaryId = listSource ? listSource.id : "";
+      var exportTarget = core.segmentExportTarget(project, exportTargetSegmentId);
+      var exportSource = exportTarget ? core.sourceDatasetOfSegment(project, exportTarget) : null;
+      if (exportTarget && exportSource && listSource && exportSource.id === listSource.id) summaryId = exportTarget.id;
+      var headerSummary = summaryId ? csvHeaderSummary(summaryId) : { columns: [] };
+      var columnInfo = Object.create(null);
+      (headerSummary.columns || []).forEach(function (col) { columnInfo[col.index] = col; });
+      syncSegmentDraftColumnSelection(listHeaders);
+      var picker = document.createElement("div");
+      picker.className = "tv-column-picker";
+      picker.dataset.columnPicker = "segment-export";
+      var toolbar = document.createElement("div");
+      toolbar.className = "tv-column-picker-toolbar";
+      var selectAll = document.createElement("button");
+      selectAll.type = "button";
+      selectAll.className = "tv-button tv-button--tiny";
+      selectAll.textContent = "全选";
+      var clearAll = document.createElement("button");
+      clearAll.type = "button";
+      clearAll.className = "tv-button tv-button--tiny";
+      clearAll.textContent = "清空";
+      var count = document.createElement("span");
+      count.className = "tv-column-picker-count";
+      count.textContent = "已选择 " + (segmentDraft.selectedColumnIndexes || []).length + " / 总计 " + listHeaders.length;
+      toolbar.append(selectAll, clearAll, count);
+      var hint = document.createElement("p");
+      hint.className = "tv-column-picker-hint";
+      hint.textContent = "Shift 连选，Cmd/Ctrl 点选，列表获焦后 Cmd/Ctrl+A 全选。";
+      var colList = document.createElement("div");
+      colList.className = "tv-column-list";
+      colList.tabIndex = 0;
+      colList.setAttribute("role", "listbox");
+      colList.setAttribute("aria-label", "导出指定列");
+      colList.setAttribute("aria-multiselectable", "true");
+
+      function applyPickerAction(action, keepFocus) {
+        segmentDraft.selectedColumnIndexes = core.applyColumnPickerSelection(
+          segmentDraft.selectedColumnIndexes || [],
+          listHeaders.length,
+          action
+        );
+        syncSegmentDraftColumnSelection(listHeaders);
+        renderProps();
+        if (keepFocus) {
+          requestAnimationFrame(function () {
+            var next = document.querySelector('[data-column-picker="segment-export"] .tv-column-list');
+            if (next) next.focus();
+          });
+        }
+      }
+
+      selectAll.addEventListener("click", function () {
+        applyPickerAction({ type: "selectAll" }, true);
+      });
+      clearAll.addEventListener("click", function () {
+        applyPickerAction({ type: "clear" }, true);
+      });
+      colList.addEventListener("keydown", function (event) {
+        if ((event.key === "a" || event.key === "A") && (event.metaKey || event.ctrlKey)) {
+          event.preventDefault();
+          event.stopPropagation();
+          applyPickerAction({ type: "selectAll" }, true);
+        }
+      });
+
+      listHeaders.forEach(function (header, index) {
+        var row = document.createElement("div");
+        row.className = "tv-column-row";
+        row.setAttribute("role", "option");
+        row.dataset.columnIndex = String(index);
+        var checked = (segmentDraft.selectedColumnIndexes || []).indexOf(index) >= 0;
+        row.setAttribute("aria-selected", checked ? "true" : "false");
+        var box = document.createElement("input");
+        box.type = "checkbox";
+        box.tabIndex = -1;
+        box.checked = checked;
+        box.setAttribute("aria-label", "选择列 " + (index + 1));
+        var copy = document.createElement("span");
+        copy.className = "tv-column-name";
+        var indexMark = document.createElement("span");
+        indexMark.className = "tv-column-index";
+        indexMark.textContent = "#" + (index + 1);
+        copy.append(indexMark, document.createTextNode(header));
+        var mapped = columnInfo[index];
+        if (mapped && mapped.renamed) {
+          var alias = document.createElement("span");
+          alias.className = "tv-column-alias";
+          alias.textContent = "→ " + mapped.exportName;
+          copy.appendChild(alias);
+          row.title = "#" + (index + 1) + " " + header + " → " + mapped.exportName;
+        } else {
+          row.title = "#" + (index + 1) + " " + header;
+        }
+        function pickColumn(event) {
+          event.preventDefault();
+          event.stopPropagation();
+          if (event.shiftKey && segmentColumnAnchor != null) {
+            applyPickerAction({
+              type: "range",
+              from: segmentColumnAnchor,
+              to: index,
+              checked: true
+            }, true);
+          } else {
+            applyPickerAction({ type: "toggle", index: index }, true);
+          }
+          segmentColumnAnchor = index;
+        }
+        box.addEventListener("click", function (event) { event.preventDefault(); });
+        box.addEventListener("pointerdown", pickColumn);
+        row.addEventListener("pointerdown", function (event) {
+          if (event.button != null && event.button !== 0) return;
+          if (event.target === box) return;
+          pickColumn(event);
+        });
+        row.append(box, copy);
+        colList.appendChild(row);
+      });
+
+      picker.append(toolbar, hint, colList);
+      return picker;
     }
 
     function xColumnLabel(item) {
@@ -6063,13 +6380,23 @@
           sourceDatasetId: segmentDraft.sourceDatasetId,
           rangeType: segmentDraft.rangeType,
           rangeDefinition: segmentRangeDefinitionFromDraft(segmentDraft),
-          name: segmentDraft.name
+          name: segmentDraft.name,
+          includeRelativeTimeColumn: !!segmentDraft.includeRelativeTimeInSegment,
+          timeColumn: segmentDraft.column
         });
         var source = core.findDataset(project, segmentDraft.sourceDatasetId);
         preview.textContent = result.rowCount + " 行 × " + result.columnCount + " 列"
           + (source && source.headers ? " · 区间预览 " + result.selectedRowRanges.map(function (range) {
             return (range.start + 1) + "–" + (range.end + 1);
           }).join("，") : "");
+        if (result.relativeTimeSample && !result.relativeTimeSample.error) {
+          preview.textContent += " · " + result.relativeTimeSample.header + " 首/中/末 "
+            + result.relativeTimeSample.first + " / "
+            + result.relativeTimeSample.middle + " / "
+            + result.relativeTimeSample.last;
+        } else if (result.relativeTimeSample && result.relativeTimeSample.error) {
+          preview.textContent += " · " + result.relativeTimeSample.error;
+        }
         if (!segmentDraft.name) segmentDraft.name = result.name;
       } catch (error) {
         preview.textContent = (error && error.message) || "无法预览该区间。";
@@ -13378,6 +13705,9 @@
       }
       if ((event.key === "a" || event.key === "A") && (event.ctrlKey || event.metaKey)) {
         if (isTextEntry(document.activeElement)) return;
+        if (document.activeElement && document.activeElement.closest && document.activeElement.closest("[data-column-picker]")) {
+          return;
+        }
         if (propsPanelActive) {
           var plotForSelect = selectedPlot();
           if (!plotForSelect || !(plotForSelect.seriesRefs || []).length) return;
@@ -13454,6 +13784,12 @@
       getProject: function () { return project; },
       isDirty: function () { return dirty; },
       renderAll: function () { renderAll(); },
+      getSegmentDraft: function () { return segmentDraft; },
+      setCsvHeaderMode: function (mode) {
+        segmentDraft.headerMode = mode === "alias" ? "alias" : "original";
+        renderProps();
+        return segmentDraft.headerMode;
+      },
       importCsvText: function (text, options) {
         var dataset = core.parseDatasetFromCsv(text, options || {});
         core.addDataset(project, dataset);

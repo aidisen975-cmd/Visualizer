@@ -1579,3 +1579,100 @@ NOT RUN：Edge / Windows / 触控板 / 系统保存框。H2 用户复验未做�
 
 ---
 
+## v0.7.2 V072-K 指定列导出可读性与快捷多选
+
+- 日期：2026-11-03
+- 软件版本：`0.7.2`（工作区补丁候选，未升版本号）
+- 工程格式：`projectFormatVersion: "1.1"`（未升）
+- 已发布基线：tag `v0.7.2` → `a8770c5`；HEAD `950365e`（发布记录提交）。不覆盖既有 Release。
+- 起点 HEAD：`950365e`。未提交、未打 tag、未发 Release。
+- 标识：`EXEC_V072-K_20261103T100725_CURSOR_950365e`
+
+用户反馈：切段/CSV「导出列→指定列」列名被压成单字，约 177 列无法快捷多选。Notion 版本状态纠偏：v0.7.2 已正式发布，本任务是下一补丁候选，不是阻止已发生的发布。
+
+根因：指定列复用 `.tv-series-row` 的四列 grid（`auto 10px minmax(0,1fr) auto`），但只挂了 checkbox + 名称，名称落在 10px 轨道，所以只剩一字；同时没有 Shift/Cmd 多选、全选/清空和已选计数。次因：清空后若仍用旧 `selectedColumns` 回填索引，会把刚清空的勾选灌回来。
+
+做法：独立 `.tv-column-list` / `.tv-column-row`（`auto minmax(0,1fr)`，列名可换行）；勾选按列索引；Shift 连选、单击切换、列表获焦 Cmd/Ctrl+A 全选；全选/清空按钮和「已选择 X / 总计 Y」；文件名输入框内 Cmd/Ctrl+A 不劫持。导出 `columnSelection` 增加 indexes，指定列按源序，重名列可分别导出；0 列禁止导出。V072-J 连续切段与导出目标分离未改。
+
+验证：
+
+- `node tests/core-test.js` PASS，含 177 列表头夹具、离散/连选/全选/清空、重名列源序导出、0 列失败、页面不再用 series-row 做指定列。
+- `node tests/canvas-export-test.js` PASS。
+- `node tests/segment-acceptance.js` NOT RUN（本机缺少原 `Downloads/...0.33C_UTF8.CSV`）。
+- Mac Chrome headless CDP：`node tmp/v072k/run-chrome.js` PASS。构造 177 列中文表头；前/中/后与「本层电压(V)」完整可读；离散 3、Shift 11、Cmd+A 177、清空 0、全选按钮 177；文件名框 Cmd+A 不改列勾选；Segment A/B 并存且底部目标切到 B；指定列 CSV 回导表头 `序号|I(A)|充电电流(A)|温度|温度`；ZIP 2 文件。证据 `tmp/v072k/report.json`、`tmp/v072k/column-picker.png`。
+- Edge / Windows Ctrl+A 真机：NOT RUN。
+
+NOT RUN：用户人工复验列名与快捷多选；真实 177 列实验原文件（本轮用构造中文 177 列夹具）；Edge / Windows。WIP / Done=NO。不提交、不覆盖 v0.7.2 Release、不发布。
+
+代码审查跟进（同标识）：跨源导出时若草稿列选择器与导出目标来源不同，索引与表头对不上则按列名回退到导出源；切换片段/新建切段时重置 `segmentColumnAnchor`，避免 Shift 连选沿用旧锚点。
+
+---
+
+## v0.7.2 V072-L 导出 CSV 可使用数据系列重命名后的表头
+
+- 日期：2026-11-03
+- 软件版本：`0.7.2`（工作区补丁候选，未升版本号）
+- 工程格式：`projectFormatVersion: "1.1"`（未升）
+- 已发布基线：tag `v0.7.2` → `a8770c5`；HEAD `950365e`。不覆盖既有 Release。
+- 起点 HEAD：`950365e`。未提交、未打 tag、未发 Release。
+- 标识：`EXEC_V072-L_20261103T124648_CURSOR_950365e`
+
+用户反馈：左侧数据系列已重命名，导出 CSV 仍用源文件原名。前置 V072-K 用户人工 6/6 PASS。本轮在 K 未提交改动上叠加，不 reset。
+
+做法：CSV 导出设置增加「导出表头名称」：原始列名（默认）/ 使用数据系列重命名后的列名。别名按源列索引映射到 Dataset Series 的 `displayName`；未真正改名或空白回退 `originalHeader`。Segment 有自己的别名时优先用片段保存名，否则回退源系列。图窗图例名不参与。只改表头行，不改单元格、列序、编码、BOM、相对时间列名 `相对时间(s)`。重名保留用户别名并提示「表头有重复，回导可能歧义」。表头模式留在导出面板，不写入工程。
+
+验证：
+
+- `node tests/core-test.js` PASS，含中文别名、同名列索引、空白回退、相对时间列不被覆盖、UTF-8 BOM / GB18030 回导、工程 1.1 往返、ZIP 两段表头。
+- `node tests/canvas-export-test.js` PASS（V072-I 画布导出未回归）。
+- Mac Chrome headless `node tmp/v072l/run-chrome.js` PASS：177 列夹具；默认原始列名；切到别名后仅 T45 / 进水口温度 / 两列「温度」变「模组中央温度 / 冷却液入口温度 / 温度甲」；数据行相同；指定列 Shift 36 列带 `原始 → 导出` 辅助行；相对时间从 0；连续两段 ZIP 2 文件表头均为别名；回导无乱码。证据 `tmp/v072l/report.json`、`tmp/v072l/header-mode.png`。
+- `segment-acceptance.js` NOT RUN（本机缺原 UTF8 CSV）。
+- Edge / Windows：NOT RUN。
+
+WIP / Done=NO。等用户人工复验。不提交、不覆盖 v0.7.2 Release、不发布。
+
+---
+
+## v0.7.2 V072-M Segment 内相对时间列与连续创建按钮精简
+
+**Task**：V072-M｜Segment 内相对时间列生成及连续创建按钮精简  
+**标识**：`EXEC_V072-M_20261105T170000_CURSOR_950365e`
+
+**根因**：切段 UI 的「相对时间」原先只传给 `exportSegmentCsv` 的 `relativeTime`，`createSegment` / `updateSegment` 未在片段 Dataset 内派生 `相对时间(s)` Series；导出计划也未识别片段已含列，可能重复附加。
+
+**做法**：
+
+- 创建区勾选「在片段中新增相对时间列」→ `includeRelativeTimeColumn` 写入片段；按来源时间列首有效值计算 `relative[i]=time[i]-time[0]`，插入 `derivedRelativeTime` Series 与表头；工程 JSON 增可选字段 `includeRelativeTimeColumn` / `derivedRelativeTime` / `relativeTimeSourceColumn`，`projectFormatVersion` 仍为 1.1。
+- 导出区改为「导出时补充相对时间列」；目标片段已含相对时间时禁用补充，CSV/ZIP 不重复列；导出值与片段内 Series 一致。
+- `mappedSeriesX` / `listNumericXColumns` 支持片段派生列作 X 轴；创建模式移除「继续创建新片段」，编辑模式保留「新建片段」。
+- 保留 V072-K/L 工作区改动；`APP_INFO.version` 仍为 0.7.2。
+
+**验证**：
+
+- `node --check visualizer-core.js` PASS
+- `node tests/core-test.js` PASS（含 `testSegmentRelativeTimeColumn`）
+- `node tests/canvas-export-test.js` PASS
+- Mac Chrome headless `node tmp/v072m/run-chrome.js` PASS（预览含相对时间首/中/末；A 段左侧有列、导出无重复；B 段可导出补充；无「继续创建新片段」）。证据 `tmp/v072m/report.json`、`tmp/v072m/segment-relative.png`
+- `segment-acceptance.js` NOT RUN
+- Edge / Windows NOT RUN
+- V072-M 用户人工验收 NOT RUN（K/L 已 PASS 结论保留）
+
+WIP / Done=NO。未提交、不升版本、不发布。
+
+---
+
+## 2026-11-06 发布 v0.7.3
+
+- 软件版本：`0.7.3`
+- 工程格式：`projectFormatVersion: "1.1"`
+- 分支：`feat/v0.1.0`
+- 内容：V072-K 指定列 UI 与快捷多选、V072-L CSV 表头别名、V072-M 片段内相对时间列与导出去重；`projectFormatVersion` 未升，旧工程仍可读。
+- tag：`v0.7.3`（提交哈希见 Git）
+- Release：`https://github.com/aidisen975-cmd/Visualizer/releases/tag/v0.7.3`
+
+正式版，不是 Draft，也不是 Pre-release。附件 `Visualizer-v0.7.3.zip`（html + `visualizer-core.js` + `README.md`，三个文件在压缩包根目录）。SHA256 见 Progress 发布节。
+
+验证：`node --check visualizer-core.js` PASS；`node tests/core-test.js` PASS；`node tests/canvas-export-test.js` PASS；`node tests/icon-slot-test.js` PASS。Edge、Windows、真机触控板、系统保存框 NOT RUN。
+
+---
+

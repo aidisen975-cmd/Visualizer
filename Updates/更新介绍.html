@@ -8,9 +8,9 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>Visualizer · 0.7.2 更新日志</title>
+<title>Visualizer · 0.7.3 更新日志</title>
 <meta name="author" content="{{作者}}">
-<meta name="description" content="Visualizer 0.7.2 让画布上的每张图单独排版，预览和导出带上主图。">
+<meta name="description" content="Visualizer 0.7.3 改进片段 CSV 指定列、表头别名与片段内相对时间列。">
 <meta name="keywords" content="Visualizer、画布、图例、标注、数据片段">
 <meta name="generator" content="Kami">
 <style>
@@ -198,13 +198,26 @@
 <div class="header">
   <div class="title-block">
     <div class="eyebrow">更新日志</div>
-    <h1>Visualizer 0.7.2</h1>
-    <div class="subtitle">画布上的每张图可以单独排，预览和导出带上主图。</div>
+    <h1>Visualizer 0.7.3</h1>
+    <div class="subtitle">片段导出更易读：指定列、表头别名与片段内相对时间。</div>
   </div>
-  <div class="meta">2026-11-02</div>
+  <div class="meta">2026-11-06</div>
 </div>
 
 <h2>新功能</h2>
+<ol class="changes">
+  <li><strong>指定列</strong>：指定列导出改用独立列表，长列名完整可读，并支持 Shift 与 Cmd/Ctrl 多选、全选和清空。</li>
+  <li><strong>表头别名</strong>：导出 CSV 时可选原始表头，或使用左侧数据系列重命名后的列名，只改表头不改数据。</li>
+  <li><strong>片段相对时间</strong>：创建片段时可把相对时间写进片段本身，可作为横轴并随工程保存；导出时若已有该列则不再重复附加。</li>
+  <li><strong>连续切段</strong>：创建片段界面去掉多余的「继续创建新片段」，连续切段流程更直接。</li>
+</ol>
+
+<h2>修复</h2>
+<ol class="changes">
+  <li><strong>指定列</strong>：切换导出目标或跨源导出时，指定列索引与表头不再错位。</li>
+</ol>
+
+<h2>0.7.2 · 2026-11-02</h2>
 <ol class="changes">
   <li><strong>画布副本</strong>：同一张图放进多张画布时，图例、标题、刻度和标注属于这份副本，不会改到源图。</li>
   <li><strong>布局</strong>：布局上方排整张画布，下方把当前图放进指定格子；占住的格子可以换位，不会复制出第二张。</li>
@@ -213,10 +226,6 @@
   <li><strong>刻度与模板</strong>：自动刻度更密，疏密会写进图表模板。保存同名模板时需选择覆盖、另存或取消。</li>
   <li><strong>标注</strong>：点标注后可以在数据点上加文字。文字框可以拖开，数据点留在原处，悬停能看到读数。</li>
   <li><strong>片段导出</strong>：创建片段后，底部可以直接导出刚保存的那一段；接着做下一段时，导出仍指向上一段。</li>
-</ol>
-
-<h2>修复</h2>
-<ol class="changes">
   <li><strong>画布导出</strong>：画布预览、PNG 和 SVG 会带上主图，局部视图和引导线不再把主图弄丢。</li>
 </ol>
 

@@ -1,12 +1,12 @@
 # Visualizer
 
-当前版本：**0.7.2**  
+当前版本：**0.7.3**  
 工程格式：`projectFormatVersion: "1.1"`，仍可打开 `1.0`。文档结构 `schemaVersion: 2`  
-下载：[Visualizer v0.7.2](https://github.com/aidisen975-cmd/Visualizer/releases/tag/v0.7.2)
+下载：[Visualizer v0.7.3](https://github.com/aidisen975-cmd/Visualizer/releases/tag/v0.7.3)
 
 浏览器本地运行的实验数据可视化工作台，面向科研与工程出图。数据在本机处理，不经过远程服务器，也不需要安装客户端或注册云端账户。Windows 与 macOS 使用同一份文件。
 
-本文只写**当前版本已经能用的能力**。功能增加或收缩时同步改这一份文件，不把规划写成已上线。完整开发过程见 [DEVLOG.md](DEVLOG.md)，当前状态见 [Progress/PROGRESS-v0.7.2.md](Progress/PROGRESS-v0.7.2.md)。更新介绍见 [Updates/更新介绍 PDF](Updates/更新介绍.pdf)。
+本文只写**当前版本已经能用的能力**。功能增加或收缩时同步改这一份文件，不把规划写成已上线。完整开发过程见 [DEVLOG.md](DEVLOG.md)，当前状态见 [Progress/PROGRESS-v0.7.3.md](Progress/PROGRESS-v0.7.3.md)。更新介绍见 [Updates/更新介绍 PDF](Updates/更新介绍.pdf)。
 
 ## 特色
 
@@ -17,7 +17,7 @@
 - **通用数值 CSV**：不限于温度表。能解析 `Name(unit)`、`Name [unit]`、`Name / unit` 表头，不猜测未写出的单位。
 - **出图可控**：多图排版、磁吸对齐、图例位置、曲线与文字样式、坐标轴刻度都可以直接改，适合整理论文和汇报图。
 
-## 功能（v0.7.2）
+## 功能（v0.7.3）
 
 ### 数据导入与管理
 
@@ -26,8 +26,8 @@
 - 颜色、线型、线宽在右侧当前图里设置。左栏圆点显示这条曲线当前的最终颜色。右栏按数据簇收起显示「已加入 x/y」，展开后只列出已经加入这张图的系列。数据簇可以统一成一种颜色，也可以按 Palette 给每条曲线分配不同颜色。预设包括 Auto High Contrast、Okabe-Ito、Tol Bright、Tol Muted、ColorBrewer Set1、ColorBrewer Dark2、Tableau 10。数据簇的颜色方式、配色、颜色、线型、线宽改一项就立即作用到这张图里该簇的全部系列，只改这一项，不会把其他项重置。单条系列的覆盖优先，换 Palette 不会改掉已经单独设置的颜色；「全部重新应用」才会清掉这些覆盖。选中几条系列改样式时只改这几条，不影响其他图窗。
 - 曲线区分原始列名与显示名。右侧 Series 行分层显示两者，超长名称省略且不撑破面板；支持单条重命名，以及查找替换、前后缀、`T{n}` / `{original}` 批量重命名（应用前可预览）。
 - 右侧可单独勾选要编辑的 Series，与图上的显示 / 隐藏分开：改样式或重命名不会误改可见性。
-- 可按图上拖选、时间或 X 区间、工步、行号，从原始数据切出片段。片段挂在来源数据簇下面，不复制整表，也不进「计算结果」。同一来源可以有多段，区间可以重叠。创建成功后仍停在新建，下一次不会覆盖刚保存的片段。
-- 片段可以导出 CSV，编码可选 UTF-8（含 BOM）、UTF-8 或 GB18030，也可以加一列从 0 开始的相对时间，或只导出指定列。勾选多段时打成 ZIP。创建之后，底部导出指向刚保存的那一段；改草稿或继续创建下一段时，目标仍是上一段，直到另选。
+- 可按图上拖选、时间或 X 区间、工步、行号，从原始数据切出片段。片段挂在来源数据簇下面，不复制整表，也不进「计算结果」。同一来源可以有多段，区间可以重叠。创建时可勾选在片段内新增从 0 开始的相对时间列，该列可作为横轴、参与公式，并随工程保存。创建成功后仍停在新建，下一次不会覆盖刚保存的片段。
+- 片段可以导出 CSV，编码可选 UTF-8（含 BOM）、UTF-8 或 GB18030。导出时可选择用原始表头，或用左侧数据系列重命名后的列名（只改表头行，不改数据）。也可在导出时补充相对时间列；片段里已有相对时间列时不会重复附加。指定列时使用独立列列表，列名完整可读，支持 Shift / Cmd/Ctrl 多选、全选、清空和已选计数。勾选多段时打成 ZIP。创建之后，底部导出指向刚保存的那一段；改草稿或继续创建下一段时，目标仍是上一段，直到另选。
 
 ### 绘图与排版
 
@@ -98,7 +98,7 @@
 
 ## 如何使用
 
-1. 下载并解压 [Visualizer-v0.7.2.zip](https://github.com/aidisen975-cmd/Visualizer/releases/download/v0.7.2/Visualizer-v0.7.2.zip)。仓库里开发时，直接打开根目录的 HTML。
+1. 下载并解压 [Visualizer-v0.7.3.zip](https://github.com/aidisen975-cmd/Visualizer/releases/download/v0.7.3/Visualizer-v0.7.3.zip)。仓库里开发时，直接打开根目录的 HTML。
 2. 保持以下文件在**同一文件夹**：
    - `temperature_trajectory_visualizer.html`
    - `visualizer-core.js`
