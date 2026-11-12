@@ -1822,3 +1822,20 @@ WIP / Done=NO。未提交、不升版本、不发布。
 
 ---
 
+## 2026-11-12 发布 v0.7.4
+
+- 软件版本：`0.7.4`
+- 工程格式：`projectFormatVersion: "1.1"`
+- 分支：`feat/v0.1.0`
+- 提交：`38c35fe73fb32b960d04d46c8b54f9d91392852b`
+- tag：`v0.7.4` 指向该提交
+- 页面：https://github.com/aidisen975-cmd/Visualizer/releases/tag/v0.7.4
+
+正式版，不是 Draft，也不是 Pre-release。附件 `Visualizer-v0.7.4.zip`（html + `visualizer-core.js` + `README.md`，三个文件在压缩包根目录）。SHA256 `b7062ebf2bda973f07bd20518bc4d0141c68478b0bf6a2762ba493f70b613463`。
+
+发布后 `checkForUpdates`：`0.7.3` 状态为发现新版本，最新版 `0.7.4`，下载地址是 `Visualizer-v0.7.4.zip`。本地 `0.7.4` 的状态是当前版本不低于最新正式版本。
+
+验证：`node --check visualizer-core.js` PASS；`node tests/core-test.js` PASS；`node tests/canvas-export-test.js` PASS；`node tests/icon-slot-test.js` PASS。用户 2026-11-12 确认 V073-01 人工验收通过。Edge、Windows、真机触控板、系统保存框 NOT RUN。
+
+---
+
