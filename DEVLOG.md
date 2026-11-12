@@ -1676,3 +1676,149 @@ WIP / Done=NO。未提交、不升版本、不发布。
 
 ---
 
+## 2026-11-06 V073-01 数据源列名写回与片段工作台（待人工验收）
+
+- 软件版本：仍 `0.7.3`（未改 `APP_INFO.version`）
+- 工程格式：仍 `1.1`（新增可选字段 `diskHeaders` / `columnSaveState` / `sourceBom` / `sourceFileIdentity` / `series.sourceColumnIndex` / `seriesRef.legendName`，旧工程打开不写 CSV）
+- 分支：`feat/v0.1.0`
+- HEAD：`79c6423140a0e32b345e4d9d8fd98220aeddd196`（v0.7.3 已发布记录提交）
+- 工作区：未提交 `visualizer-core.js`、`temperature_trajectory_visualizer.html`、`tests/core-test.js`；保留既有未跟踪 `.cursor/`、`.playwright-cli/`、`poc/`、`workbench-shell-poc.html`
+- 标识：`EXEC_V073-01_20261106T153617_CURSOR_79c6423`
+
+### 本轮实际完成
+
+- 左侧直接编辑数据源 CSV 表头（含非系列列）；批量模板预览（如 `T{n}`）；空名/新重名拒绝；未保存徽章；撤销；「保存到原文件」。
+- 写回只改表头行，保留 BOM/换行/引用/正文；列数变化禁止覆写；写后校验；File System Access 有句柄时覆写，否则另存且不谎称原文件已改；按名称/大小/修改时间核对身份。
+- 右侧 Inspector / 批量重命名只写 `seriesRef.legendName`，不改源列名、CSV、其他图窗。
+- 切段创建、导出设置、右键 CSV 收成四区工作台：选择 / 处理 / 预览 / 操作。动作：保存片段、直接导出 CSV、保存并导出；编辑另有更新、另存为、仅本次导出。不恢复「继续创建新片段」。
+- 未保存列名导出前三选一：当前列名 / 先写回再导出 / 磁盘原始列名。
+- 直接导出不创建 Segment；保存片段后导出与直接导出同一投影。
+
+### 验证
+
+- `node --check visualizer-core.js` PASS
+- `node tests/core-test.js` PASS（含 `testSourceColumnWritebackAndWorkbench`）
+- `node tests/canvas-export-test.js` PASS
+- Mac Chrome headless `node tmp/v07301/run-chrome.js` PASS。证据 `tmp/v07301/report.json`、`tmp/v07301/workbench.png`、`tmp/v07301/left-unsaved.png`
+- Cursor 浏览器：导入夹具 → C1 改为 T1 → 未保存/保存到原文件可见 → 保存片段成功 → 直接导出弹出三选一对话框
+- `segment-acceptance.js` NOT RUN（本机缺原 UTF8 CSV）
+- Edge / Windows / 真机覆写原 CSV / 系统保存框 NOT RUN
+- A04 真实磁盘覆写留给人工：自动化只验证无损改写文本与 UI 授权路径，未在本机改用户实验原文件
+
+未提交、不升版本、不发布。状态：待人工验收，Done=NO。
+
+---
+
+## 2026-11-06 V073-01 补齐原 CSV 备份与未保存离开提醒（待人工验收）
+
+- 软件版本：仍 `0.7.3`（未改 `APP_INFO.version`）
+- 工程格式：仍 `1.1`
+- 分支：`feat/v0.1.0`
+- HEAD：`79c6423140a0e32b345e4d9d8fd98220aeddd196`
+- 工作区：未提交 `visualizer-core.js`、`temperature_trajectory_visualizer.html`、`tests/core-test.js`；文档追加；保留既有未跟踪 `.cursor/`、`.playwright-cli/`、`poc/`、`workbench-shell-poc.html`
+- 标识：`EXEC_V073-01_20261106T161624_CURSOR_79c6423`
+
+### 本轮实际完成
+
+- 覆盖原 CSV 前可选独立备份：`备份后覆写` 先把覆盖前原文写成 `.csv.bak`，读回字节校验；校验失败或只进入浏览器下载无法核对时阻止覆写，草稿保留为保存失败。也可选 `不备份，直接覆写` 或取消。
+- 身份核对 / 写后校验仍在，不再当作备份功能本身。
+- 切换数据源、删除未保存数据源、新建/打开工程、关闭或重新载入页面会提示尚未写回原文件。浏览器 `beforeunload` 只用原生确认框，不自定义退出文字。同源片段不误报。
+
+### 验证
+
+- `node --check visualizer-core.js` PASS
+- `node tests/core-test.js` PASS（含 `testSourceCsvBackupAndUnsavedLeave`，以及损坏 `.bak` 阻止覆写）
+- `node tests/canvas-export-test.js` PASS
+- Mac Chrome headless `node tmp/v07301/run-chrome.js` PASS：切换拦截、工程已保存仍警告关闭、备份对话框、取消后草稿仍在
+- Cursor Chrome：导入两源 → C1 改为 T1 →「保存到原文件」出现备份对话框 → 取消后未保存仍在；点「新建」出现列名未写回确认并拒绝后数据仍在
+- `segment-acceptance.js` NOT RUN（本机缺原 UTF8 CSV）
+- A04 真实磁盘覆写、Windows/Edge、系统保存框仍 NOT RUN
+
+未提交、不升版本、不发布。状态：待人工验收，Done=NO。
+
+---
+
+## 2026-11-06 V073-01 修复左侧列名中文输入（待人工验收）
+
+- 软件版本：仍 `0.7.3`（未改 `APP_INFO.version`）
+- 工程格式：仍 `1.1`
+- 分支：`feat/v0.1.0`
+- HEAD：`79c6423140a0e32b345e4d9d8fd98220aeddd196`
+- 工作区：未提交。本轮继续改 `visualizer-core.js`、`temperature_trajectory_visualizer.html`、`tests/core-test.js`，并追加本文与 `Progress/PROGRESS-v0.7.3.md`、`tmp/v07301/`。保留既有未跟踪 `.cursor/`、`.playwright-cli/`、`poc/`、`workbench-shell-poc.html`。未 reset。
+- 标识：`EXEC_V073-01_20261106T170223_CURSOR_79c6423`
+
+### 根因
+
+左侧系列行的 `keydown` 对空格和 Enter 一律 `preventDefault`，并调用 `pickInspectorSeries` → `renderData()`。中文拼音用空格或 Enter 选候选时，输入框在组合过程中被拆掉，浏览器把未确认的拼音写进列名，出现「入shui」这类混杂。列名还一直用裸 `<input>`，没有右侧 Inspector 的 `.tv-field`。
+
+### 本轮实际完成
+
+- 双击列名或右键「重命名数据列」才打开编辑器，样式用 `.tv-field`。
+- 组合期间不提交、不重绘。Enter 在输入法确认后不立刻保存列名，下一次 Enter 才写入工程草稿并显示未保存。Esc 在组合中留给输入法，之后取消编辑。失焦提交。空名和重名留在编辑器里。
+- 仍只改工程内列名。写回原 CSV 仍要点「保存到原文件」。
+
+### 验证
+
+- 修前 `node tests/core-test.js` 在 `createColumnRenameKeyState` 处失败。修后 `node --check visualizer-core.js` 与 `node tests/core-test.js` PASS。
+- `node tests/canvas-export-test.js` PASS。
+- Mac Chrome headless `node tmp/v07301/run-chrome.js` PASS：确认 Enter 不提交、下一次 Enter 写入「入口水温」、Esc 取消、英文 Inlet、批量 P1/P2、图例「图例中文」不改源列名。
+- Mac Chrome 可见窗口 + 系统拼音：候选条出现在列名编辑框上。「模组最高温度」多次完整进入草稿。「极耳温度T53」多次完整进入草稿，最后一次只留下「极耳温度」。`ru` 的第 2 个候选曾选中「入」，「温」也曾被候选键选中；系统词库顺序随后变化，最后一次整句停在「如口水闻」，不是编辑器留下拼音。原表头未改，显示未保存。
+- Windows / Edge 拼音 NOT RUN。
+
+未提交、不升版本、不发布。A01 中文输入待用户再看一眼。选择保持 WIP，Done=NO。
+
+---
+
+## 2026-11-09 V073-01 批量改列名弹层与片段工作台越界（待人工验收）
+
+- 软件版本：仍 `0.7.3`（未改 `APP_INFO.version`）
+- 工程格式：仍 `1.1`
+- 分支：`feat/v0.1.0`
+- HEAD：`79c6423140a0e32b345e4d9d8fd98220aeddd196`
+- 工作区：未提交。本轮继续改 `visualizer-core.js`、`temperature_trajectory_visualizer.html`、`tests/core-test.js`，并追加本文与 `Progress/PROGRESS-v0.7.3.md`。浏览器证据在 `tmp/v07301/`。保留既有未跟踪 `.cursor/`、`.playwright-cli/`、`poc/`、`workbench-shell-poc.html`。未 reset、未覆盖 11-06 的列名写回、备份和单列 IME。
+- 标识：`EXEC_V073-01_20261109T105713_CURSOR_79c6423`
+
+### 根因
+
+1. 左侧「批量改列名」走 `window.prompt("批量列名模板。T{n} 会把选中列编成 T1、T2；或输入 查找=替换。")`，再用 `window.confirm` 预览。这就是截图里的 “This page says”。11-06 修的是双击单列，两条路径不是同一个函数。
+2. 换成应用内弹层后，`.tv-control { display: grid }` 压过了浏览器对 `[hidden]` 的 `display: none`，序号模板模式仍把「查找 / 替换」画出来。
+3. 右侧工作台的 `.tv-accordion-body`、`.tv-workbench-zone`、`.tv-control` 都是网格，默认轨道是 `minmax(auto, max-content)`。输入框和选择框的最小内容宽度（含很长的来源 Dataset 名）把轨道撑开，卡片 `.tv-l1` 又被限制在右栏宽度内，所以控件右边框画出卡片。不是靠隐藏溢出能修好的。
+
+### 本轮实际完成
+
+- 批量改列名打开已有 `#tvRenameDialog`，字段用 Inspector 的 `.tv-field` / `.tv-select`。保留 `T{n}`、起始编号、查找/替换、旧→新预览。未勾选时说明将改全部数据列；已勾选时只改这些列。空名和新重名在预览里禁用应用。确认走原来的撤销记录，只改工程内列名，不写原 CSV。
+- 中文输入沿用 `columnRenameKeyAction`：组合中的 Enter/空格不提交，组合结束后的那一下确认键也不提交，再按 Enter 才应用，Esc 取消。
+- 单列仍是双击行内 `.tv-field`。复制文本、模板名称、关闭页面确认仍用系统框。
+- 工作台和字段网格轨道改为 `minmax(0, 1fr)`，控件 `min-width: 0; max-width: 100%`。没有用 `overflow: hidden` 把越界裁掉，也没有改右栏去占画布。
+
+### 验证
+
+- `node tests/core-test.js` PASS。
+- `node tests/canvas-export-test.js` PASS。
+- `node tests/icon-slot-test.js` PASS。
+- Mac Chrome headless `node tmp/v07301/run-chrome.js` PASS。`findHiddenInTemplate: true`；320/400/520 与 125% 缩放、创建/编辑的 `overflowCount` 和右栏 `panelOverflow` 都是 0。
+- 截图：`tmp/v07301/batch-dialog.png`、`batch-dialog-replace.png`、`workbench-create-320.png`、`workbench-create-320-actions.png`、`workbench-create-400.png`、`workbench-create-520.png`、`workbench-zoom-125.png`、`workbench-edit-320.png`。
+- `segment-acceptance.js` NOT RUN（本机仍缺原 UTF-8 实验 CSV）。
+- Windows / Edge / 真机拼音 / 系统保存框 NOT RUN。
+
+未提交、不升版本、不封包、不发布。两项修复待用户按下面步骤再看，选择保持 WIP，Done=NO。
+
+人工复验：
+
+1. 左侧勾选 3 列，点「批量改列名」。不应出现 “This page says”。模板 `T{n}` 预览为 T1、T2、T3；未勾选列不变。切到查找/替换后再输入。用拼音输入「入口水温」，候选上的 Enter 或空格不应用；再按 Enter 才写入。取消后列名不变。应用后出现未保存，需手动「保存到原文件」。双击单列改名仍可用。
+2. 展开右侧「数据片段工作台」。把右栏拖到大约 320、400、520 像素，浏览器 100% 和 125%。切换按行号/按时间，以及创建和编辑。来源、模式、起止行、预览和保存/导出按钮的边框都在卡片内，底部按钮可以滚到，不被挡住。
+
+---
+
+## 2026-11-12 V073-01 用户人工验收通过
+
+- 软件版本：发布为 `0.7.4`（`APP_INFO.version` 自 `0.7.3` 递增）
+- 工程格式：仍 `1.1`
+- 分支：`feat/v0.1.0`
+- 用户确认：V073-01 全部人工验收通过（列名写回、备份、图例名、片段工作台、批量改列名、中文输入、窄栏布局）。
+- 标识：`USER_MANUAL_ACCEPTANCE_V07301_20261112`
+
+发布前重跑：`node --check visualizer-core.js` PASS；`node tests/core-test.js` PASS；`node tests/canvas-export-test.js` PASS（发布流水线）；`node tests/icon-slot-test.js` PASS。Edge、Windows、真机触控板、系统保存框 NOT RUN。
+
+---
+

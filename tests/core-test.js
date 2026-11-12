@@ -409,7 +409,7 @@ assert(legend.columns >= 2, "大量图例自动多列");
 assert(legend.placed.length >= 20, "多列后尽量保留图例项");
 
 var v021 = core.parseProject(core.serializeProject(elecProject));
-assert(v021.softwareVersion === "0.7.3", "新工程写入 0.7.3");
+assert(v021.softwareVersion === "0.7.4", "新工程写入 0.7.4");
 assert(v021.schemaVersion === 2, "新工程写入 schemaVersion 2");
 assert(v021.plots[0].legend.visible === true, "legend 随工程保存");
 assert(v021.ui.leftPanelWidth >= 220, "ui layout 随工程保存");
@@ -439,8 +439,10 @@ var beforeNames = renamePlot.seriesRefs.map(function (ref) {
 var preview = core.previewBatchRename(selectedIds.map(function (id) {
   return core.seriesDisplayName(core.findSeries(renameProject, id));
 }), { mode: "replace", find: "Voltage", replace: "Cell Voltage" });
-core.applyRenameToSeriesIds(renameProject, selectedIds, preview);
-assert(core.findSeries(renameProject, "ds-ren::Voltage").displayName.indexOf("Cell Voltage") >= 0, "选中 Series 被重命名");
+core.applyRenameToSeriesIds(renameProject, selectedIds, preview, renamePlot);
+var renamedRef = renamePlot.seriesRefs.find(function (ref) { return ref.seriesId === "ds-ren::Voltage"; });
+assert(core.plotSeriesLegendName(renamedRef, core.findSeries(renameProject, "ds-ren::Voltage")).indexOf("Cell Voltage") >= 0, "选中 Series 被重命名");
+assert(core.findSeries(renameProject, "ds-ren::Voltage").displayName.indexOf("Cell Voltage") < 0, "图例重命名不改数据源列名");
 assert(core.findSeries(renameProject, "ds-ren::Current").displayName === beforeNames[1], "未选中 Series 名称不变");
 assert(core.findSeries(renameProject, "ds-ren::V2").displayName === "Cell Voltage Monitor 002", "未选中的 Monitor 002 不变");
 
@@ -543,7 +545,7 @@ var oldMigrated = core.parseProject(readFixture("TESTDATA_v010.tvproj.json"));
 assert(oldMigrated.plots[0].seriesRefs[0].style && oldMigrated.plots[0].seriesRefs[0].style.lineWidth === 1.5, "旧工程补齐 series.style");
 assert(oldMigrated.plots[0].xAxis.time && oldMigrated.plots[0].xAxis.time.displayUnit, "旧工程补齐 per-chart time");
 assert(oldMigrated.plots[0].textStyles && oldMigrated.plots[0].textStyles.title.fontSize === 14, "旧工程补齐 textStyles");
-assert(oldMigrated.softwareVersion === "0.7.3", "打开后 working copy 版本为 0.7.3，源文件未改");
+assert(oldMigrated.softwareVersion === "0.7.4", "打开后 working copy 版本为 0.7.4，源文件未改");
 assert(oldMigrated.plots[0].type === "normal" && oldMigrated.plots[0].topEdge.showLine === false, "旧工程补上普通图和默认关闭的上边轴");
 assert(oldMigrated.plots[0].xAxis.showLine === true && oldMigrated.plots[0].xAxis.showTickLabels === true && oldMigrated.plots[0].xAxis.tickDirection === "out", "旧工程底轴默认轴线、刻度标签和向外刻度");
 assert(oldMigrated.plots[0].showTitle === true && oldMigrated.plots[0].title !== "未命名图", "旧工程有标题时显示标题，不回写成未命名图");
@@ -653,7 +655,7 @@ assert(huge.grown, "文字过大时允许增大 Figure");
 assert(huge.plotArea.width >= core.FIGURE_LAYOUT.minPlotWidth, "Plot Area 不低于最小宽度");
 assert(huge.plotArea.height >= core.FIGURE_LAYOUT.minPlotHeight, "Plot Area 不低于最小高度");
 
-assert(core.APP_INFO.version === "0.7.3", "APP version 为 0.7.3");
+assert(core.APP_INFO.version === "0.7.4", "APP version 为 0.7.4");
 assert(core.SOFTWARE_VERSION === core.APP_INFO.version, "SOFTWARE_VERSION 与 APP_INFO.version 相同");
 assert(core.PROJECT_FORMAT_VERSION === "1.1", "工程格式为 1.1");
 assert(core.APP_INFO.version !== core.PROJECT_FORMAT_VERSION, "软件版本与工程格式分离");
@@ -1792,7 +1794,7 @@ var updateChecks = [
 
 // V070-B: Alignment Engine. Fixed SPEC-070 fixture. atol = 1e-9, rtol = 1e-9. APP 0.7.0, project format 1.1.
 (function () {
-  assert(core.APP_INFO.version === "0.7.3", "对齐测试时软件版本为 0.7.3");
+  assert(core.APP_INFO.version === "0.7.4", "对齐测试时软件版本为 0.7.4");
   assert(core.PROJECT_FORMAT_VERSION === "1.1", "对齐测试不升工程格式");
   var ATOL = 1e-9;
   var RTOL = 1e-9;
@@ -1946,7 +1948,7 @@ var updateChecks = [
 
 // V070-C: MAE/RMSE/MaxAE/Bias + AnalysisRecord. Shares alignSeries. APP 0.7.0, project format 1.1.
 (function () {
-  assert(core.APP_INFO.version === "0.7.3", "误差测试时软件版本为 0.7.3");
+  assert(core.APP_INFO.version === "0.7.4", "误差测试时软件版本为 0.7.4");
   assert(core.PROJECT_FORMAT_VERSION === "1.1", "误差测试不升工程格式");
   var ATOL = 1e-9;
   var RTOL = 1e-9;
@@ -2858,7 +2860,7 @@ var updateChecks = [
     var single = core.exportSegmentCsv(project, id, options("alias"));
     assert(entry.text === single.text, "ZIP 内 CSV 与单段导出字节对应的文本一致");
   });
-  assert(core.APP_INFO.version === "0.7.3" && core.PROJECT_FORMAT_VERSION === "1.1", "不升软件版本和工程格式");
+  assert(core.APP_INFO.version === "0.7.4" && core.PROJECT_FORMAT_VERSION === "1.1", "不升软件版本和工程格式");
 }());
 
 (function testCustomXColumnMapping() {
@@ -3216,7 +3218,7 @@ var updateChecks = [
 
   var round = core.parseProject(core.serializeProject(p));
   assert(round.canvases[0].instances[0].display && round.canvases[0].instances[0].display.legend.fontSize === 11, "工程往返保留副本图例");
-  assert(round.projectFormatVersion === "1.1", "v0.7.3 不升工程格式");
+  assert(round.projectFormatVersion === "1.1", "v0.7.4 不升工程格式");
 }());
 
 (function testSegmentRelativeTimeColumn() {
@@ -3275,6 +3277,382 @@ var updateChecks = [
   var reopenedRel = reopenedA.series.filter(function (item) { return item.role === "relative-time"; })[0];
   assert(reopenedRel.y.join(",") === "0,250", "重开后相对时间仍在");
   assert(saved.projectFormatVersion === "1.1", "不升工程格式");
+}());
+
+(function testSourceColumnWritebackAndWorkbench() {
+  var csv = [
+    "时间(s),C1(℃),C2(℃),工步名称",
+    "10,21.0,22.0,放电",
+    "12,21.5,22.5,放电",
+    "15,22.0,23.0,静置",
+    ""
+  ].join("\n");
+  var source = core.parseDatasetFromCsv(csv, { id: "ds-col", name: "列名源", sourceFilename: "cols.csv", sourceEncoding: "utf-8" });
+  var project = core.createProject({ projectName: "v073-01" });
+  core.addDataset(project, source);
+  var c1 = source.series.filter(function (item) { return item.originalHeader === "C1(℃)"; })[0];
+  var c2 = source.series.filter(function (item) { return item.originalHeader === "C2(℃)"; })[0];
+  assert(c1 && c1.sourceColumnIndex === 1 && c2.sourceColumnIndex === 2, "导入时绑定稳定列索引");
+  assert(core.columnSaveState(source) === "saved", "导入后已保存");
+  assert(!core.hasUnsavedColumnNames(source), "导入后没有未保存列名");
+  assert(core.datasetDiskHeaders(source).join("|") === source.headers.join("|"), "磁盘表头与导入表头一致");
+
+  var preview = core.previewSourceColumnRename(source, [1, 2], { mode: "template", template: "T{n}", start: 1 });
+  assert(preview[0].before === "C1(℃)" && preview[0].after === "T1", "C1 预览为 T1");
+  assert(preview[1].before === "C2(℃)" && preview[1].after === "T2", "C2 预览为 T2");
+  core.renameSourceColumns(source, { 1: "T1", 2: "T2" });
+  assert(source.headers[1] === "T1" && source.headers[2] === "T2", "左侧改名立即更新工程内表头");
+  assert(core.datasetDiskHeaders(source)[1] === "C1(℃)", "未保存前磁盘表头不变");
+  assert(core.hasUnsavedColumnNames(source) && core.columnSaveState(source) === "unsaved", "显示未保存");
+  assert(c1.id === "ds-col::T1" || c1.localId, "系列 ID 仍稳定");
+  assert(c1.originalHeader === "C1(℃)", "未写回前 originalHeader 不变");
+  assert(c1.displayName === "T1", "默认继承当前数据源列名");
+
+  var emptyFailed = false;
+  try { core.renameSourceColumns(source, { 1: "  " }); } catch (error) {
+    emptyFailed = /空/.test(String(error && error.message || error));
+  }
+  assert(emptyFailed, "禁止空列名");
+  var dupFailed = false;
+  try { core.renameSourceColumns(source, { 1: "T2" }); } catch (error) {
+    dupFailed = /重名/.test(String(error && error.message || error));
+  }
+  assert(dupFailed, "禁止新产生的重名");
+
+  var plotA = core.createPlot(project, { title: "图A" });
+  var plotB = core.createPlot(project, { title: "图B" });
+  core.addSeriesToPlot(project, plotA, [c1.id]);
+  core.addSeriesToPlot(project, plotB, [c1.id]);
+  plotA.seriesRefs[0].legendName = "模组中央";
+  assert(core.plotSeriesLegendName(plotA.seriesRefs[0], c1) === "模组中央", "右侧图例覆盖只作用于当前图");
+  assert(core.plotSeriesLegendName(plotB.seriesRefs[0], c1) === "T1", "其他图窗仍继承数据源列名");
+  core.normalizeSeriesRef(plotA.seriesRefs[0]);
+  var originalExport = core.exportProjectedCsv(project, {
+    sourceDatasetId: source.id,
+    rangeType: "row",
+    rangeDefinition: { startRow: 1, endRow: 3 },
+    headerMode: "original",
+    encoding: "utf-8"
+  });
+  assert(originalExport.headers.join("|") === "时间(s)|C1(℃)|C2(℃)|工步名称", "原始表头模式仍用磁盘列名");
+  var currentExport = core.exportProjectedCsv(project, {
+    sourceDatasetId: source.id,
+    rangeType: "row",
+    rangeDefinition: { startRow: 1, endRow: 3 },
+    headerMode: "current",
+    encoding: "utf-8"
+  });
+  assert(currentExport.headers.join("|") === "时间(s)|T1|T2|工步名称", "当前列名导出不受图例影响");
+  assert(currentExport.headers.indexOf("模组中央") < 0, "图例名不进入 CSV");
+  assert(currentExport.rowCount === 3, "未创建片段也可按范围导出");
+
+  var quotedCsv = "Time,\"Name,with comma\",Value\n1,\"a\",2\n";
+  var rewritten = core.rewriteCsvHeadersLossless(quotedCsv, ["Time", "Renamed", "Value"]);
+  assert(rewritten.ok, "可引用表头可无损改写");
+  var verified = core.verifyRewrittenCsvHeaders(quotedCsv, rewritten.text, ["Time", "Renamed", "Value"]);
+  assert(verified.ok, "写后校验表头");
+  assert(rewritten.text.split("\n")[1] === "1,\"a\",2", "数据行原样保留");
+  var crlf = "A,B\r\n1,2\r\n";
+  var crlfOut = core.rewriteCsvHeadersLossless(crlf, ["X", "Y"]);
+  assert(crlfOut.ok && crlfOut.text.indexOf("\r\n") >= 0 && crlfOut.text.split("\r\n")[1] === "1,2", "保留 CRLF 与数据");
+  var mismatch = core.rewriteCsvHeadersLossless(quotedCsv, ["only-one"]);
+  assert(!mismatch.ok, "列数变化禁止覆写");
+
+  var prepared = core.prepareSourceCsvRewrite(source);
+  assert(prepared.ok, "未保存列名可准备写回文本");
+  assert(prepared.text.indexOf("T1") === 0 || prepared.text.split(/[\r\n]/)[0].indexOf("T1") >= 0, "写回文本含新表头");
+  var bodyUnchanged = prepared.text.replace(/^[^\r\n]+/, "").replace(/^\r?\n/, "");
+  var originalBody = csv.replace(/^[^\r\n]+/, "").replace(/^\r?\n/, "");
+  assert(bodyUnchanged === originalBody, "写回只改表头行");
+  core.commitSourceColumnWrite(source, prepared.text, { encoding: "utf-8" });
+  assert(!core.hasUnsavedColumnNames(source), "写回成功后已保存");
+  assert(c1.originalHeader === "T1", "写回后 originalHeader 更新");
+  assert(source.rawCsv.split(/[\r\n]/)[0].indexOf("T1") >= 0, "rawCsv 表头已更新");
+  assert(c1.id.indexOf("::") > 0 && c1.y[0] === 21, "写回不改数值与稳定 ID");
+
+  core.renameSourceColumns(source, { 1: "Alpha" });
+  core.revertUnsavedColumnNames(source);
+  assert(source.headers[1] === "T1" && !core.hasUnsavedColumnNames(source), "撤销未保存修改");
+
+  core.renameSourceColumns(source, { 1: "入口温度" });
+  var saved = core.parseProject(core.serializeProject(project));
+  var reopened = core.findDataset(saved, source.id);
+  assert(reopened.headers[1] === "入口温度", "工程记录未保存草稿");
+  assert(core.hasUnsavedColumnNames(reopened), "重开后不得谎称已写回磁盘");
+  assert(core.datasetDiskHeaders(reopened)[1] === "T1", "磁盘列名仍是上次写回结果");
+  assert(saved.projectFormatVersion === "1.1", "列名草稿不升工程格式");
+  var reopenedPlot = saved.plots.filter(function (item) { return item.title === "图A"; })[0];
+  assert(reopenedPlot.seriesRefs[0].legendName === "模组中央", "图例覆盖随工程保存");
+
+  var identity = core.sourceFileIdentity({ name: "cols.csv", size: 120, lastModified: 10, headerFingerprint: "时间(s)|T1|T2|工步名称" });
+  var same = core.sourceFileIdentitiesMatch(identity, { name: "cols.csv", size: 120, lastModified: 10, headerFingerprint: "时间(s)|T1|T2|工步名称" });
+  var changed = core.sourceFileIdentitiesMatch(identity, { name: "cols.csv", size: 999, lastModified: 11, headerFingerprint: "时间(s)|T1|T2|工步名称" });
+  assert(same && !changed, "文件身份按名称/大小/时间核对，不只看文件名");
+
+  var workbench = core.workbenchExportPreview(project, {
+    sourceDatasetId: source.id,
+    rangeType: "time",
+    rangeDefinition: { column: "时间(s)", start: "10", end: "12" },
+    includeRelativeTimeColumn: true,
+    timeColumn: "时间(s)",
+    columnSelection: { mode: "selected", indexes: [0, 1], columns: ["时间(s)", "入口温度"] },
+    headerMode: "current",
+    keepOriginalTime: true
+  });
+  assert(workbench.rowCount === 2, "工作台预览行数");
+  assert(workbench.headers.join("|") === "时间(s)|相对时间(s)|入口温度", "预览列名/相对时间与导出一致");
+  assert(workbench.sample[0][1] === "0", "相对时间以首条有效时间为 0");
+  var direct = core.exportProjectedCsv(project, {
+    sourceDatasetId: source.id,
+    rangeType: "time",
+    rangeDefinition: { column: "时间(s)", start: "10", end: "12" },
+    includeRelativeTimeColumn: true,
+    timeColumn: "时间(s)",
+    columnSelection: { mode: "selected", indexes: [0, 1], columns: ["时间(s)", "入口温度"] },
+    headerMode: "current",
+    keepOriginalTime: true,
+    relativeTime: true,
+    encoding: "utf-8",
+    filename: "direct.csv"
+  });
+  assert(direct.headers.join("|") === workbench.headers.join("|"), "直接导出与预览表头一致");
+  assert(direct.rowCount === 2 && !core.findDataset(project, "missing"), "直接导出不创建片段");
+
+  var segment = core.createSegment(project, {
+    name: "放电段",
+    sourceDatasetId: source.id,
+    rangeType: "time",
+    rangeDefinition: { column: "时间(s)", start: "10", end: "12" },
+    includeRelativeTimeColumn: true,
+    timeColumn: "时间(s)",
+    columnSelection: { mode: "selected", indexes: [0, 1], columns: ["时间(s)", "入口温度"] }
+  });
+  var savedCfg = core.exportSegmentCsv(project, segment.id, {
+    encoding: "utf-8",
+    headerMode: "current",
+    keepOriginalTime: true,
+    relativeTime: true,
+    columnSelection: segment.columnSelection,
+    timeColumn: "时间(s)"
+  });
+  assert(savedCfg.headers.join("|") === direct.headers.join("|"), "保存片段后导出与直接导出同一投影");
+  var tempExport = core.exportProjectedCsv(project, {
+    sourceDatasetId: source.id,
+    segmentId: segment.id,
+    rangeType: "time",
+    rangeDefinition: { column: "时间(s)", start: "10", end: "15" },
+    includeRelativeTimeColumn: true,
+    timeColumn: "时间(s)",
+    headerMode: "current",
+    keepOriginalTime: true,
+    relativeTime: true,
+    encoding: "utf-8",
+    persist: false
+  });
+  assert(tempExport.rowCount === 3, "仅本次导出可用临时范围");
+  assert(core.rowRangeCount(core.findDataset(project, segment.id).selectedRowRanges) === 2, "临时导出不改已保存片段");
+
+  var page = fs.readFileSync(path.join(__dirname, "..", "temperature_trajectory_visualizer.html"), "utf8");
+  assert(page.indexOf("保存到原文件") >= 0, "左侧提供保存到原文件");
+  assert(page.indexOf("直接导出 CSV") >= 0 && page.indexOf("保存并导出") >= 0, "工作台含直接导出与保存并导出");
+  assert(page.indexOf("tv-workbench-zone") >= 0, "统一工作台分区");
+  assert(page.indexOf("继续创建新片段") < 0, "不恢复多余继续创建按钮");
+}());
+
+(function testSourceCsvBackupAndUnsavedLeave() {
+  assert(core.sourceCsvBackupFilename("cols.csv") === "cols.csv.bak", "CSV 备份名为 .csv.bak");
+  assert(core.sourceCsvBackupFilename("data") === "data.bak", "无扩展名时加 .bak");
+  assert(core.sourceCsvBackupFilename("keep.csv.bak") === "keep.csv.bak", "已是 bak 不再叠加");
+
+  var csv = "时间(s),C1(℃),C2(℃)\n10,21.0,22.0\n12,21.5,22.5\n";
+  var source = core.parseDatasetFromCsv(csv, {
+    id: "ds-bak",
+    name: "备份源",
+    sourceFilename: "cols.csv",
+    sourceEncoding: "utf-8"
+  });
+  var other = core.parseDatasetFromCsv("时间(s),X\n1,2\n2,3\n", {
+    id: "ds-other",
+    name: "另一源",
+    sourceFilename: "other.csv",
+    sourceEncoding: "utf-8"
+  });
+  var project = core.createProject({ projectName: "v073-01-backup" });
+  core.addDataset(project, source);
+  core.addDataset(project, other);
+  core.renameSourceColumns(source, { 1: "T1" });
+
+  var backup = core.createSourceCsvBackup(source);
+  assert(backup.ok, "可从磁盘原文生成备份");
+  assert(backup.filename === "cols.csv.bak", "备份建议文件名");
+  assert(backup.text.indexOf("C1(℃)") >= 0 && backup.text.indexOf("T1") < 0, "备份是覆盖前原文，不是新表头");
+  assert(core.verifySourceCsvBackup(source.rawCsv, backup.text).ok, "备份文本与原文一致则通过");
+  assert(!core.verifySourceCsvBackup(source.rawCsv, "tampered").ok, "备份被篡改则失败");
+  var originalBytes = core.encodeCsvText(backup.text, backup.encoding);
+  var sameBytes = core.encodeCsvText(backup.text, backup.encoding);
+  var badBytes = core.encodeCsvText("tampered", "utf-8");
+  assert(core.verifySourceCsvBackupBytes(originalBytes, sameBytes).ok, "备份字节一致则通过");
+  assert(!core.verifySourceCsvBackupBytes(originalBytes, badBytes).ok, "备份字节不一致则失败");
+  var bakDir = path.join(__dirname, "..", "tmp", "v07301");
+  fs.mkdirSync(bakDir, { recursive: true });
+  var bakPath = path.join(bakDir, backup.filename);
+  fs.writeFileSync(bakPath, Buffer.from(originalBytes));
+  var bakRead = fs.readFileSync(bakPath);
+  assert(core.verifySourceCsvBackupBytes(originalBytes, bakRead).ok, "写入 .bak 后再读回字节一致");
+  fs.writeFileSync(bakPath, "tampered-backup");
+  assert(!core.verifySourceCsvBackupBytes(originalBytes, fs.readFileSync(bakPath)).ok, "损坏的 .bak 不能当作备份成功");
+  assert(!core.canOverwriteSourceCsv({
+    backupRequested: true,
+    backupVerified: core.verifySourceCsvBackupBytes(originalBytes, fs.readFileSync(bakPath)).ok
+  }).ok, "损坏备份阻止覆写");
+  fs.writeFileSync(bakPath, Buffer.from(originalBytes));
+
+  var blocked = core.canOverwriteSourceCsv({
+    backupRequested: true,
+    backupVerified: false,
+    backupError: "磁盘已满"
+  });
+  assert(!blocked.ok && /阻止覆写/.test(blocked.error) && /磁盘已满/.test(blocked.error), "备份失败阻止覆写");
+  var unverified = core.canOverwriteSourceCsv({ backupRequested: true, backupVerified: false });
+  assert(!unverified.ok, "无法校验的备份也阻止覆写");
+  assert(core.canOverwriteSourceCsv({ backupRequested: true, backupVerified: true }).ok, "备份校验通过才允许覆写");
+  assert(core.canOverwriteSourceCsv({ backupRequested: false }).ok, "用户明确不备份时允许覆写");
+
+  var stay = core.unsavedColumnLeaveGuard(project, source.id, source.id);
+  assert(!stay.warn, "停留在同一数据源不提示");
+  var switchAway = core.unsavedColumnLeaveGuard(project, source.id, other.id);
+  assert(switchAway.warn && /尚未写回原文件/.test(switchAway.message), "切换到其他数据源要提示未保存列名");
+  var switchFromEmpty = core.unsavedColumnLeaveGuard(project, null, other.id);
+  assert(switchFromEmpty.warn, "当前未点选时离开唯一未保存数据源也要提示");
+  core.renameSourceColumns(other, { 1: "Y" });
+  var twoUnsaved = core.unsavedColumnLeaveGuard(project, null, other.id);
+  assert(twoUnsaved.warn, "两个未保存数据源时切到其中一个仍要提示另一个");
+  var third = core.parseDatasetFromCsv("时间(s),Z\n1,2\n2,3\n", {
+    id: "ds-third",
+    name: "第三源",
+    sourceFilename: "third.csv",
+    sourceEncoding: "utf-8"
+  });
+  core.addDataset(project, third);
+  var twoToThird = core.unsavedColumnLeaveGuard(project, null, third.id);
+  assert(twoToThird.warn && /有尚未写回原文件/.test(twoToThird.message), "多个未保存数据源离开时用总提示");
+  core.revertUnsavedColumnNames(other);
+  var segment = core.createSegment(project, {
+    name: "同源片段",
+    sourceDatasetId: source.id,
+    rangeType: "row",
+    rangeDefinition: { startRow: 1, endRow: 1 }
+  });
+  assert(!core.unsavedColumnLeaveGuard(project, source.id, segment.id).warn, "切到同源片段不提示");
+  assert(core.projectHasUnsavedColumnNames(project), "工程内存在未保存列名");
+  assert(core.pageLeaveNeedsWarning(project, false), "工程已保存但列名未写回时关闭页面仍要警告");
+  assert(core.pageLeaveNeedsWarning(project, true), "工程脏时关闭页面要警告");
+  var discardBoth = core.confirmDiscardMessage(project, true);
+  assert(/尚未写回原文件/.test(discardBoth) && /工程/.test(discardBoth), "放弃工程时同时提示列名与工程未保存");
+
+  var prepared = core.prepareSourceCsvRewrite(source);
+  core.commitSourceColumnWrite(source, prepared.text, { encoding: "utf-8" });
+  assert(!core.unsavedColumnLeaveGuard(project, source.id, other.id).warn, "写回成功后切换不再提示列名");
+  assert(!core.pageLeaveNeedsWarning(project, false), "列名已写回且工程干净时关闭无需警告");
+  assert(core.confirmDiscardMessage(project, true) === "有未保存的修改，确定放弃当前工程？", "仅工程脏时沿用原确认文案");
+
+  var page = fs.readFileSync(path.join(__dirname, "..", "temperature_trajectory_visualizer.html"), "utf8");
+  assert(page.indexOf("备份后覆写") >= 0, "保存原文件提供备份后覆写");
+  assert(page.indexOf("不备份，直接覆写") >= 0, "保存原文件允许跳过备份");
+  assert(page.indexOf("尚未写回原文件") >= 0, "切换/关闭提示未保存列名");
+  assert(page.indexOf("pageLeaveNeedsWarning") >= 0, "关闭页面走未保存列名检查");
+}());
+
+(function testColumnRenameImeKey() {
+  function replay(events) {
+    var state = core.createColumnRenameKeyState();
+    var actions = [];
+    events.forEach(function (event) {
+      var result = core.columnRenameKeyAction(state, event);
+      state = result.state;
+      actions.push(result.action);
+    });
+    return actions;
+  }
+  function naiveImeEnter(event) {
+    if (event.isComposing || event.keyCode === 229) return "passthrough";
+    if (event.key === "Enter") return "commit";
+    return "passthrough";
+  }
+  var chromeOrder = replay([
+    { type: "compositionstart" },
+    { type: "keydown", key: "Enter", isComposing: true, keyCode: 229 },
+    { type: "compositionend" },
+    { type: "keyup", key: "Enter" },
+    { type: "keydown", key: "Enter", isComposing: false, keyCode: 13 }
+  ]);
+  assert(chromeOrder.join(",") === "passthrough,passthrough,passthrough,passthrough,commit", "拼音确认键不提交，随后的 Enter 才提交");
+  var endBeforeKey = [
+    { type: "compositionstart" },
+    { type: "compositionend" },
+    { type: "keydown", key: "Enter", isComposing: false, keyCode: 13 },
+    { type: "keyup", key: "Enter" },
+    { type: "keydown", key: "Enter", isComposing: false, keyCode: 13 }
+  ];
+  var reversed = replay(endBeforeKey);
+  assert(naiveImeEnter(endBeforeKey[2]) === "commit", "只看 isComposing 会把组合结束后的确认 Enter 当成提交");
+  assert(reversed.join(",") === "passthrough,passthrough,ignore,passthrough,commit", "compositionend 先到时确认 Enter 不提交");
+  var escapeOrder = replay([
+    { type: "compositionstart" },
+    { type: "keydown", key: "Escape", isComposing: true, keyCode: 229 },
+    { type: "compositionend" },
+    { type: "keyup", key: "Escape" },
+    { type: "keydown", key: "Escape", isComposing: false, keyCode: 27 }
+  ]);
+  assert(escapeOrder[1] === "passthrough" && escapeOrder[4] === "cancel", "组合中的 Esc 留给输入法，之后的 Esc 取消编辑");
+  assert(replay([{ type: "keydown", key: "Enter", isComposing: false, keyCode: 13 }])[0] === "commit", "英文 Enter 直接提交");
+  assert(replay([
+    { type: "compositionstart" },
+    { type: "keydown", key: " ", isComposing: true, keyCode: 229 },
+    { type: "compositionend" },
+    { type: "keyup", key: " " }
+  ]).indexOf("commit") < 0, "空格确认候选不提交列名");
+  var page = fs.readFileSync(path.join(__dirname, "..", "temperature_trajectory_visualizer.html"), "utf8");
+  assert(page.indexOf("tv-column-editor") >= 0, "左侧列名编辑使用独立编辑器");
+  assert(page.indexOf("columnRenameKeyAction") >= 0, "左侧列名编辑走输入法按键判定");
+  assert(page.indexOf("tv-series-name-input") < 0, "左侧不再用常驻默认输入框");
+}());
+
+(function testSourceColumnBatchRenameDialogAndWorkbenchFit() {
+  var csv = "时间(s),C1(℃),C2(℃),C3(℃)\n10,21,22,23\n12,21.5,22.5,23.5\n15,22,23,24\n";
+  var source = core.parseDatasetFromCsv(csv, { id: "ds-batch", name: "批量源", sourceFilename: "batch.csv", sourceEncoding: "utf-8" });
+  var specT = core.parseSourceColumnRenameSpec("T{n}");
+  assert(specT && specT.mode === "template" && specT.template === "T{n}" && specT.start === 1, "T{n} 解析为序号模板");
+  var specR = core.parseSourceColumnRenameSpec("C=入口");
+  assert(specR && specR.mode === "replace" && specR.find === "C" && specR.replace === "入口", "查找=替换");
+  var specEq = core.parseSourceColumnRenameSpec("a=b=c");
+  assert(specEq && specEq.replace === "b=c", "替换文本可含等号");
+  assert(!core.parseSourceColumnRenameSpec("   "), "空模板无效");
+  var preview = core.previewSourceColumnRename(source, [1, 2], specT);
+  assert(preview[0].before === "C1(℃)" && preview[0].after === "T1", "选中列预览 T1");
+  assert(preview[1].before === "C2(℃)" && preview[1].after === "T2", "选中列预览 T2");
+  core.renameSourceColumns(source, { 1: preview[0].after, 2: preview[1].after });
+  assert(source.headers[1] === "T1" && source.headers[2] === "T2" && source.headers[3] === "C3(℃)", "未选中列保持原样");
+  assert(core.hasUnsavedColumnNames(source), "批量改名后仍是未保存草稿");
+  assert(core.datasetDiskHeaders(source)[1] === "C1(℃)", "批量改名不写回原 CSV");
+
+  var page = fs.readFileSync(path.join(__dirname, "..", "temperature_trajectory_visualizer.html"), "utf8");
+  assert(page.indexOf("window.prompt(\"批量列名模板") < 0, "批量改列名不再调用浏览器 prompt");
+  assert(page.indexOf("window.confirm(\"预览：") < 0, "批量改列名不再用原生 confirm 预览");
+  assert(page.indexOf("openSourceColumnRenameDialog") >= 0, "批量改列名打开应用内弹层");
+  assert(page.indexOf("data-batch-template") >= 0, "弹层含模板输入");
+  assert(page.indexOf("data-batch-apply") >= 0, "弹层含确认应用");
+  assert(page.indexOf("tv-column-editor") >= 0, "单列行内编辑保留");
+  assert(core.validateSourceColumnNames(source, ["时间(s)", "", "C2(℃)", "C3(℃)"]) === "列名不能为空。", "批量预览拒绝空列名");
+  assert(/重名/.test(core.validateSourceColumnNames(source, ["时间(s)", "C2(℃)", "C2(℃)", "C3(℃)"])), "批量预览拒绝新重名");
+  var css = page.replace(/\s+/g, " ");
+  assert(/\.tv-select, \.tv-field, textarea\.tv-field \{[^}]*min-width: 0/.test(css), "字段允许在窄栏收缩");
+  assert(/\.tv-workbench-zone \{[^}]*grid-template-columns: minmax\(0, 1fr\)/.test(css), "工作台分区轨道从 0 收缩");
+  assert(/\.tv-control \{[^}]*grid-template-columns: minmax\(0, 1fr\)/.test(css), "字段轨道从 0 收缩");
+  assert(/\.tv-workbench-zone[\s\S]{0,180}?min-width: 0/.test(page) || /\.tv-workbench-zone \{[^}]*min-width: 0/.test(css), "工作台分区可收缩");
+  assert(/\.tv-accordion-body[\s\S]{0,220}?min-width: 0/.test(page) || /tv-accordion-body,[^\{]*\{[^}]*min-width: 0/.test(css), "属性卡片内容可收缩");
+  assert(!/\.tv-workbench-zone \{[^}]*overflow:\s*hidden/.test(css), "不以 overflow hidden 掩盖越界");
+  assert(page.indexOf(".tv-control[hidden]") >= 0, "弹层隐藏字段不被 display:grid 盖掉");
 }());
 
 Promise.all(updateChecks).then(function () {

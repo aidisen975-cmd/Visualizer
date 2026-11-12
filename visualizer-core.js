@@ -4,7 +4,7 @@
 
   var APP_INFO = Object.freeze({
     name: "Visualizer",
-    version: "0.7.3",
+    version: "0.7.4",
     repositoryOwner: "aidisen975-cmd",
     repositoryName: "Visualizer",
     updateChannel: "stable"
@@ -582,6 +582,7 @@
     var decoded = decodeCsvBytes(input, options && options.encoding);
     var next = options ? Object.assign({}, options) : {};
     next.sourceEncoding = decoded.encoding;
+    next.sourceBom = decoded.bom || next.sourceBom || "";
     return parseDatasetFromCsv(decoded.text, next);
   }
 
@@ -721,6 +722,7 @@
         originalName: meta.originalHeader || meta.name || localId,
         displayName: meta.name || localId,
         sourceLabel: meta.originalHeader || meta.name || localId,
+        sourceColumnIndex: columnIndex,
         kind: "raw",
         role: sensorId != null ? "sensor" : "numeric",
         sensorId: sensorId,
@@ -738,6 +740,10 @@
       sourceEncoding: (options && options.sourceEncoding) || "",
       importedAt: (options && options.importedAt) || new Date().toISOString(),
       headers: headers,
+      diskHeaders: headers.slice(),
+      columnSaveState: "saved",
+      sourceBom: (options && options.sourceBom) || "",
+      sourceFileIdentity: normalizeSourceFileIdentity(options && options.sourceFileIdentity),
       timeUnit: (options && options.timeUnit) || "s",
       xHeader: xMeta.originalHeader || xMeta.name,
       xName: xMeta.name || (xIsTime ? "Time" : ""),
@@ -1118,12 +1124,19 @@
     return (plot.seriesRefs || []).map(function (ref) { return ref.seriesId; });
   }
 
-  function applyRenameToSeriesIds(project, seriesIds, previewRows) {
+  function applyRenameToSeriesIds(project, seriesIds, previewRows, plot) {
     (seriesIds || []).forEach(function (id, index) {
       if (!previewRows || !previewRows[index]) return;
+      var next = String(previewRows[index].after || "").trim();
+      if (plot && plot.seriesRefs) {
+        plot.seriesRefs.forEach(function (ref) {
+          if (ref.seriesId === id) ref.legendName = next;
+        });
+        return;
+      }
       var series = findSeries(project, id);
       if (!series) return;
-      series.displayName = String(previewRows[index].after || "");
+      series.displayName = next;
       series.label = series.displayName;
     });
     return seriesIds;
@@ -1789,6 +1802,7 @@
     var originalName = String(raw.originalName || originalHeader || name);
     var displayName = String(raw.displayName || raw.label || name || localId);
     var style = normalizeSeriesStyle(raw.style, raw.color || "#5d646b");
+    var sourceColumnIndex = Number(raw.sourceColumnIndex);
     var series = {
       id: id,
       datasetId: datasetId,
@@ -1800,6 +1814,7 @@
       originalName: originalName,
       displayName: displayName,
       sourceLabel: String(raw.sourceLabel || originalHeader),
+      sourceColumnIndex: Number.isInteger(sourceColumnIndex) && sourceColumnIndex >= 0 ? sourceColumnIndex : null,
       kind: kind,
       role: raw.role || (kind === "computed" ? "computed" : "numeric"),
       sensorId: raw.sensorId == null ? null : Number(raw.sensorId),
@@ -1837,6 +1852,10 @@
       sourceEncoding: String(raw.sourceEncoding || ""),
       importedAt: String(raw.importedAt || ""),
       headers: Array.isArray(raw.headers) ? raw.headers.map(String) : [],
+      diskHeaders: Array.isArray(raw.diskHeaders) ? raw.diskHeaders.map(String) : (Array.isArray(raw.headers) ? raw.headers.map(String) : []),
+      columnSaveState: raw.columnSaveState === "failed" || raw.columnSaveState === "unsaved" ? raw.columnSaveState : "saved",
+      sourceBom: String(raw.sourceBom || ""),
+      sourceFileIdentity: normalizeSourceFileIdentity(raw.sourceFileIdentity),
       timeUnit: TIME_IN_SECONDS[raw.timeUnit] ? raw.timeUnit : "s",
       xHeader: String(raw.xHeader || xMeta.originalHeader || ""),
       xName: String(raw.xName || xMeta.name || (xIsTime ? "Time" : "")),
@@ -1847,6 +1866,7 @@
       warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : [],
       series: (raw.series || []).map(function (item) { return normalizeSeries(item, datasetId); })
     };
+    bindSeriesColumnIndexes(dataset);
     if (kind === "segment") {
       dataset.sourceDatasetId = String(raw.sourceDatasetId || "");
       dataset.rangeType = normalizeSegmentRangeType(raw.rangeType);
@@ -1957,13 +1977,15 @@
     var color = ref.color ? String(ref.color) : (ref.style && ref.style.color ? String(ref.style.color) : null);
     var style = normalizeSeriesStyle(ref.style, color);
     if (color) style.color = color;
+    var legendName = ref.legendName == null ? "" : String(ref.legendName).trim();
     return {
       seriesId: String(ref.seriesId),
       visible: ref.visible !== false,
       selected: !!ref.selected,
       color: style.color || color,
       style: style,
-      styleOverrides: normalizeStyleOverrides(ref.styleOverrides)
+      styleOverrides: normalizeStyleOverrides(ref.styleOverrides),
+      legendName: legendName
     };
   }
 
@@ -4466,7 +4488,7 @@
           best = {
             dist: dist,
             seriesId: item.series.id,
-            name: seriesDisplayName(item.series),
+            name: plotSeriesLegendName(item.ref, item.series),
             unit: String(item.series.unit || ""),
             x: xs[i],
             y: ys[i],
@@ -4493,7 +4515,7 @@
         best = {
           dist: dist,
           seriesId: item.series.id,
-          name: seriesDisplayName(item.series),
+          name: plotSeriesLegendName(item.ref, item.series),
           unit: String(item.series.unit || ""),
           color: item.color,
           x: sample.x,
@@ -4569,7 +4591,7 @@
       var sample = sampleSeriesY(xs, item.series.y, x, mode === "interpolate" ? "interpolate" : "nearest");
       return {
         seriesId: item.series.id,
-        name: seriesDisplayName(item.series),
+        name: plotSeriesLegendName(item.ref, item.series),
         unit: String(item.series.unit || ""),
         color: item.color,
         y: sample ? sample.y : null,
@@ -7860,7 +7882,532 @@
   }
 
   function normalizeCsvHeaderMode(value) {
-    return value === "alias" ? "alias" : "original";
+    if (value === "alias" || value === "current" || value === "renamed") return "alias";
+    return "original";
+  }
+
+  function datasetDiskHeaders(dataset) {
+    if (dataset && Array.isArray(dataset.diskHeaders) && dataset.diskHeaders.length) return dataset.diskHeaders.slice();
+    return ((dataset && dataset.headers) || []).slice();
+  }
+
+  function columnSaveState(dataset) {
+    if (!dataset || dataset.kind === "computed" || dataset.kind === "segment") return "saved";
+    if (dataset.columnSaveState === "failed") return "failed";
+    return hasUnsavedColumnNames(dataset) ? "unsaved" : "saved";
+  }
+
+  function hasUnsavedColumnNames(dataset) {
+    if (!dataset || dataset.kind === "computed" || dataset.kind === "segment") return false;
+    var current = dataset.headers || [];
+    var disk = datasetDiskHeaders(dataset);
+    if (current.length !== disk.length) return current.length > 0;
+    return current.some(function (header, index) { return String(header) !== String(disk[index]); });
+  }
+
+  function resolveExportHeaderName(source, segment, columnIndex, fallback, mode) {
+    if (columnIndex === SEGMENT_RELATIVE_DERIVED_INDEX || columnIndex < 0) return fallback;
+    var current = ((source && source.headers) || [])[columnIndex];
+    var disk = ((source && source.diskHeaders) || (source && source.headers) || [])[columnIndex];
+    if (normalizeCsvHeaderMode(mode) === "original") return disk != null ? disk : (current || fallback);
+    if (current && disk != null && String(current) !== String(disk)) return current;
+    var alias = explicitSeriesAlias(seriesForSourceColumn(source, segment, columnIndex));
+    if (alias) return alias;
+    return current || fallback;
+  }
+
+  function normalizeSourceFileIdentity(raw) {
+    if (!raw || typeof raw !== "object") {
+      return { name: "", size: 0, lastModified: 0, headerFingerprint: "" };
+    }
+    return {
+      name: String(raw.name || ""),
+      size: Number(raw.size) || 0,
+      lastModified: Number(raw.lastModified) || 0,
+      headerFingerprint: String(raw.headerFingerprint || "")
+    };
+  }
+
+  function sourceFileIdentity(info) {
+    return normalizeSourceFileIdentity(info);
+  }
+
+  function sourceFileIdentitiesMatch(stored, current) {
+    var a = normalizeSourceFileIdentity(stored);
+    var b = normalizeSourceFileIdentity(current);
+    if (!b.name && !b.size && !b.lastModified && !b.headerFingerprint) return false;
+    if (a.name && b.name && a.name !== b.name) return false;
+    if (a.size && b.size && Number(a.size) !== Number(b.size)) return false;
+    if (a.lastModified && b.lastModified && Number(a.lastModified) !== Number(b.lastModified)) return false;
+    if (a.headerFingerprint && b.headerFingerprint && a.headerFingerprint !== b.headerFingerprint) return false;
+    return true;
+  }
+
+  function bindSeriesColumnIndexes(dataset) {
+    if (!dataset || dataset.kind === "computed") return dataset;
+    var headers = dataset.headers || [];
+    var disk = datasetDiskHeaders(dataset);
+    (dataset.series || []).forEach(function (series) {
+      if (!series || series.kind === "computed") return;
+      if (Number.isInteger(series.sourceColumnIndex) && series.sourceColumnIndex >= 0) return;
+      var wanted = String(series.originalHeader || series.originalName || "");
+      var found = headers.indexOf(wanted);
+      if (found < 0) found = disk.indexOf(wanted);
+      if (found >= 0) series.sourceColumnIndex = found;
+    });
+    return dataset;
+  }
+
+  function plotSeriesLegendName(ref, series) {
+    if (ref && String(ref.legendName || "").trim()) return String(ref.legendName).trim();
+    return seriesDisplayName(series);
+  }
+
+  function validateSourceColumnNames(dataset, nextHeaders) {
+    var next = nextHeaders || [];
+    var index;
+    for (index = 0; index < next.length; index += 1) {
+      if (!String(next[index] || "").trim()) return "列名不能为空。";
+    }
+    var disk = datasetDiskHeaders(dataset);
+    var seen = Object.create(null);
+    for (index = 0; index < next.length; index += 1) {
+      var name = String(next[index]);
+      if (seen[name] == null) {
+        seen[name] = index;
+        continue;
+      }
+      var other = seen[name];
+      var wasDup = disk[index] != null && disk[other] != null
+        && String(disk[index]) === String(disk[other])
+        && String(disk[index]) === name;
+      if (!wasDup) return "新列名存在重名：「" + name + "」。";
+    }
+    return "";
+  }
+
+  function parseSourceColumnRenameSpec(text, start) {
+    var template = String(text == null ? "" : text);
+    if (!template.trim()) return null;
+    if (template.indexOf("{n}") >= 0 || template.indexOf("{original}") >= 0) {
+      return { mode: "template", template: template, start: Number(start) || 1 };
+    }
+    if (template.indexOf("=") >= 0) {
+      return {
+        mode: "replace",
+        find: template.split("=")[0],
+        replace: template.split("=").slice(1).join("=")
+      };
+    }
+    return { mode: "template", template: template, start: Number(start) || 1 };
+  }
+
+  function previewSourceColumnRename(dataset, indexes, spec) {
+    var headers = (dataset && dataset.headers) || [];
+    var names = (indexes || []).map(function (index) { return headers[index] || ""; });
+    return previewBatchRename(names, spec);
+  }
+
+  function createColumnRenameKeyState() {
+    return { composing: false, swallowKey: "", sawKeyup: true };
+  }
+
+  function columnRenameKeyAction(state, event) {
+    var next = {
+      composing: !!(state && state.composing),
+      swallowKey: (state && state.swallowKey) || "",
+      sawKeyup: !state || state.sawKeyup !== false
+    };
+    var type = (event && event.type) || "";
+    var key = (event && event.key) || "";
+    if (type === "compositionstart") {
+      next.composing = true;
+      next.swallowKey = "";
+      next.sawKeyup = false;
+      return { action: "passthrough", state: next };
+    }
+    if (type === "compositionend") {
+      next.composing = false;
+      if (!next.swallowKey) next.swallowKey = "pending";
+      return { action: "passthrough", state: next };
+    }
+    if (type === "keyup") {
+      next.sawKeyup = true;
+      next.swallowKey = "";
+      return { action: "passthrough", state: next };
+    }
+    if (type === "keydown") {
+      var ime = next.composing || !!(event && event.isComposing) || (event && event.keyCode) === 229;
+      if (ime) {
+        next.swallowKey = key || "pending";
+        return { action: "passthrough", state: next };
+      }
+      if (!next.sawKeyup && (next.swallowKey === "pending" || (key && next.swallowKey === key))) {
+        next.swallowKey = "";
+        return { action: "ignore", state: next };
+      }
+      next.swallowKey = "";
+      if (key === "Enter") return { action: "commit", state: next };
+      if (key === "Escape") return { action: "cancel", state: next };
+    }
+    return { action: "passthrough", state: next };
+  }
+
+  function renameSourceColumns(dataset, mapping) {
+    if (!dataset || dataset.kind !== "raw") throw new Error("只能重命名原始数据源列。");
+    var next = (dataset.headers || []).slice();
+    Object.keys(mapping || {}).forEach(function (key) {
+      var index = Number(key);
+      if (!Number.isInteger(index) || index < 0 || index >= next.length) return;
+      next[index] = String(mapping[key] == null ? "" : mapping[key]).trim();
+    });
+    var error = validateSourceColumnNames(dataset, next);
+    if (error) throw new Error(error);
+    var old = (dataset.headers || []).slice();
+    dataset.headers = next;
+    if (dataset.xHeader) {
+      var xIndex = old.indexOf(dataset.xHeader);
+      if (xIndex >= 0) dataset.xHeader = next[xIndex];
+    }
+    (dataset.series || []).forEach(function (series) {
+      var columnIndex = Number.isInteger(series.sourceColumnIndex)
+        ? series.sourceColumnIndex
+        : old.indexOf(series.originalHeader);
+      if (columnIndex < 0 || next[columnIndex] == null) return;
+      series.displayName = next[columnIndex];
+      series.label = next[columnIndex];
+    });
+    dataset.columnSaveState = hasUnsavedColumnNames(dataset) ? "unsaved" : "saved";
+    if (seriesColumnCache) seriesColumnCache.delete(dataset);
+    return dataset;
+  }
+
+  function revertUnsavedColumnNames(dataset) {
+    if (!dataset || dataset.kind !== "raw") return dataset;
+    var disk = datasetDiskHeaders(dataset);
+    if (!disk.length) return dataset;
+    var mapping = {};
+    disk.forEach(function (header, index) { mapping[index] = header; });
+    return renameSourceColumns(dataset, mapping);
+  }
+
+  function parseCsvRowText(line) {
+    var row = [];
+    var field = "";
+    var quoted = false;
+    var source = String(line || "");
+    var index;
+    for (index = 0; index < source.length; index += 1) {
+      var character = source[index];
+      if (quoted) {
+        if (character === '"' && source[index + 1] === '"') {
+          field += '"';
+          index += 1;
+        } else if (character === '"') {
+          quoted = false;
+        } else {
+          field += character;
+        }
+      } else if (character === '"') {
+        quoted = true;
+      } else if (character === ",") {
+        row.push(field);
+        field = "";
+      } else {
+        if (character === "\n" || character === "\r") throw new Error("表头行含有未引用的换行，无法无损改写。");
+        field += character;
+      }
+    }
+    if (quoted) throw new Error("CSV 引号未闭合。");
+    row.push(field);
+    return row;
+  }
+
+  function splitCsvHeaderAndBody(text) {
+    var source = String(text || "");
+    var bom = "";
+    if (source.charCodeAt(0) === 0xFEFF) {
+      bom = "\uFEFF";
+      source = source.slice(1);
+    }
+    var quoted = false;
+    var index;
+    for (index = 0; index < source.length; index += 1) {
+      var character = source[index];
+      if (quoted) {
+        if (character === '"' && source[index + 1] === '"') {
+          index += 1;
+        } else if (character === '"') {
+          quoted = false;
+        }
+      } else if (character === '"') {
+        quoted = true;
+      } else if (character === "\n" || character === "\r") {
+        var newline = character === "\r" && source[index + 1] === "\n" ? "\r\n" : character;
+        return {
+          bom: bom,
+          newline: newline,
+          headerLine: source.slice(0, index),
+          body: source.slice(index + newline.length)
+        };
+      }
+    }
+    return { bom: bom, newline: "\n", headerLine: source, body: "" };
+  }
+
+  function rewriteCsvHeadersLossless(rawCsv, newHeaders) {
+    var parts;
+    try {
+      parts = splitCsvHeaderAndBody(rawCsv);
+    } catch (error) {
+      return { ok: false, error: error.message || "无法解析原 CSV 表头。" };
+    }
+    var oldRow;
+    try {
+      oldRow = parseCsvRowText(parts.headerLine);
+    } catch (parseError) {
+      return { ok: false, error: parseError.message || "无法无损解析表头行。" };
+    }
+    var next = (newHeaders || []).map(function (header) { return String(header == null ? "" : header); });
+    if (oldRow.length !== next.length) {
+      return { ok: false, error: "列数与原文件不一致，禁止覆写。" };
+    }
+    var headerLine = next.map(csvEscape).join(",");
+    return {
+      ok: true,
+      text: (parts.bom || "") + headerLine + parts.newline + parts.body,
+      newline: parts.newline
+    };
+  }
+
+  function verifyRewrittenCsvHeaders(originalText, rewrittenText, expectedHeaders) {
+    var oldParts;
+    var newParts;
+    try {
+      oldParts = splitCsvHeaderAndBody(originalText);
+      newParts = splitCsvHeaderAndBody(rewrittenText);
+    } catch (error) {
+      return { ok: false, error: error.message || "写后无法解析 CSV。" };
+    }
+    if (oldParts.body !== newParts.body) {
+      return { ok: false, error: "表头以外的内容被改动，已拒绝覆写。" };
+    }
+    var got;
+    try {
+      got = parseCsvRowText(newParts.headerLine).map(function (cell) {
+        return String(cell).replace(/^\uFEFF/, "");
+      });
+    } catch (parseError) {
+      return { ok: false, error: parseError.message || "写后表头无法解析。" };
+    }
+    var expected = (expectedHeaders || []).map(String);
+    if (got.length !== expected.length) return { ok: false, error: "写后表头列数不符。" };
+    var index;
+    for (index = 0; index < expected.length; index += 1) {
+      if (got[index] !== expected[index]) return { ok: false, error: "写后表头与预期不一致。" };
+    }
+    return { ok: true };
+  }
+
+  function sourceWriteEncoding(dataset) {
+    var encoding = String((dataset && dataset.sourceEncoding) || "utf-8").toLowerCase();
+    if (encoding === "utf8") encoding = "utf-8";
+    if (encoding === "gbk") encoding = "gb18030";
+    if (dataset && dataset.sourceBom === "utf-8" && encoding === "utf-8") encoding = "utf-8-bom";
+    if (encoding === "utf-16le" || encoding === "utf-16be") return "";
+    if (CSV_EXPORT_ENCODINGS.indexOf(encoding) < 0 && encoding !== "utf-8") return "";
+    return encoding || "utf-8";
+  }
+
+  function prepareSourceCsvRewrite(dataset) {
+    if (!dataset || dataset.kind !== "raw") return { ok: false, error: "只能写回原始数据源。" };
+    if (!dataset.rawCsv) return { ok: false, error: "没有保留原始 CSV 文本，无法无损写回。" };
+    var encoding = sourceWriteEncoding(dataset);
+    if (!encoding) return { ok: false, error: "当前编码无法无损覆写，请另存修改后的 CSV。" };
+    var nameError = validateSourceColumnNames(dataset, dataset.headers || []);
+    if (nameError) return { ok: false, error: nameError };
+    var rewritten = rewriteCsvHeadersLossless(dataset.rawCsv, dataset.headers || []);
+    if (!rewritten.ok) return rewritten;
+    var verified = verifyRewrittenCsvHeaders(dataset.rawCsv, rewritten.text, dataset.headers || []);
+    if (!verified.ok) return verified;
+    return { ok: true, text: rewritten.text, newline: rewritten.newline, encoding: encoding };
+  }
+
+  function commitSourceColumnWrite(dataset, rewrittenText, options) {
+    if (!dataset || dataset.kind !== "raw") throw new Error("只能写回原始数据源。");
+    var expected = (dataset.headers || []).slice();
+    var verified = verifyRewrittenCsvHeaders(dataset.rawCsv, rewrittenText, expected);
+    if (!verified.ok) throw new Error(verified.error || "写后校验失败，未修改原文件内容。");
+    dataset.rawCsv = rewrittenText;
+    dataset.diskHeaders = expected.slice();
+    dataset.columnSaveState = "saved";
+    if (options && options.encoding) dataset.sourceEncoding = String(options.encoding);
+    (dataset.series || []).forEach(function (series) {
+      if (!Number.isInteger(series.sourceColumnIndex)) return;
+      var header = expected[series.sourceColumnIndex];
+      if (header == null) return;
+      series.originalHeader = header;
+      series.originalName = header;
+      series.sourceLabel = header;
+    });
+    if (csvRowCache) csvRowCache.delete(dataset);
+    if (seriesColumnCache) seriesColumnCache.delete(dataset);
+    return dataset;
+  }
+
+  function sourceCsvBackupFilename(filename) {
+    var name = String(filename || "source.csv").trim() || "source.csv";
+    if (/\.bak$/i.test(name)) return name;
+    return name + ".bak";
+  }
+
+  function createSourceCsvBackup(dataset) {
+    if (!dataset || dataset.kind !== "raw") return { ok: false, error: "只能备份原始数据源。" };
+    if (!dataset.rawCsv) return { ok: false, error: "没有可备份的原始 CSV 文本。" };
+    var encoding = sourceWriteEncoding(dataset);
+    if (!encoding) return { ok: false, error: "当前编码无法无损备份。" };
+    return {
+      ok: true,
+      filename: sourceCsvBackupFilename(dataset.sourceFilename || "source.csv"),
+      text: String(dataset.rawCsv),
+      encoding: encoding
+    };
+  }
+
+  function verifySourceCsvBackup(originalText, backupText) {
+    if (String(originalText || "") !== String(backupText || "")) {
+      return { ok: false, error: "备份内容与原文件不一致，已阻止覆写。" };
+    }
+    return { ok: true };
+  }
+
+  function verifySourceCsvBackupBytes(originalBytes, backupBytes) {
+    var a = originalBytes || [];
+    var b = backupBytes || [];
+    if (a.length !== b.length) return { ok: false, error: "备份字节与原文件不一致，已阻止覆写。" };
+    var index;
+    for (index = 0; index < a.length; index += 1) {
+      if ((a[index] || 0) !== (b[index] || 0)) {
+        return { ok: false, error: "备份字节与原文件不一致，已阻止覆写。" };
+      }
+    }
+    return { ok: true };
+  }
+
+  function canOverwriteSourceCsv(options) {
+    options = options || {};
+    if (!options.backupRequested) return { ok: true };
+    if (options.backupVerified) return { ok: true };
+    var detail = String(options.backupError || "备份未成功").replace(/。$/, "");
+    if (/阻止覆写/.test(detail)) return { ok: false, error: detail + "。" };
+    return { ok: false, error: detail + "，已阻止覆写原文件。" };
+  }
+
+  function projectHasUnsavedColumnNames(project) {
+    return ((project && project.datasets) || []).some(hasUnsavedColumnNames);
+  }
+
+  function pageLeaveNeedsWarning(project, dirty) {
+    return !!(dirty || projectHasUnsavedColumnNames(project));
+  }
+
+  function confirmDiscardMessage(project, dirty) {
+    var unsaved = projectHasUnsavedColumnNames(project);
+    if (!dirty && !unsaved) return "";
+    if (unsaved && dirty) return "有尚未写回原文件的数据源列名，工程也未保存。确定放弃当前工程？";
+    if (unsaved) return "有尚未写回原文件的数据源列名。确定放弃当前工程？工程内草稿会丢失。";
+    return "有未保存的修改，确定放弃当前工程？";
+  }
+
+  function unsavedColumnTargetIsSameSource(project, unsaved, toId) {
+    if (!unsaved || !toId) return false;
+    if (unsaved.id === toId) return true;
+    var next = findDataset(project, toId);
+    if (!next || next.kind !== "segment") return false;
+    var nextSource = sourceDatasetOfSegment(project, next);
+    return !!(nextSource && nextSource.id === unsaved.id);
+  }
+
+  function unsavedColumnLeaveGuard(project, fromId, toId) {
+    var from = findDataset(project, fromId);
+    var candidates = [];
+    if (from) {
+      var current = from.kind === "raw" ? from : sourceDatasetOfSegment(project, from);
+      if (current && hasUnsavedColumnNames(current)) candidates = [current];
+    } else {
+      candidates = ((project && project.datasets) || []).filter(hasUnsavedColumnNames);
+    }
+    var leaving = candidates.filter(function (item) {
+      return !unsavedColumnTargetIsSameSource(project, item, toId);
+    });
+    if (!leaving.length) return { warn: false, message: "" };
+    if (leaving.length > 1) {
+      return {
+        warn: true,
+        message: "有尚未写回原文件的数据源列名。草稿会留在工程内，但不会写入磁盘。仍要继续？"
+      };
+    }
+    return {
+      warn: true,
+      message: "数据源「" + (leaving[0].name || "未命名") + "」的列名尚未写回原文件。草稿会留在工程内，但不会写入磁盘。仍要继续？"
+    };
+  }
+
+  function packProjectedCsv(packed, spec) {
+    var text = serializeCsvRows(packed.headers, packed.rows);
+    var encoding = (spec && spec.encoding) || "utf-8-bom";
+    var base = sanitizeExportFilename((spec && spec.filename) || "export.csv", "export.csv");
+    if (!/\.csv$/i.test(base)) base += ".csv";
+    return {
+      filename: base,
+      text: text,
+      bytes: encodeCsvText(text, encoding),
+      headers: packed.headers,
+      rows: packed.rows,
+      rowCount: packed.rows.length,
+      encoding: encoding,
+      renamedCount: packed.renamedCount,
+      duplicateHeaders: packed.duplicateHeaders
+    };
+  }
+
+  function exportProjectedCsv(project, spec) {
+    spec = spec || {};
+    var source = findDataset(project, spec.sourceDatasetId);
+    if (!source || source.kind === "computed" || source.kind === "segment") {
+      throw new Error("请选择原始数据源。");
+    }
+    if (!source.rawCsv) throw new Error("源数据没有保留原始单元格，无法按原表导出。");
+    var segment = spec.segmentId ? findDataset(project, spec.segmentId) : null;
+    if (segment && segment.kind !== "segment") segment = null;
+    var useSegment = !!(segment && spec.persist !== false);
+    var rangeType = normalizeSegmentRangeType(spec.rangeType || (useSegment && segment.rangeType) || "row");
+    var definition = spec.rangeDefinition || (useSegment ? segment.rangeDefinition : null);
+    var ranges = resolveSegmentRows(source, rangeType, definition);
+    var relativeTime = spec.relativeTime;
+    if (relativeTime == null) relativeTime = !!spec.includeRelativeTimeColumn;
+    var options = {
+      encoding: spec.encoding || "utf-8-bom",
+      filename: spec.filename,
+      keepOriginalTime: spec.keepOriginalTime !== false,
+      relativeTime: !!relativeTime,
+      timeColumn: spec.timeColumn || source.xHeader || source.xName,
+      columnSelection: spec.columnSelection || (useSegment && segment.columnSelection) || { mode: "all" },
+      headerMode: spec.headerMode || "current"
+    };
+    var packed = collectSegmentExportRows(source, ranges, options, useSegment ? segment : null);
+    return packProjectedCsv(packed, options);
+  }
+
+  function workbenchExportPreview(project, spec) {
+    var exported = exportProjectedCsv(project, spec);
+    return {
+      headers: exported.headers.slice(),
+      rowCount: exported.rowCount,
+      sample: (exported.rows || []).slice(0, 5),
+      duplicateHeaders: exported.duplicateHeaders.slice(),
+      renamedCount: exported.renamedCount
+    };
   }
 
   // A saved left-panel rename changes displayName and leaves name at the import label.
@@ -7887,8 +8434,8 @@
 
   function seriesColumnBindingKey(dataset) {
     return (dataset.series || []).map(function (item) {
-      return item && item.kind !== "computed" ? item.id : "";
-    }).join("\0");
+      return item && item.kind !== "computed" ? item.id + ":" + item.sourceColumnIndex : "";
+    }).join("\0") + "\0" + ((dataset && dataset.headers) || []).join("\0");
   }
 
   // ponytail: WeakMap by dataset object, rebuild only when series ids change
@@ -7907,14 +8454,21 @@
     });
     var headers = dataset.headers || [];
     var map = Object.create(null);
+    var used = Object.create(null);
+    series.forEach(function (item) {
+      if (Number.isInteger(item.sourceColumnIndex) && item.sourceColumnIndex >= 0) {
+        map[item.sourceColumnIndex] = item;
+        used[item.sourceColumnIndex] = true;
+      }
+    });
     var aligned = series.length === columns.length && series.every(function (item, index) {
       return String(headers[columns[index]] || "") === String(item.originalHeader || item.originalName || "");
     });
-    if (aligned) {
+    if (Object.keys(map).length !== series.length && aligned) {
       series.forEach(function (item, index) { map[columns[index]] = item; });
-    } else {
-      var used = Object.create(null);
+    } else if (Object.keys(map).length !== series.length) {
       series.forEach(function (item) {
+        if (used[item.sourceColumnIndex]) return;
         var wanted = String(item.originalHeader || item.originalName || "");
         var found = -1;
         columns.forEach(function (columnIndex) {
@@ -7970,23 +8524,13 @@
   }
 
   function resolveSegmentExportPlan(source, options, segment) {
-    var materializedRelative = segment && segment.derivedRelativeTime;
-    var allHeaders = materializedRelative
-      ? (segment.headers || []).slice()
-      : (source.headers || []).slice();
+    var allHeaders = (source.headers || []).slice();
     var selection = normalizeColumnSelection(options && options.columnSelection);
     var sourceIndexes = selection.mode === "selected"
       ? resolveSelectedColumnIndexes(allHeaders, selection)
       : allHeaders.map(function (_header, index) { return index; });
     var headers = sourceIndexes.map(function (index) { return allHeaders[index]; });
-    var indexes = sourceIndexes.map(function (index) {
-      if (!materializedRelative) return index;
-      var header = allHeaders[index];
-      if (header === SEGMENT_RELATIVE_TIME_HEADER && segment.derivedRelativeTime) {
-        return SEGMENT_RELATIVE_DERIVED_INDEX;
-      }
-      return datasetHeaderIndex(source, header);
-    });
+    var indexes = sourceIndexes.slice();
     var keepOriginalTime = !options || options.keepOriginalTime !== false;
     var timeHeader = (options && options.timeColumn) || source.xHeader || source.xName;
     var timeSourceIndex = datasetHeaderIndex(source, timeHeader);
@@ -8001,27 +8545,30 @@
       headers = keptHeaders;
       indexes = keptIndexes;
     }
-    if (options && options.relativeTime && !segmentHasStoredRelativeTime(segment, source)) {
+    var alreadyHasRelative = headers.some(headerLooksRelativeTime);
+    if (options && options.relativeTime && !alreadyHasRelative) {
       var relativeHeader = SEGMENT_RELATIVE_TIME_HEADER;
+      var derivedIndex = segment && segment.derivedRelativeTime
+        ? SEGMENT_RELATIVE_DERIVED_INDEX
+        : -1;
       var timePos = headers.indexOf(timeHeader);
       if (timePos >= 0) {
         headers.splice(timePos + 1, 0, relativeHeader);
-        indexes.splice(timePos + 1, 0, -1);
+        indexes.splice(timePos + 1, 0, derivedIndex);
       } else {
         headers.push(relativeHeader);
-        indexes.push(-1);
+        indexes.push(derivedIndex);
       }
     }
     var renamedCount = 0;
-    if (normalizeCsvHeaderMode(options && options.headerMode) === "alias") {
-      headers = headers.map(function (header, pos) {
-        if (indexes[pos] < 0) return header;
-        var alias = explicitSeriesAlias(seriesForSourceColumn(source, segment, indexes[pos]));
-        if (!alias || alias === header) return header;
-        renamedCount += 1;
-        return alias;
-      });
-    }
+    var disk = datasetDiskHeaders(source);
+    headers = headers.map(function (header, pos) {
+      if (indexes[pos] < 0) return header;
+      var next = resolveExportHeaderName(source, segment, indexes[pos], header, options && options.headerMode);
+      var originalName = disk[indexes[pos]] != null ? disk[indexes[pos]] : header;
+      if (next !== originalName) renamedCount += 1;
+      return next;
+    });
     return {
       headers: headers,
       indexes: indexes,
@@ -8103,18 +8650,15 @@
       return { headers: [], renamedCount: 0, duplicateHeaders: [], columns: [] };
     }
     var plan = resolveSegmentExportPlan(source, options, segment);
-    var useAlias = normalizeCsvHeaderMode(options && options.headerMode) === "alias";
+    var disk = datasetDiskHeaders(source);
     var columns = (source.headers || []).map(function (header, index) {
-      var exportName = header;
-      if (useAlias) {
-        var alias = explicitSeriesAlias(seriesForSourceColumn(source, segment, index));
-        if (alias) exportName = alias;
-      }
+      var exportName = resolveExportHeaderName(source, segment, index, header, options && options.headerMode);
+      var original = disk[index] != null ? disk[index] : header;
       return {
         index: index,
-        original: header,
+        original: original,
         exportName: exportName,
-        renamed: exportName !== header
+        renamed: exportName !== original
       };
     });
     return {
@@ -8537,6 +9081,34 @@
     columnSelectionFromIndexes: columnSelectionFromIndexes,
     applyColumnPickerSelection: applyColumnPickerSelection,
     normalizeCsvHeaderMode: normalizeCsvHeaderMode,
+    datasetDiskHeaders: datasetDiskHeaders,
+    columnSaveState: columnSaveState,
+    hasUnsavedColumnNames: hasUnsavedColumnNames,
+    sourceFileIdentity: sourceFileIdentity,
+    sourceFileIdentitiesMatch: sourceFileIdentitiesMatch,
+    plotSeriesLegendName: plotSeriesLegendName,
+    parseSourceColumnRenameSpec: parseSourceColumnRenameSpec,
+    previewSourceColumnRename: previewSourceColumnRename,
+    validateSourceColumnNames: validateSourceColumnNames,
+    createColumnRenameKeyState: createColumnRenameKeyState,
+    columnRenameKeyAction: columnRenameKeyAction,
+    renameSourceColumns: renameSourceColumns,
+    revertUnsavedColumnNames: revertUnsavedColumnNames,
+    rewriteCsvHeadersLossless: rewriteCsvHeadersLossless,
+    verifyRewrittenCsvHeaders: verifyRewrittenCsvHeaders,
+    prepareSourceCsvRewrite: prepareSourceCsvRewrite,
+    commitSourceColumnWrite: commitSourceColumnWrite,
+    sourceCsvBackupFilename: sourceCsvBackupFilename,
+    createSourceCsvBackup: createSourceCsvBackup,
+    verifySourceCsvBackup: verifySourceCsvBackup,
+    verifySourceCsvBackupBytes: verifySourceCsvBackupBytes,
+    canOverwriteSourceCsv: canOverwriteSourceCsv,
+    projectHasUnsavedColumnNames: projectHasUnsavedColumnNames,
+    pageLeaveNeedsWarning: pageLeaveNeedsWarning,
+    confirmDiscardMessage: confirmDiscardMessage,
+    unsavedColumnLeaveGuard: unsavedColumnLeaveGuard,
+    exportProjectedCsv: exportProjectedCsv,
+    workbenchExportPreview: workbenchExportPreview,
     describeCsvExportHeaders: describeCsvExportHeaders,
     exportSegmentCsv: exportSegmentCsv,
     exportSegmentsZip: exportSegmentsZip,
